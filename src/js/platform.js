@@ -1,11 +1,19 @@
-// A moving ledge. Its glyph is also its way of moving: '>' and '<' run
-// sideways, '^' and 'v' up and down, each setting off the way it points, so
-// one platform object usually takes all four codes. game.js builds them after
-// the terrain, since how far one travels depends on what is around it.
+// A moving ledge. Its block's digit is its way of moving: 0= and 1= run
+// sideways, setting off right and left; 2= and 3= up and down, setting off up
+// and down. game.js builds them after the terrain, since how far one travels
+// depends on what is around it.
+const PLATFORM_DIRS = [
+  { axis: 'x', sign: 1 },    // 0  right
+  { axis: 'x', sign: -1 },   // 1  left
+  { axis: 'y', sign: -1 },   // 2  up
+  { axis: 'y', sign: 1 }     // 3  down
+];
+
 class Platform extends Entity {
   static editor = {
     label: 'Platform',
-    code: ['0>', '0<', '0^', '0v'],
+    code: 'n=',
+    digit: 'direction (0 right, 1 left, 2 up, 3 down)',
     props: {
       speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)' }
     }
@@ -53,7 +61,8 @@ class Platform extends Entity {
   draw() { atlas.draw(this.obj, this.x, this.y, atlas.frame(this.obj), this.w); }
 
   mapCell() {
-    return { ch: this.axis === 'x' ? '>' : 'v', data: 0, x: this.baseX, y: this.baseY };
+    const code = codesOf(atlas.object(this.name))[0] || 'n=0';
+    return { ch: code[1], data: this.axis === 'x' ? 0 : 3, x: this.baseX, y: this.baseY };
   }
 
   // stood on rather than touched, so it reads like terrain

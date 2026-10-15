@@ -610,8 +610,8 @@ function loseLife() {
 }
 
 // ---------- Custom levels ----------
-// '>' '<' '^' 'v' are the moving platforms — the glyph picks both the axis
-// and the way it first sets off. 'x' marks a travel boundary it turns at;
+// '=' is a moving platform, and its digit picks both the axis and the way it
+// first sets off: 0 right, 1 left, 2 up, 3 down (PLATFORM_DIRS). 'x' marks a travel boundary it turns at;
 // where none is given the nearest solid tile does the same job. Both may be
 // written straight into the terrain layer (they are void there) or into an
 // optional same-shape "info" layer, whichever keeps the map readable.
@@ -651,7 +651,7 @@ function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir, name
   const from = Math.max(min, Math.min(max, spawn));
 
   // Start at the spawn cell already travelling the way the arrow points.
-  const backwards = dir === '<' || dir === '^';
+  const backwards = dir < 0;
   let phase = 0;
   if (amplitude > 0.001) {
     const u = Math.max(-1, Math.min(1, (from - base) / amplitude));
@@ -812,7 +812,11 @@ function loadCustomLevel(text, opts = {}) {
     // a door is the one thing that only counts in the solid layer
     if (Cls.mainLayerOnly && !onMain) return;
     // platforms wait for the terrain, since how far they travel depends on it
-    if (Cls === Platform) { platformSpots.push({ row: r, col: c, axis: ch === '>' || ch === '<' ? 'x' : 'y', dir: ch, name, layer }); return; }
+    if (Cls === Platform) {
+      const way = PLATFORM_DIRS[d] || PLATFORM_DIRS[0];
+      platformSpots.push({ row: r, col: c, axis: way.axis, dir: way.sign, name, layer });
+      return;
+    }
     const into = spawned[Cls.bucket];
     const e = Cls.spawn(r, c, d, name, into.length);
     e.layer = layer;

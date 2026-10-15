@@ -1706,8 +1706,8 @@ function loseLife() {
 }
 
 // ---------- Custom levels ----------
-// '>' '<' '^' 'v' are the moving platforms — the glyph picks both the axis
-// and the way it first sets off. 'x' marks a travel boundary it turns at;
+// '=' is a moving platform, and its digit picks both the axis and the way it
+// first sets off: 0 right, 1 left, 2 up, 3 down (PLATFORM_DIRS). 'x' marks a travel boundary it turns at;
 // where none is given the nearest solid tile does the same job. Both may be
 // written straight into the terrain layer (they are void there) or into an
 // optional same-shape "info" layer, whichever keeps the map readable.
@@ -1747,7 +1747,7 @@ function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir, name
   const from = Math.max(min, Math.min(max, spawn));
 
   // Start at the spawn cell already travelling the way the arrow points.
-  const backwards = dir === '<' || dir === '^';
+  const backwards = dir < 0;
   let phase = 0;
   if (amplitude > 0.001) {
     const u = Math.max(-1, Math.min(1, (from - base) / amplitude));
@@ -1908,7 +1908,11 @@ function loadCustomLevel(text, opts = {}) {
     // a door is the one thing that only counts in the solid layer
     if (Cls.mainLayerOnly && !onMain) return;
     // platforms wait for the terrain, since how far they travel depends on it
-    if (Cls === Platform) { platformSpots.push({ row: r, col: c, axis: ch === '>' || ch === '<' ? 'x' : 'y', dir: ch, name, layer }); return; }
+    if (Cls === Platform) {
+      const way = PLATFORM_DIRS[d] || PLATFORM_DIRS[0];
+      platformSpots.push({ row: r, col: c, axis: way.axis, dir: way.sign, name, layer });
+      return;
+    }
     const into = spawned[Cls.bucket];
     const e = Cls.spawn(r, c, d, name, into.length);
     e.layer = layer;
@@ -3589,6 +3593,13 @@ class Entity {
   }
   static get takesId() { return this.codes.some(c => c[0] === 'n'); }
 
+  // What the digit means when a class takes any: its id, unless the class
+  // says otherwise (`editor.digit`) — a platform's is its direction.
+  static get digitMeaning() {
+    if (!this.takesId) return null;
+    return (Object.hasOwn(this, 'editor') && this.editor.digit) || 'id';
+  }
+
   // Every property this class reads, its bases' first, the sprite before all.
   static propDefs() {
     const chain = [];
@@ -4071,14 +4082,22 @@ class Key extends Pickup {
 </script>
 <!-- js/platform.js -->
 <script>
-// A moving ledge. Its glyph is also its way of moving: '>' and '<' run
-// sideways, '^' and 'v' up and down, each setting off the way it points, so
-// one platform object usually takes all four codes. game.js builds them after
-// the terrain, since how far one travels depends on what is around it.
+// A moving ledge. Its block's digit is its way of moving: 0= and 1= run
+// sideways, setting off right and left; 2= and 3= up and down, setting off up
+// and down. game.js builds them after the terrain, since how far one travels
+// depends on what is around it.
+const PLATFORM_DIRS = [
+  { axis: 'x', sign: 1 },    // 0  right
+  { axis: 'x', sign: -1 },   // 1  left
+  { axis: 'y', sign: -1 },   // 2  up
+  { axis: 'y', sign: 1 }     // 3  down
+];
+
 class Platform extends Entity {
   static editor = {
     label: 'Platform',
-    code: ['0>', '0<', '0^', '0v'],
+    code: 'n=',
+    digit: 'direction (0 right, 1 left, 2 up, 3 down)',
     props: {
       speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)' }
     }
@@ -4126,7 +4145,8 @@ class Platform extends Entity {
   draw() { atlas.draw(this.obj, this.x, this.y, atlas.frame(this.obj), this.w); }
 
   mapCell() {
-    return { ch: this.axis === 'x' ? '>' : 'v', data: 0, x: this.baseX, y: this.baseY };
+    const code = codesOf(atlas.object(this.name))[0] || 'n=0';
+    return { ch: code[1], data: this.axis === 'x' ? 0 : 3, x: this.baseX, y: this.baseY };
   }
 
   // stood on rather than touched, so it reads like terrain

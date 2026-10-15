@@ -13,8 +13,10 @@ The game only spawns objects. A map block is three characters, and they are
 its object's **code**:
 
 - the first two are the **class's**, fixed by the class itself — Beetle `0E`,
-  Moth `1E`, Frog `2E`, Coin `0C`. A class whose digit is an id (a key's
-  colour, a sign's message) has `n` there, for any digit: `nK`.
+  Moth `1E`, Frog `2E`, Coin `0C`. A class whose digit says something about
+  the one placed has `n` there, for any digit: a key's id (`nK`, so `3K0` is
+  key 3), a platform's direction (`n=`: `0=` right, `1=` left, `2=` up,
+  `3=` down).
 - the third is the **object's**: which of that class's objects it is, given
   automatically — the first coin `0C0`, the second `0C1`.
 
@@ -55,7 +57,7 @@ its **Sprites** tab.
 | `nF0` | `Flag::flag` | `sprite::flag` | |
 | `nM0` | `Sign::sign` | `sprite::sign` | |
 | `0W0` | `Decoration::cloud` | `sprite::cloud` | |
-| `0>0` `0<0` `0^0` `0v0` | `Platform::platform` | `sprite::platform` | |
+| `n=0` | `Platform::platform` | `sprite::platform` | |
 | `0P0` | — her start | `sprite::worm`, drawn by `game.js` | parts `body`, `tail`, `headLeft`, `headRight` |
 
 ## The classes
@@ -231,7 +233,7 @@ Falling rock · extends `Entity` · code `0R` · stands at 50%, 0% of its cell
 
 ### Platform
 
-Platform · extends `Entity` · code `0> 0< 0^ 0v` · stands at 0%, 0% of its cell
+Platform · extends `Entity` · code `n=` (its digit is its direction: 0 right, 1 left, 2 up, 3 down) · stands at 0%, 0% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -250,8 +252,9 @@ Decoration · extends `Entity` · code `0W` · stands at 50%, 50% of its cell
 
 1. Write it in `src/js/`, extending `Entity` (or `Pickup`, `Enemy`), with a
    `static editor = { label, code, props }` block — `code` the two characters
-   its blocks start with, a digit (or `n` if the digit is the thing's id) and a
-   glyph no other class uses with that digit — and, if it doesn't stand in the
+   its blocks start with, a digit (or `n` if the digit is read by the class,
+   with `digit` saying what it means; an id unless said) and a glyph no other
+   class uses with that digit — and, if it doesn't stand in the
    middle of its cell, a `static cellAnchor`. Read its settings from
    `this.props`.
 2. Add its script tag to `src/index.html`, `editor/index.html` and

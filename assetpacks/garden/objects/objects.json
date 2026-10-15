@@ -16,7 +16,7 @@
     "lanternSmall": {"class":"Lantern","code":"0N2","props":{"sprite":"sprite::lantern","part":"smalllight","reach":2,"pickSound":"sound::lantern"}},
     "moth": {"class":"Moth","code":"1E0","props":{"sprite":"sprite::moth","stompScore":1,"stompSound":"sound::eat","stompBounce":0.55,"speed":0.9,"range":3,"bob":14,"bobSpeed":0.05}},
     "plant": {"class":"Plant","code":"0V0","props":{"sprite":"sprite::plant","reach":100,"trigger":40,"rise":16,"hold":10,"fall":20,"cooldown":50,"bounce":0.4,"bud":"bud","stem":"stem","head":"head"}},
-    "platform": {"class":"Platform","code":["0>0","0<0","0^0","0v0"],"props":{"sprite":"sprite::platform","speed":0.04}},
+    "platform": {"class":"Platform","code":"n=0","props":{"sprite":"sprite::platform","speed":0.04}},
     "portal": {"class":"Portal","code":"nO0","props":{"sprite":"sprite::portal"}},
     "rock": {"class":"RockSpawner","code":"0R0","props":{"sprite":"sprite::rock","interval":140,"gravity":0.55,"maxFall":12}},
     "rock2": {"class":"RockSpawner","code":"0R1","props":{"sprite":"sprite::rock","interval":140,"gravity":0.22,"maxFall":4.5}},

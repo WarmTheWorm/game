@@ -34,7 +34,7 @@ function codeLine(o, C) {
   const codes = o.code.map(c => `<code class="bigcode">${esc(c)}</code>`).join(' ');
   if (!C) return codes;
   const id = C.takesId
-    ? ` Its first character is the ${C.editor.label.toLowerCase()}'s id — write ${esc(C.codes[0].replace('n', '3') + v)} for number 3.`
+    ? ` In a level its first character is the ${C.editor.label.toLowerCase()}'s ${esc(C.digitMeaning)}: ${esc(C.codes[0].replace('n', '3') + v)} gives 3.`
     : '';
   const which = siblings.length > 1
     ? ` The last character, ${esc(v)}, is which of the pack's ${siblings.length} ${esc(o.cls)} objects this is.`

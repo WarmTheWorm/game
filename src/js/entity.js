@@ -37,6 +37,13 @@ class Entity {
   }
   static get takesId() { return this.codes.some(c => c[0] === 'n'); }
 
+  // What the digit means when a class takes any: its id, unless the class
+  // says otherwise (`editor.digit`) — a platform's is its direction.
+  static get digitMeaning() {
+    if (!this.takesId) return null;
+    return (Object.hasOwn(this, 'editor') && this.editor.digit) || 'id';
+  }
+
   // Every property this class reads, its bases' first, the sprite before all.
   static propDefs() {
     const chain = [];

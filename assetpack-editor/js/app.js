@@ -89,7 +89,9 @@ async function boot(already) {
   // gained since they were saved
   const split = migrateSplit(pack);
   const folded = split ? [] : migrateGlow(pack);
-  const recoded = migrateCodes(pack);
+  // both run: an old pack may need its codes made, then brought up to date
+  const madeCodes = migrateCodes(pack);
+  const recoded = recodeObjects(pack) > 0 || madeCodes;
   for (const o of pack.objects) fillProps(o);
   if (!pack.sprites.includes(current)) current = pack.sprites[0] || null;
   if (!pack.objects.includes(currentObj)) currentObj = pack.objects[0] || null;

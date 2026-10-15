@@ -79,6 +79,21 @@ function newGameObject(name, cls, sprite) {
   return o;
 }
 
+// An object whose codes aren't its class's — the class's code has changed in
+// the game since it was saved, as platforms' did — takes the class's again,
+// keeping its own third character.
+function recodeObjects(p) {
+  let n = 0;
+  for (const o of p.objects) {
+    const C = gameClass(o.cls);
+    const v = variantOf(o) || '0';
+    if (!C || o.code.join() === C.codes.map(c => c + v).join()) continue;
+    setVariant(o, v);
+    n++;
+  }
+  return n;
+}
+
 // Packs from when an object chose its own 2-char code: each class's objects
 // are numbered in the order of the digit they had, as was done for the packs
 // on disk, so the first coin is 0C0 and the second 0C1.

@@ -251,7 +251,7 @@
     <div class="group">
       <label>Object</label>
       <div id="objPalette"></div>
-      <div class="field" style="margin-top:8px"><span>Id — for a key, door, portal, flag or sign</span><div id="objDigits"></div></div>
+      <div class="field" style="margin-top:8px"><span id="objDigitsLabel">Digit</span><div id="objDigits"></div></div>
       <div class="hint" id="objHint">Spawns from the layer it is drawn on. A door only counts on Mid. The block’s first character picks the variant, or the id that pairs a key with its door.</div>
     </div>
 
@@ -434,9 +434,11 @@ const OBJECTS = [...new Set(GAME_CLASSES.flatMap(C => C.codes.map(c => c[1])))]
 const OBJ_BY_GLYPH = new Map(OBJECTS.map((o, i) => [o.glyph, i]));
 
 // A level saved before classes owned their codes may still say 1C for the
-// second coin, 1N/2N for the big and small lamps, 1R for the slow rock. No
-// class has those codes now, so reading them as what they meant is safe.
+// second coin, 1N/2N for the big and small lamps, 1R for the slow rock, and
+// > < ^ v for platforms, which are = with the direction as the digit now. No
+// class has those codes any more, so reading them as what they meant is safe.
 const OLD_CODES = { '1C': '0C1', '1N': '0N1', '2N': '0N2', '1R': '0R1' };
+const OLD_PLATFORMS = { '>': 0, '<': 1, '^': 2, 'v': 3 };
 
 const objName = (glyph, digit, v) => atlas.objectAt(glyph, digit, v) || glyph;
 const objSprite = (glyph, digit, v) => atlas.spriteOf(objName(glyph, digit, v));
@@ -891,7 +893,11 @@ function fromBlockMap(text) {
         const id = line[c * 3], glyph = line[c * 3 + 1], tintCh = line[c * 3 + 2];
         if (!glyph || isBlank(glyph)) continue;
         if (glyph === 'P') { start = { r, c }; continue; }
-        const digit = (id >= '0' && id <= '9') ? +id : 0;
+        let digit = (id >= '0' && id <= '9') ? +id : 0;
+        if (OLD_PLATFORMS[glyph] !== undefined) {
+          layers[li][r][c] = { oi: OBJ_BY_GLYPH.get('='), id: OLD_PLATFORMS[glyph], v: isBlank(tintCh) || !tintCh ? '0' : tintCh };
+          continue;
+        }
         if (OBJ_BY_GLYPH.has(glyph)) {
           const old = OLD_CODES[digit + glyph];
           const v = old ? old[2] : (isBlank(tintCh) || !tintCh ? '0' : tintCh);
@@ -1766,6 +1772,10 @@ function refreshSelection() {
   // the digit is only the object's to choose when it is an id
   const entry = objSwatches[objEntry];
   objDigitsEl.classList.toggle('locked', !!entry && entry.digit !== 'n');
+  const C = entry && objClass(entry.glyph, objDigit, entry.v);
+  document.getElementById('objDigitsLabel').textContent = !entry || entry.digit !== 'n'
+    ? 'Digit — fixed by the object'
+    : `Digit — the ${(C && C.editor.label || 'object').toLowerCase()}'s ${C ? C.digitMeaning : 'id'}`;
   renderProps();
   drawSwatches();
   updateStatus(hover);
@@ -1917,7 +1927,8 @@ function drawSwatches() {
     const d = s.digit === 'n' ? objDigit : +s.digit;
     drawObjectSwatch(s.ctx, s.glyph, d, s.v);
     const part = objPart(s.glyph, d, s.v);
-    s.cell.title = `${d}${s.glyph}${s.v} — ${s.name}${part ? ' (' + part + ')' : ''}${s.digit === 'n' ? ' · its digit is its id' : ''}`;
+    const C = s.digit === 'n' && objClass(s.glyph, d, s.v);
+    s.cell.title = `${d}${s.glyph}${s.v} — ${s.name}${part ? ' (' + part + ')' : ''}${C ? ' · its digit is its ' + C.digitMeaning : ''}`;
   });
 }
 
