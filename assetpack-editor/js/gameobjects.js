@@ -52,7 +52,8 @@ function propField(o, k, d) {
   const options = (list, prefix) => {
     const vals = list.map(n => prefix + n);
     if (v && !vals.includes(v)) vals.unshift(v);            // keep what it says, even if it's gone
-    return ['', ...vals].map(x => `<option value="${esc(x)}" ${x === v ? 'selected' : ''}>${x ? esc(x) + (list.includes(refName(x)) ? '' : ' — missing') : '—'}</option>`).join('');
+    // the value keeps its kind in front (sound::coin); the label is just the name
+    return ['', ...vals].map(x => `<option value="${esc(x)}" ${x === v ? 'selected' : ''}>${x ? esc(refName(x)) + (list.includes(refName(x)) ? '' : ' — missing') : '—'}</option>`).join('');
   };
   let input;
   switch (d.type) {
