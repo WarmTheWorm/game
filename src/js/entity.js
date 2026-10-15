@@ -1,25 +1,72 @@
 // ---------- Entities ----------
 // Everything a level spawns is one of these. A class says how its kind moves,
-// draws and reacts; the glyph map at SPAWN says which class a map character
-// makes. So a new kind of thing is a class and one entry in that map, not
-// another branch in the loader, the update loop and the draw loop.
+// draws and reacts; an object in objects.json says which class it is, the
+// block code that places it, and its property values. So a new kind of thing
+// is a class listed in classes.js, not another branch in the loader, the
+// update loop and the draw loop.
+//
+// Each class declares what it reads in a static `editor` block: the glyphs
+// its codes may use and its properties, typed and with defaults. The asset
+// editor builds an object's form from it, and the game falls back on the
+// defaults for anything an object leaves out. Declarations add up down the
+// class chain, so an Enemy's stomp settings are every enemy's.
+//
+//   types: int, float, bool, text, color, choice (with `options`),
+//          sound, sprite, part (of the object's own sprite), background
+//   optional: true  — a part that may be missing, the class managing without
 //
 // The base is enough on its own for anything that just sits there: it draws
-// its object's current animation frame, tinted by its pairing id if it has
+// its sprite's current animation frame, tinted by its pairing id if it has
 // one and its sprite carries a glow mask.
 class Entity {
-  constructor(obj, x, y) {
-    this.obj = obj;
+  static editor = { props: {} };
+
+  // Where in its cell an object of this class stands, as a share of the cell:
+  // the middle, unless a class stands on the floor or hangs from the top. The
+  // editors read it too, to draw a thing where the game will put it.
+  static cellAnchor = [0.5, 0.5];
+
+  // A class whose code takes any digit reads that digit as the thing's own id.
+  static takesId = false;
+
+  // Every property this class reads, its bases' first, the sprite before all.
+  static propDefs() {
+    const chain = [];
+    for (let C = this; C && C.prototype instanceof Object; C = Object.getPrototypeOf(C)) chain.unshift(C);
+    const out = { sprite: { type: 'sprite', default: '', label: 'Sprite' } };
+    for (const C of chain) if (Object.hasOwn(C, 'editor')) Object.assign(out, C.editor.props || {});
+    return out;
+  }
+
+  // An object's values over the class defaults.
+  static propsFor(name) {
+    const own = (atlas.object(name) || {}).props || {};
+    const out = {};
+    for (const [k, d] of Object.entries(this.propDefs())) out[k] = own[k] !== undefined ? own[k] : d.default;
+    return out;
+  }
+
+  constructor(name, x, y) {
+    this.name = name;                         // the object, in objects.json
+    this.props = this.constructor.propsFor(name);
+    this.obj = refName(this.props.sprite);    // the sprite it wears, in sprites.json
     this.x = x;
     this.y = y;
-    this.r = atlas.radius(obj);
+    this.r = atlas.radius(this.obj);
     this.layer = LAYER_MAIN;   // overwritten at spawn; anything made mid-play is middle
   }
 
-  // Cell centre. Kinds that stand on the floor or hang from it override this.
-  // `index` is how many of this kind the level has already spawned.
-  static spawn(row, col, data, obj, index) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2));
+  // Where its cellAnchor says, moved by its sprite's offset. `index` is how
+  // many of this kind the level has already spawned.
+  static spawn(row, col, data, name, index) {
+    const e = new this(name, ...this.spawnPoint(row, col, name));
+    if (this.takesId) e.id = data;
+    return e;
+  }
+
+  static spawnPoint(row, col, name) {
+    const [ax, ay] = this.cellAnchor;
+    return atlas.place(atlas.spriteOf(name), (col + ax) * TILE, (row + ay) * TILE);
   }
 
   update() {}
@@ -33,11 +80,13 @@ class Entity {
   // back to how the level spawned it, for a restart without a reload
   reset() {}
 
-  // How this would be written in a block map, for the debug export. null if
-  // it isn't something a map spells out, like a rock already in flight.
+  // How this would be written in a block map, for the debug export: its
+  // object's first code, with its own id where the code takes any digit. null
+  // if it isn't something a map spells out, like a rock already in flight.
   mapCell() {
-    const ch = this.constructor.glyph;
-    return ch ? { ch, data: this.id || 0, x: this.x, y: this.y } : null;
+    const code = codesOf(atlas.object(this.name))[0];
+    if (!code) return null;
+    return { ch: code[1], data: code[0] === 'n' ? (this.id || 0) : +code[0], x: this.x, y: this.y };
   }
 
   touches(reach = R) {

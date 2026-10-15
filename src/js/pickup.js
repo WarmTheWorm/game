@@ -1,5 +1,4 @@
 // ---------- Collectibles ----------
-const GEM_VALUE = 5;
 const COIN_POP_DURATION = 28; // frames
 const COIN_POP_RISE = 22;     // px
 

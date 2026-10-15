@@ -342,6 +342,30 @@
      the map text to a live copy of the game running in the frame below. -->
 <script src="../src/js/tileset.js"></script>
 <script src="../src/js/atlas.js"></script>
+<!-- the game's classes, for what they declare: the glyphs a palette offers and
+     where in its cell each kind of thing stands. Nothing here runs them. -->
+<script src="../src/js/entity.js"></script>
+<script src="../src/js/enemy.js"></script>
+<script src="../src/js/beetle.js"></script>
+<script src="../src/js/moth.js"></script>
+<script src="../src/js/frog.js"></script>
+<script src="../src/js/pickup.js"></script>
+<script src="../src/js/coin.js"></script>
+<script src="../src/js/gem.js"></script>
+<script src="../src/js/shield.js"></script>
+<script src="../src/js/lantern.js"></script>
+<script src="../src/js/key.js"></script>
+<script src="../src/js/platform.js"></script>
+<script src="../src/js/rock.js"></script>
+<script src="../src/js/rock-spawner.js"></script>
+<script src="../src/js/plant.js"></script>
+<script src="../src/js/portal.js"></script>
+<script src="../src/js/checkpoint.js"></script>
+<script src="../src/js/flag.js"></script>
+<script src="../src/js/door.js"></script>
+<script src="../src/js/sign.js"></script>
+<script src="../src/js/decoration.js"></script>
+<script src="../src/js/classes.js"></script>
 <script>
 // ---------- what tileset.js expects of its host ----------
 // Tileset sizes itself in tiles and blits through a module-global `ctx`, which
@@ -398,36 +422,44 @@ const HIT_TEXT = { ' ': 'no collision', 'S': 'solid', '^': 'top half only' };
 const hitText = h => HIT_TEXT[h] || (isRampHit(h) ? 'ramp ' + h : h);
 
 // ---------- the objects ----------
-// One entry per glyph the game spawns from, read out of the very map it uses.
-// 'P' is not in there at all — her start is not an object, and a level has
-// exactly one.
-const OBJECTS = Object.keys(DEFAULT_GLYPH_OBJECTS)
-  .filter(g => g !== 'P')
+// One entry per glyph a game class declares, in the game's own order. 'P' is
+// not in there at all — her start is not an object, and a level has exactly
+// one. Which object a glyph and digit place is the pack's: each object in its
+// objects.json carries the codes that name it.
+const OBJECTS = [...new Set(GAME_CLASSES.flatMap(C => [...(C.editor.glyphs || '')]))]
   .map(glyph => ({ glyph }));
 const OBJ_BY_GLYPH = new Map(OBJECTS.map((o, i) => [o.glyph, i]));
 
 // The info digit is the variant for a glyph that covers several objects and a
 // pairing id for the rest, so the name is the only honest label.
-const objName = (glyph, digit) => atlas.objectFor(glyph, digit) || glyph;
+const objName = (glyph, digit) => atlas.objectAt(glyph, digit) || glyph;
+const objSprite = (glyph, digit) => atlas.spriteOf(objName(glyph, digit));
+const objClass = (glyph, digit) => {
+  const o = atlas.object(objName(glyph, digit));
+  return o ? CLASS_BY_NAME.get(o.class) || null : null;
+};
 
-// A glyph may name a part of its object ('lantern:biglight'), in which case
-// the preview shows that part's first frame rather than the sheet's.
+// The part an object shows by — the first part property its class reads, a
+// lantern's lamp or a plant's bud — or null for its whole strip.
+const objPart = (glyph, digit) => {
+  const o = atlas.object(objName(glyph, digit));
+  const C = objClass(glyph, digit);
+  if (!o || !C) return null;
+  const k = Object.entries(C.propDefs()).find(([, d]) => d.type === 'part');
+  const v = k && ((o.props || {})[k[0]] ?? k[1].default);
+  return v && atlas.partSpan(objSprite(glyph, digit), v) ? v : null;
+};
 const objFrame = (glyph, digit) => {
-  const span = atlas.partSpan(objName(glyph, digit), atlas.partFor(glyph, digit));
+  const span = atlas.partSpan(objSprite(glyph, digit), objPart(glyph, digit));
   return span ? span[0] : 0;
 };
 
-// Where in its cell each object actually lands, as a fraction of the cell.
-// Most sit in the middle, which is what `Entity.spawn` does; the ones here
-// override that, so this mirrors their own `static spawn`. Keyed by object
-// name rather than glyph, because 'E' lands differently per variant.
-const CELL_ANCHOR = {
-  door: [0, 0],                              // stamps its own cell, pivot at the corner
-  beetle: [0.5, 0], frog: [0.5, 0],          // Enemy.spawn: standing on the cell's top edge
-  rock: [0.5, 0], rock2: [0.5, 0],           // the ledge a rock drops from
-  plant: [0.5, 1]                            // rooted in the floor below it
+// Where in its cell an object lands, as a fraction of the cell — its class's
+// own cellAnchor, the same one its spawn uses.
+const cellAnchor = (glyph, digit) => {
+  const C = objClass(glyph, digit);
+  return C ? C.cellAnchor : [0.5, 0.5];
 };
-const cellAnchor = name => CELL_ANCHOR[name] || [0.5, 0.5];
 
 // ---------- the level being drawn ----------
 // Three layers of cells, each holding either a tile ({pi, tint}) or an object
@@ -782,7 +814,7 @@ function packJson() {
       row_C: DEFAULT_ROW_C,
       col_0: DEFAULT_COL_0
     },
-    objects: { manifest: PACK_OBJECTS + 'objects.json', glyphs: DEFAULT_GLYPH_OBJECTS },
+    objects: { manifest: PACK_OBJECTS + 'objects.json' },
     sounds: PACK_SOUNDS + soundDefault
   }, null, 2);
 }
@@ -937,9 +969,9 @@ function render() {
 // glyph named.
 function drawObjectCell(cell, c, r) {
   const glyph = OBJECTS[cell.oi].glyph;
-  const name = objName(glyph, cell.id);
+  const name = objSprite(glyph, cell.id);
   if (!atlas.def(name).frame) { objPlaceholder(c, r, cell.id + glyph); return; }
-  const [ax, ay] = cellAnchor(name);
+  const [ax, ay] = cellAnchor(glyph, cell.id);
   const [x, y] = atlas.place(name, (c + ax) * TILE, (r + ay) * TILE);
   const frame = objFrame(glyph, cell.id);
   // tiles want nearest-neighbour, but object art is packed finer than it is
@@ -1436,12 +1468,17 @@ async function packAssets() {
     return res;
   };
   const grab = async url => new Uint8Array(await (await fetchOk(url)).arrayBuffer());
+  // the objects, the sprites they wear, and the sheet the sprites are cut
+  // from — each a file beside the one that names it
   const manifestUrl = new URL(EDITOR_OBJECTS, location.href).href;
-  const manifest = await (await fetchOk(manifestUrl)).json();
+  const spritesFile = (await (await fetchOk(manifestUrl)).json()).sprites;
+  const spritesUrl = new URL(spritesFile, manifestUrl).href;
+  const sprites = await (await fetchOk(spritesUrl)).json();
   const files = [
     { name: PACK_TILES + 'tiles.png', data: await grab(sheet.img.src) },
-    { name: PACK_OBJECTS + 'objects.json', data: JSON.stringify(manifest, null, 2) },
-    { name: PACK_OBJECTS + 'objects.png', data: await grab(new URL(manifest.texture, manifestUrl).href) }
+    { name: PACK_OBJECTS + 'objects.json', data: await grab(manifestUrl) },
+    { name: PACK_OBJECTS + spritesFile, data: await grab(spritesUrl) },
+    { name: PACK_OBJECTS + sprites.texture, data: await grab(new URL(sprites.texture, spritesUrl).href) }
   ];
   for (const file of new Set(levels.map(s => s.bg && s.bg.texture).filter(Boolean))) {
     files.push({ name: PACK_BACKGROUNDS + file, data: await grab(bgDir + file) });
@@ -1684,7 +1721,7 @@ function selectionText() {
     return `${p.label} · ${sheet.tintName(tintIndex)} · ${hitText(p.hit)}`;
   }
   const glyph = OBJECTS[objIndex].glyph;
-  const part = atlas.partFor(glyph, objDigit);
+  const part = objPart(glyph, objDigit);
   return `${objDigit}${glyph}0 · ${objName(glyph, objDigit)}${part ? ' · ' + part : ''}`;
 }
 
@@ -1817,7 +1854,7 @@ OBJECTS.forEach((o, i) => {
 // digit changes.
 function drawObjectSwatch(c2, glyph, digit) {
   c2.clearRect(0, 0, SWATCH, SWATCH);
-  const name = objName(glyph, digit);
+  const name = objSprite(glyph, digit);
   const def = atlas.def(name);
   if (!def.frame) return;
   const [fw, fh] = atlas.size(name);
@@ -1842,7 +1879,7 @@ function drawSwatches() {
   });
   objSwatches.forEach(s => {
     drawObjectSwatch(s.ctx, s.glyph, objDigit);
-    const part = atlas.partFor(s.glyph, objDigit);
+    const part = objPart(s.glyph, objDigit);
     s.cell.title = `${objDigit}${s.glyph}0 — ${objName(s.glyph, objDigit)}${part ? ' (' + part + ')' : ''}`;
   });
 }

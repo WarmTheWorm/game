@@ -4,6 +4,7 @@
 function showTab(name) {
   $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
   $$('.page').forEach(p => p.classList.toggle('on', p.dataset.page === name));
+  if (name === 'gameobjects') renderGameObjects();
   if (name === 'tiles') renderTiles();
   if (name === 'backgrounds') renderBackgrounds();
   if (name === 'sounds') renderSounds();
@@ -23,6 +24,7 @@ $('#resetBtn').onclick = async () => {
   await dbClear();
   pack = newPack();
   current = null;
+  currentObj = null;
   sndSel = null;
   fcan.clear();
   await boot(true);
@@ -38,11 +40,12 @@ $('#importBtn').onclick = async () => {
   toast('Reading…');
   try {
     pack = await importPack(got.dir);
-    current = pack.objects[0] || null;
+    current = null;
+    currentObj = null;
     sndSel = Object.keys(pack.sounds.defs)[0] || null;
     await boot(true);
     savePack();
-    toast(`Read ${pack.objects.length} objects`);
+    toast(`Read ${pack.sprites.length} sprites and ${pack.objects.length} objects`);
   } catch (err) {
     toast('Could not read that pack: ' + err.message, true);
   }
@@ -51,7 +54,7 @@ $('#importBtn').onclick = async () => {
 // Frames are kept as data: URLs so the model stays cloneable; the canvases
 // they draw through are rebuilt here.
 async function warmFrames() {
-  for (const o of pack.objects) {
+  for (const o of pack.sprites) {
     for (const f of o.frames) {
       if (!fcan.has(f.id)) await attachFrame(o, f);
     }
@@ -78,25 +81,33 @@ async function boot(already) {
   if (!already) {
     let saved = null;
     try { saved = await dbGet(); } catch { /* a first run has nothing stored */ }
-    pack = saved && saved.objects ? saved : newPack();
-    current = pack.objects[0] || null;
+    pack = saved && (saved.sprites || saved.objects) ? saved : newPack();
     sndSel = Object.keys(pack.sounds.defs)[0] || null;
   }
-  // packs from before glows were parts carry them as objects of their own
-  const folded = migrateGlow(pack);
-  if (!pack.objects.includes(current)) current = pack.objects[0] || null;
+  // packs from before sprites and objects were apart, or before glows were
+  // parts, are brought up to date; objects take any property their class has
+  // gained since they were saved
+  const split = migrateSplit(pack);
+  const folded = split ? [] : migrateGlow(pack);
+  for (const o of pack.objects) fillProps(o);
+  if (!pack.sprites.includes(current)) current = pack.sprites[0] || null;
+  if (!pack.objects.includes(currentObj)) currentObj = pack.objects[0] || null;
   $('#packName').value = pack.name;
   warmMedia();
   await warmFrames();
   useSounds();
   renderObjects();
+  renderGameObjects();
   renderTiles();
   renderBackgrounds();
   renderSounds();
   renderPackTab();
-  if (folded.length) {
+  if (split) {
     savePack();
-    toast(`Glows are parts now — ${folded.join(', ')} moved into the objects they lit`);
+    toast(`Sprites and objects are apart now — ${pack.sprites.length} sprites, ${pack.objects.length} objects`);
+  } else if (folded.length) {
+    savePack();
+    toast(`Glows are parts now — ${folded.join(', ')} moved into the sprites they lit`);
   }
 }
 

@@ -462,8 +462,8 @@
 <!-- sound.js, tileset.js and atlas.js first: they stand alone and game.js
      builds on them as it loads. Then game.js, which owns TILE and the rest of
      the world the classes build on. Then each kind of thing, base classes
-     before the kinds that extend them, and spawn.js last because its table
-     names every class. -->
+     before the kinds that extend them, and classes.js last because it lists
+     every class. -->
 <script>
   window.PACK_URL = 'levelpack.json';
   window.OBJECTS_URL = 'objects/objects.json';
@@ -573,8 +573,10 @@ class SoundBoard {
     }
   }
 
+  // `name` is a sound id, or a reference to one: "sound::coin".
   play(name) {
-    const def = this.defs[name];
+    const id = String(name ?? '').replace(/^sound::/, '');
+    const def = this.defs[id];
     if (!def || def.loop || !this.effectsOn) return;
     if (def.shake && navigator.vibrate) navigator.vibrate(def.shake);
     try {
@@ -840,13 +842,13 @@ class Tileset {
 </script>
 <!-- js/atlas.js -->
 <script>
-// ---------- Object atlas ----------
-// Every object the game draws or collides with is described in a manifest
-// like an asset pack's objects/objects.json: where its frames sit in the
-// shared sheet, how fast they run, where its own position lands inside a
-// frame, and what it collides as. Nothing about an object's size or anchoring
-// lives in code. A level names the manifest it wants and which of its objects
-// each map glyph spawns, so both are data.
+// ---------- Sprites and objects ----------
+// An asset pack's objects/objects.json says what a level can place: each
+// object is a game class, the 2-char code a map block names it by, and its
+// property values — the sprite it wears among them. The art is sprites.json
+// beside it: where each sprite's frames sit in the shared sheet, how fast they
+// run, where its own position lands inside a frame, and what it collides as.
+// Nothing about a thing's look, size or settings lives in code.
 // A page may say where its root manifest is before loading this, which is how
 // a downloaded pack points the game at its own copy.
 const ROOT_OBJECTS_URL = window.OBJECTS_URL || '/assetpacks/garden/objects/objects.json';
@@ -857,26 +859,24 @@ const ROOT_OBJECTS_URL = window.OBJECTS_URL || '/assetpacks/garden/objects/objec
 const KEY_COLORS = ['#ffffff', '#ff5a5a', '#ffa23a', '#ffd93a', '#5fe86b',
                     '#4fc9e8', '#6a8cff', '#b06aff', '#ff6ad5', '#9a7b5a'];
 
-// Which object each map glyph spawns. An array picks by the block's info
-// digit, which is how one 'E' covers three kinds of enemy. An entry may also
-// name a part of that object as 'object:part', which is how one 'N' covers the
-// three lamps that share a sheet — so which digit gets which lamp is the
-// level's business rather than the lantern's. A level may replace this
-// wholesale, so the same map text can wear a different cast.
-const DEFAULT_GLYPH_OBJECTS = {
-  E: ['beetle', 'moth', 'frog'],
-  C: 'coin', G: 'gem', K: 'key', S: 'shield',
-  N: ['lantern:fulllight', 'lantern:biglight', 'lantern:smalllight'],
-  O: 'portal', '!': 'checkpoint', V: 'plant', R: ['rock', 'rock2'],
-  L: 'door', F: 'flag', M: 'sign', W: 'cloud',
-  '>': 'platform', '<': 'platform', '^': 'platform', v: 'platform',
+// One element names another with the other's kind in front: "sprite::coin",
+// "sound::coin". Lookups take either form.
+const refName = v => {
+  const s = String(v ?? '');
+  const cut = s.indexOf('::');
+  return cut < 0 ? s : s.slice(cut + 2);
 };
+
+// An object's codes as a list. "1C" is digit 1 of glyph C; "nK" is any digit,
+// which the class then reads as the thing's own id.
+const codesOf = def => !def || !def.code ? [] : Array.isArray(def.code) ? def.code : [def.code];
 
 class ObjectAtlas {
   constructor() {
-    this.defs = {};
+    this.defs = {};                // sprite name -> its art
+    this.objects = {};             // object name -> { class, code, props }
+    this.codes = new Map();        // glyph -> { any, byDigit: [] } object names
     this.sheet = new Image();
-    this.glyphs = DEFAULT_GLYPH_OBJECTS;
     this.root = null;
     // Seconds of elapsed play, so sprites animate at their own frame rate
     // however often the game steps or the display refreshes.
@@ -888,18 +888,24 @@ class ObjectAtlas {
   async loadManifest(url, base) {
     const href = new URL(url, base || location.href).href;
     if (this.manifests.has(href)) return this.manifests.get(href);
-    const res = await fetch(href);
-    if (!res.ok) throw new Error(`${href}: HTTP ${res.status}`);
-    const data = await res.json();
-    if (!data || !data.objects) throw new Error(`${href}: no objects`);
+    const get = async u => {
+      const res = await fetch(u);
+      if (!res.ok) throw new Error(`${u}: HTTP ${res.status}`);
+      return res.json();
+    };
+    const data = await get(href);
+    if (!data || !data.objects || !data.sprites) throw new Error(`${href}: no objects`);
+    const spritesHref = new URL(data.sprites, href).href;
+    const art = await get(spritesHref);
+    if (!art || !art.sprites) throw new Error(`${spritesHref}: no sprites`);
     const sheet = new Image();
-    sheet.src = new URL(data.texture, href).href;
+    sheet.src = new URL(art.texture, spritesHref).href;
     await new Promise((ok, fail) => {
       if (sheet.complete && sheet.naturalWidth) return ok();
       sheet.addEventListener('load', ok, { once: true });
       sheet.addEventListener('error', () => fail(new Error(`${sheet.src}: failed to load`)), { once: true });
     });
-    const entry = { defs: data.objects, sheet };
+    const entry = { defs: art.sprites, objects: data.objects, sheet };
     this.manifests.set(href, entry);
     return entry;
   }
@@ -911,44 +917,52 @@ class ObjectAtlas {
     this.use(this.root);
   }
 
-  use(entry, glyphs) {
+  use(entry) {
     this.defs = entry.defs;
+    this.objects = entry.objects;
     this.sheet = entry.sheet;
-    this.glyphs = glyphs || DEFAULT_GLYPH_OBJECTS;
+    // which object each block names, built from the objects' own codes
+    this.codes = new Map();
+    for (const [name, def] of Object.entries(this.objects)) {
+      for (const code of codesOf(def)) {
+        const glyph = code[1];
+        if (!glyph) continue;
+        if (!this.codes.has(glyph)) this.codes.set(glyph, { any: null, byDigit: [] });
+        const slot = this.codes.get(glyph);
+        if (code[0] === 'n') slot.any = slot.any || name;
+        else slot.byDigit[+code[0]] = slot.byDigit[+code[0]] || name;
+      }
+    }
   }
 
-  def(name) { return this.defs[name] || {}; }
+  // ---- objects ----
+  object(name) { return this.objects[refName(name)] || null; }
+
+  // The object a block names: its exact digit, else the glyph's any-digit
+  // object, else the glyph's first — so "5E" is still an enemy.
+  objectAt(glyph, digit = 0) {
+    const slot = this.codes.get(glyph);
+    if (!slot) return null;
+    return slot.byDigit[digit] || slot.any || slot.byDigit.find(Boolean) || null;
+  }
+
+  // The sprite an object wears.
+  spriteOf(name) {
+    const o = this.object(name);
+    return o && o.props ? refName(o.props.sprite) : '';
+  }
+
+  // ---- sprites ----
+  def(name) { return this.defs[refName(name)] || {}; }
   hit(name) { return this.def(name).collision || {}; }
   radius(name) { return this.hit(name).r || 0; }
 
-  // Where an object stands, given the point its kind spawns at. A def's
+  // Where a sprite stands, given the point its kind spawns at. A def's
   // `offset` moves it off that point — art that sits low in its tile, with its
   // body going along — and a manifest without one means none.
   place(name, x, y) {
     const o = this.def(name).offset;
     return o ? [x + o[0], y + o[1]] : [x, y];
-  }
-
-  // What a glyph names at that info digit, 'object' or 'object:part'.
-  entryFor(ch, data = 0) {
-    const named = this.glyphs[ch];
-    return Array.isArray(named) ? (named[data] || named[0]) : named;
-  }
-
-  objectFor(ch, data = 0) {
-    const entry = this.entryFor(ch, data);
-    if (!entry) return entry;
-    const cut = entry.indexOf(':');
-    return cut < 0 ? entry : entry.slice(0, cut);
-  }
-
-  // The part of that object the glyph asked for, or null for the whole thing.
-  // What a part means is the entity's own business — for a lantern it is both
-  // the frames it shows and how far it lets her see.
-  partFor(ch, data = 0) {
-    const entry = this.entryFor(ch, data);
-    const cut = entry ? entry.indexOf(':') : -1;
-    return cut < 0 ? null : entry.slice(cut + 1);
   }
 
   // Where a named part sits on the sheet: a [first, last] span, a single
@@ -1187,7 +1201,7 @@ function tryOpenDoor(col, row) {
   door.open = true;
   collideGrid[row][col] = HIT_NONE;
   updateHud();
-  playSound('unlock');
+  playSound(door.props.openSound);
   return true;
 }
 
@@ -1500,7 +1514,7 @@ function drawDeathAnimation() {
 let score = 0;
 let lives = 3;
 let hasShield = false;
-let shieldObj = null;      // the object of the shield she holds, whose "worn" part she wears
+let shieldWorn = null;     // { sprite, part } of the shield she holds, drawn over her head
 let gameState = 'start'; // 'start' | 'playing' | 'gameover'
 
 const scoreEl = document.getElementById('score');
@@ -1690,7 +1704,6 @@ function loseLife() {
 // optional same-shape "info" layer, whichever keeps the map readable.
 // Angular speed is quoted for a reference travel distance; makeRangedPlatform
 // rescales it per platform so they all cross at the same px/frame.
-const PLATFORM_SPEED = 0.04;
 const PLATFORM_REF_AMPLITUDE = 2.5 * TILE;
 
 // First travel boundary out from (row,col) in direction `step`: an explicit
@@ -1709,8 +1722,8 @@ function platformBound(hits, gRows, gCols, marks, row, col, axis, step) {
   }
 }
 
-function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir) {
-  const p = new Platform(atlas.objectFor(dir), col * TILE, row * TILE, 1, axis, 0, 0.02);
+function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir, name) {
+  const p = new Platform(name, col * TILE, row * TILE, 1, axis, 0, 0.02);
   const lo = platformBound(hits, gRows, gCols, marks, row, col, axis, -1);
   const hi = platformBound(hits, gRows, gCols, marks, row, col, axis, 1);
 
@@ -1735,8 +1748,8 @@ function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir) {
   // Frequency scales inversely with travel, so a long run takes
   // proportionally longer and every platform crosses at the same px/frame.
   p.speed = amplitude > 0.001
-    ? PLATFORM_SPEED * PLATFORM_REF_AMPLITUDE / amplitude
-    : PLATFORM_SPEED;
+    ? p.props.speed * PLATFORM_REF_AMPLITUDE / amplitude
+    : p.props.speed;
   p.amplitude = amplitude;
   p.phase = phase;
   if (axis === 'x') { p.baseX = base; p.x = p.prevX = from; }
@@ -1837,9 +1850,9 @@ function parseBlockMap(text, sheet) {
 }
 
 function loadCustomLevel(text, opts = {}) {
-  // A level brings its own object manifest and glyph map; a pasted one falls
-  // back to the root manifest and the built-in glyphs.
-  atlas.use(opts.manifest || atlas.root, opts.glyphs);
+  // A level brings its own object manifest, whose objects' codes say what
+  // each block spawns; a pasted one falls back to the root manifest.
+  atlas.use(opts.manifest || atlas.root);
   const sheet = new Tileset(opts.tileset);
   const map = parseBlockMap(text, sheet);
   if (!map) return { ok: false, error: 'That looks empty — paste a level first.' };
@@ -1870,17 +1883,21 @@ function loadCustomLevel(text, opts = {}) {
   const platformSpots = [];
   let startPos = null;
 
-  // Entities spawn into the one world whichever layer their glyph sits in,
-  // carrying that block's own data character — and the layer itself, which is
-  // all that decides when they are drawn.
-  const spawnEntity = (ch, d, r, c, layer) => {
+  // A block's two characters name an object through the objects' codes, and
+  // the object names its class. Entities spawn into the one world whichever
+  // layer their block sits in, carrying that block's own digit — and the layer
+  // itself, which is all that decides when they are drawn.
+  const spawnEntity = (ch, d, r, c, layer, onMain) => {
     if (ch === 'P') { startPos = { x: c * TILE + TILE / 2, y: r * TILE }; return; }
-    if (ch === '>' || ch === '<') { platformSpots.push({ row: r, col: c, axis: 'x', dir: ch, layer }); return; }
-    if (ch === '^' || ch === 'v') { platformSpots.push({ row: r, col: c, axis: 'y', dir: ch, layer }); return; }
-    const Cls = spawnClass(ch, d);
+    const name = atlas.objectAt(ch, d);
+    const Cls = name && classOf(name);
     if (!Cls) return;
+    // a door is the one thing that only counts in the solid layer
+    if (Cls.mainLayerOnly && !onMain) return;
+    // platforms wait for the terrain, since how far they travel depends on it
+    if (Cls === Platform) { platformSpots.push({ row: r, col: c, axis: ch === '>' || ch === '<' ? 'x' : 'y', dir: ch, name, layer }); return; }
     const into = spawned[Cls.bucket];
-    const e = Cls.spawn(r, c, d, atlas.objectFor(ch, d), into.length);
+    const e = Cls.spawn(r, c, d, name, into.length);
     e.layer = layer;
     into.push(e);
   };
@@ -1892,9 +1909,7 @@ function loadCustomLevel(text, opts = {}) {
         const ch = layer.glyphs[r][c];
         const d = layer.data[r][c];
         if (TERRAIN.has(ch)) continue;              // drawn from the layer, inert
-        // a door is the one thing that only counts in the solid layer
-        if (ch === 'L' && layer !== map.main) continue;
-        spawnEntity(ch, d, r, c, li);
+        spawnEntity(ch, d, r, c, li, layer === map.main);
       }
       // only the main layer is solid, and only its terrain glyphs are
       const mid = map.main.glyphs[r][c];
@@ -1908,7 +1923,7 @@ function loadCustomLevel(text, opts = {}) {
 
   // Platform ranges read the finished terrain, so they wait for the grid.
   for (const s of platformSpots) {
-    const p = makeRangedPlatform(map.main.collide, newRows, newCols, markGrid, s.row, s.col, s.axis, s.dir);
+    const p = makeRangedPlatform(map.main.collide, newRows, newCols, markGrid, s.row, s.col, s.axis, s.dir, s.name);
     p.layer = s.layer;
     newPlatforms.push(p);
   }
@@ -1977,9 +1992,10 @@ function applyPicks() {
     if (typeof block !== 'string' || block.length < 2) continue;
     const data = asDigit(block[0]);
     const glyph = block[1];
-    const Cls = spawnClass(glyph, data);
+    const name = atlas.objectAt(glyph, data);
+    const Cls = name && classOf(name);
     if (!Cls || !(Cls.prototype instanceof Pickup)) continue;
-    Cls.spawn(0, 0, data, atlas.objectFor(glyph, data), 0).take();
+    Cls.spawn(0, 0, data, name, 0).take();
   }
   sound.effectsOn = effects;
   lightRadius = lightTarget();     // a level opens at its own reach rather than easing into it
@@ -2188,7 +2204,7 @@ async function loadLevelPack(url) {
     tileset: { ...sheet, texture: resolveTexture(sheet.texture, url) },
     background: parseBackground(data.background, url),
     music: typeof data.music === 'string' ? data.music : null,
-    glyphs: objects.glyphs,    manifestUrl: objects.manifest ? new URL(objects.manifest, url) : null,
+    manifestUrl: objects.manifest ? new URL(objects.manifest, url) : null,
     soundsUrl: data.sounds ? new URL(data.sounds, url) : null
   };
 }
@@ -2271,7 +2287,6 @@ async function loadBuiltinLevels() {
       manifest: null,
       soundsUrl: data.sounds ? new URL(data.sounds, url) : pack.soundsUrl,
       sounds: null,
-      glyphs: objects.glyphs || pack.glyphs,
       exits: [],
       returns
     });
@@ -2359,7 +2374,7 @@ function captureWorld(flag) {
 
 function restoreWorld(w) {
   const level = BUILTIN_LEVELS[w.index];
-  atlas.use(level.manifest || atlas.root, level.glyphs);   // the cast this world was built from
+  atlas.use(level.manifest || atlas.root);   // the cast this world was built from
   grid = w.grid; backGrid = w.backGrid; frontGrid = w.frontGrid;
   collideGrid = w.collideGrid; gridMeta = w.gridMeta; backMeta = w.backMeta; frontMeta = w.frontMeta;
   tileset = w.tileset;
@@ -2539,7 +2554,6 @@ function startGame(keepCurtain) {
 }
 
 // ---------- Enemies ----------
-const ENEMY_SPEED = 1.1;
 
 // ---------- Entities ----------
 // One file per kind under js/, loaded by the script tags in the page. What
@@ -2571,18 +2585,18 @@ function checkEnemyCollisions() {
       if (warm.vy > 0 && warm.y < e.y - e.r * 0.3) {
         // stomped from above
         e.alive = false;
-        warm.vy = JUMP_V * 0.55;
-        score++;
+        warm.vy = JUMP_V * e.props.stompBounce;
+        score += e.props.stompScore;
         stats.stomps++;
         saveStats();
         checkStatAchievements();
         updateHud();
-        playSound('eat');
+        playSound(e.props.stompSound);
       } else if (hasShield) {
         // the shield absorbs one side hit AND takes the enemy out with it
         hasShield = false;
         e.alive = false;
-        score++;
+        score += e.props.stompScore;
         stats.stomps++;
         saveStats();
         checkStatAchievements();
@@ -3005,7 +3019,7 @@ function drawWorm() {
   const squish = isDucking ? 0.6 : 1;
 
   // the shield's own "worn" art if it has some, or a plain ring behind her
-  const worn = hasShield && shieldObj ? atlas.partFrame(shieldObj, SHIELD_WORN_PART) : null;
+  const worn = hasShield && shieldWorn ? atlas.partFrame(shieldWorn.sprite, shieldWorn.part) : null;
   if (hasShield && worn === null) {
     ctx.beginPath();
     ctx.arc(head.x, head.y, head.r + 5, 0, Math.PI * 2);
@@ -3027,7 +3041,7 @@ function drawWorm() {
   if (worn !== null) {
     ctx.save();
     ctx.globalAlpha = headVis;
-    atlas.draw(shieldObj, head.x, head.y, worn);
+    atlas.draw(shieldWorn.sprite, head.x, head.y, worn);
     ctx.restore();
   }
   ctx.globalAlpha = 1;
@@ -3525,26 +3539,73 @@ requestAnimationFrame(loop);
 <script>
 // ---------- Entities ----------
 // Everything a level spawns is one of these. A class says how its kind moves,
-// draws and reacts; the glyph map at SPAWN says which class a map character
-// makes. So a new kind of thing is a class and one entry in that map, not
-// another branch in the loader, the update loop and the draw loop.
+// draws and reacts; an object in objects.json says which class it is, the
+// block code that places it, and its property values. So a new kind of thing
+// is a class listed in classes.js, not another branch in the loader, the
+// update loop and the draw loop.
+//
+// Each class declares what it reads in a static `editor` block: the glyphs
+// its codes may use and its properties, typed and with defaults. The asset
+// editor builds an object's form from it, and the game falls back on the
+// defaults for anything an object leaves out. Declarations add up down the
+// class chain, so an Enemy's stomp settings are every enemy's.
+//
+//   types: int, float, bool, text, color, choice (with `options`),
+//          sound, sprite, part (of the object's own sprite), background
+//   optional: true  — a part that may be missing, the class managing without
 //
 // The base is enough on its own for anything that just sits there: it draws
-// its object's current animation frame, tinted by its pairing id if it has
+// its sprite's current animation frame, tinted by its pairing id if it has
 // one and its sprite carries a glow mask.
 class Entity {
-  constructor(obj, x, y) {
-    this.obj = obj;
+  static editor = { props: {} };
+
+  // Where in its cell an object of this class stands, as a share of the cell:
+  // the middle, unless a class stands on the floor or hangs from the top. The
+  // editors read it too, to draw a thing where the game will put it.
+  static cellAnchor = [0.5, 0.5];
+
+  // A class whose code takes any digit reads that digit as the thing's own id.
+  static takesId = false;
+
+  // Every property this class reads, its bases' first, the sprite before all.
+  static propDefs() {
+    const chain = [];
+    for (let C = this; C && C.prototype instanceof Object; C = Object.getPrototypeOf(C)) chain.unshift(C);
+    const out = { sprite: { type: 'sprite', default: '', label: 'Sprite' } };
+    for (const C of chain) if (Object.hasOwn(C, 'editor')) Object.assign(out, C.editor.props || {});
+    return out;
+  }
+
+  // An object's values over the class defaults.
+  static propsFor(name) {
+    const own = (atlas.object(name) || {}).props || {};
+    const out = {};
+    for (const [k, d] of Object.entries(this.propDefs())) out[k] = own[k] !== undefined ? own[k] : d.default;
+    return out;
+  }
+
+  constructor(name, x, y) {
+    this.name = name;                         // the object, in objects.json
+    this.props = this.constructor.propsFor(name);
+    this.obj = refName(this.props.sprite);    // the sprite it wears, in sprites.json
     this.x = x;
     this.y = y;
-    this.r = atlas.radius(obj);
+    this.r = atlas.radius(this.obj);
     this.layer = LAYER_MAIN;   // overwritten at spawn; anything made mid-play is middle
   }
 
-  // Cell centre. Kinds that stand on the floor or hang from it override this.
-  // `index` is how many of this kind the level has already spawned.
-  static spawn(row, col, data, obj, index) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2));
+  // Where its cellAnchor says, moved by its sprite's offset. `index` is how
+  // many of this kind the level has already spawned.
+  static spawn(row, col, data, name, index) {
+    const e = new this(name, ...this.spawnPoint(row, col, name));
+    if (this.takesId) e.id = data;
+    return e;
+  }
+
+  static spawnPoint(row, col, name) {
+    const [ax, ay] = this.cellAnchor;
+    return atlas.place(atlas.spriteOf(name), (col + ax) * TILE, (row + ay) * TILE);
   }
 
   update() {}
@@ -3558,11 +3619,13 @@ class Entity {
   // back to how the level spawned it, for a restart without a reload
   reset() {}
 
-  // How this would be written in a block map, for the debug export. null if
-  // it isn't something a map spells out, like a rock already in flight.
+  // How this would be written in a block map, for the debug export: its
+  // object's first code, with its own id where the code takes any digit. null
+  // if it isn't something a map spells out, like a rock already in flight.
   mapCell() {
-    const ch = this.constructor.glyph;
-    return ch ? { ch, data: this.id || 0, x: this.x, y: this.y } : null;
+    const code = codesOf(atlas.object(this.name))[0];
+    if (!code) return null;
+    return { ch: code[1], data: code[0] === 'n' ? (this.id || 0) : +code[0], x: this.x, y: this.y };
   }
 
   touches(reach = R) {
@@ -3587,25 +3650,30 @@ function hurtWarm(bounce = 0) {
 </script>
 <!-- js/enemy.js -->
 <script>
+// Every enemy is stomped from above and hurts from the side; what a stomp is
+// worth is each enemy object's own.
 class Enemy extends Entity {
   static bucket = 'enemies';
-  static glyph = 'E';
+  static editor = {
+    props: {
+      stompScore: { type: 'int', default: 1, label: 'Score for a stomp' },
+      stompSound: { type: 'sound', default: 'sound::eat', label: 'Sound when stomped' },
+      stompBounce: { type: 'float', default: 0.55, label: 'Bounce off it, as a share of a jump' }
+    }
+  };
 
-  constructor(obj, x, y) {
-    super(obj, x, y);
+  constructor(name, x, y) {
+    super(name, x, y);
     this.dir = 1;
     this.alive = true;
   }
 
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE));
-  }
+  // standing on the top edge of its cell, to fall onto whatever is below
+  static cellAnchor = [0.5, 0];
 
   reset() { this.alive = true; this.dir = 1; }
 
-  mapCell() {
-    return this.alive ? { ch: 'E', data: this.constructor.kind, x: this.x, y: this.y } : null;
-  }
+  mapCell() { return this.alive ? super.mapCell() : null; }
 
   draw() { if (this.alive) this.drawBody(); }
 
@@ -3625,11 +3693,18 @@ class Enemy extends Entity {
 </script>
 <!-- js/beetle.js -->
 <script>
+// walks its ledge, turning at a wall or a drop
 class Beetle extends Enemy {
-  static kind = 0;
+  static editor = {
+    label: 'Beetle',
+    glyphs: 'E',
+    props: {
+      speed: { type: 'float', default: 1.1, label: 'Walking speed, px a frame' }
+    }
+  };
 
-  constructor(obj, x, y) {
-    super(obj, x, y);
+  constructor(name, x, y) {
+    super(name, x, y);
     this.type = 'beetle';
     this.vy = 0;
     this.frame = 0;
@@ -3658,7 +3733,7 @@ class Beetle extends Enemy {
     }
 
     // patrol: walk until a wall or a ledge is ahead, then turn around
-    const nextX = this.x + this.dir * ENEMY_SPEED;
+    const nextX = this.x + this.dir * this.props.speed;
     const aheadCol = Math.floor((nextX + this.dir * this.r) / TILE);
     const bodyRow = Math.floor(this.y / TILE);
     const footRow = Math.floor((this.y + this.r + 2) / TILE);
@@ -3687,16 +3762,21 @@ class Beetle extends Enemy {
 <script>
 // flying moth: no gravity, drifts side to side within a range of its spawn
 // point while bobbing up and down on a sine wave
-const FLYER_SPEED = 0.9;
-const FLYER_RANGE = 3 * TILE;
-const FLYER_BOB_AMPLITUDE = 14;
-const FLYER_BOB_SPEED = 0.05;
 
 class Moth extends Enemy {
-  static kind = 1;
+  static editor = {
+    label: 'Moth',
+    glyphs: 'E',
+    props: {
+      speed: { type: 'float', default: 0.9, label: 'Flying speed, px a frame' },
+      range: { type: 'float', default: 3, label: 'How far it strays each way, in tiles' },
+      bob: { type: 'float', default: 14, label: 'Bob height, px' },
+      bobSpeed: { type: 'float', default: 0.05, label: 'Bob speed' }
+    }
+  };
 
-  constructor(obj, x, y) {
-    super(obj, x, y);
+  constructor(name, x, y) {
+    super(name, x, y);
     this.type = 'flyer';
     this.baseX = x;
     this.baseY = y;
@@ -3704,17 +3784,16 @@ class Moth extends Enemy {
   }
 
   // mid-cell, because it never falls onto anything
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2));
-  }
+  static cellAnchor = [0.5, 0.5];
 
   update() {
     if (!this.alive) return;
     this.t++;
-    this.x += this.dir * FLYER_SPEED;
-    if (this.x > this.baseX + FLYER_RANGE) { this.x = this.baseX + FLYER_RANGE; this.dir = -1; }
-    else if (this.x < this.baseX - FLYER_RANGE) { this.x = this.baseX - FLYER_RANGE; this.dir = 1; }
-    this.y = this.baseY + Math.sin(this.t * FLYER_BOB_SPEED) * FLYER_BOB_AMPLITUDE;
+    const { speed, range, bob, bobSpeed } = this.props;
+    this.x += this.dir * speed;
+    if (this.x > this.baseX + range * TILE) { this.x = this.baseX + range * TILE; this.dir = -1; }
+    else if (this.x < this.baseX - range * TILE) { this.x = this.baseX - range * TILE; this.dir = 1; }
+    this.y = this.baseY + Math.sin(this.t * bobSpeed) * bob;
   }
 
   // wingbeat runs on its own clock, so a swarm isn't in lockstep
@@ -3726,19 +3805,24 @@ class Moth extends Enemy {
 <script>
 // hopping frog: sits on the ground, periodically leaps forward, turns
 // around at a wall or ledge (checked while grounded, same as the beetle)
-const HOPPER_HOP_VY = -8.5;
-const HOPPER_HOP_VX = 2.2;
-const HOPPER_PAUSE = 40; // frames to wait on the ground between hops
 
 class Frog extends Enemy {
-  static kind = 2;
+  static editor = {
+    label: 'Frog',
+    glyphs: 'E',
+    props: {
+      hopUp: { type: 'float', default: 8.5, label: 'Hop strength, up' },
+      hopForward: { type: 'float', default: 2.2, label: 'Hop strength, forward' },
+      pause: { type: 'int', default: 40, label: 'Frames on the ground between hops' }
+    }
+  };
 
-  constructor(obj, x, y) {
-    super(obj, x, y);
+  constructor(name, x, y) {
+    super(name, x, y);
     this.type = 'hopper';
     this.vx = 0;
     this.vy = 0;
-    this.pauseT = HOPPER_PAUSE;
+    this.pauseT = this.props.pause;
     this.grounded = false;
   }
 
@@ -3767,9 +3851,9 @@ class Frog extends Enemy {
     const bodyRow = Math.floor(this.y / TILE);
     const footRow = Math.floor((this.y + this.r + 2) / TILE);
     if (solidAt(aheadCol, bodyRow) || !solidAt(aheadCol, footRow)) this.dir *= -1;
-    this.vy = HOPPER_HOP_VY;
-    this.vx = this.dir * HOPPER_HOP_VX;
-    this.pauseT = HOPPER_PAUSE;
+    this.vy = -this.props.hopUp;
+    this.vx = this.dir * this.props.hopForward;
+    this.pauseT = this.props.pause;
   }
 
   drawBody() {
@@ -3787,7 +3871,6 @@ class Frog extends Enemy {
 <!-- js/pickup.js -->
 <script>
 // ---------- Collectibles ----------
-const GEM_VALUE = 5;
 const COIN_POP_DURATION = 28; // frames
 const COIN_POP_RISE = 22;     // px
 
@@ -3838,14 +3921,22 @@ class Pickup extends Entity {
 <script>
 class Coin extends Pickup {
   static bucket = 'coins';
-  static glyph = 'C';
+  static editor = {
+    label: 'Coin',
+    glyphs: 'C',
+    props: {
+      score: { type: 'int', default: 1, label: 'Score' },
+      pickSound: { type: 'sound', default: 'sound::coin', label: 'Sound when taken' }
+    }
+  };
+
   take() {
     this.popT = 0;
-    score++;
+    score += this.props.score;
     stats.coins++;
     saveStats();
     checkStatAchievements();
-    playSound('coin');
+    playSound(this.props.pickSound);
   }
 }
 
@@ -3854,108 +3945,135 @@ class Coin extends Pickup {
 <script>
 class Gem extends Pickup {
   static bucket = 'gems';
-  static glyph = 'G';
+  static editor = {
+    label: 'Gem',
+    glyphs: 'G',
+    props: {
+      score: { type: 'int', default: 5, label: 'Score' },
+      pickSound: { type: 'sound', default: 'sound::gem', label: 'Sound when taken' }
+    }
+  };
+
   take() {
     this.popT = 0;
-    score += GEM_VALUE;
+    score += this.props.score;
     stats.gems++;
     saveStats();
     checkStatAchievements();
-    playSound('gem');
+    playSound(this.props.pickSound);
   }
 }
 
 </script>
 <!-- js/shield.js -->
 <script>
-// A shield's art may carry a part called "worn": how it looks on her once
-// taken, drawn round her head in place of the plain ring. Lying on the ground
-// it shows its other frames, so the worn look never turns up in its loop.
-const SHIELD_WORN_PART = 'worn';
-
+// A shield's sprite may carry a part to wear: how it looks on her once taken,
+// drawn over her head in place of the plain ring. Lying on the ground it shows
+// its other frames, so the worn look never turns up in its loop.
 class Shield extends Pickup {
   static bucket = 'shieldPickups';
-  static glyph = 'S';
+  static editor = {
+    label: 'Shield',
+    glyphs: 'S',
+    props: {
+      worn: { type: 'part', default: 'worn', optional: true, label: 'Part worn on her (without one, a plain ring)' },
+      pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken' }
+    }
+  };
 
   frame() {
     const parts = atlas.def(this.obj).parts;
-    if (!parts || parts[SHIELD_WORN_PART] === undefined) return atlas.frame(this.obj);
-    const own = Object.keys(parts).find(p => p !== SHIELD_WORN_PART);
+    const worn = this.props.worn;
+    if (!parts || parts[worn] === undefined) return atlas.frame(this.obj);
+    const own = Object.keys(parts).find(p => p !== worn);
     return own ? atlas.partFrame(this.obj, own) : 0;
   }
 
   take() {
     hasShield = true;
-    shieldObj = this.obj;          // which art she wears, for drawWorm
-    playSound('shieldUp');
+    shieldWorn = { sprite: this.obj, part: this.props.worn };   // what drawWorm puts on her
+    playSound(this.props.pickSound);
   }
 }
 
 </script>
 <!-- js/lantern.js -->
 <script>
-// Taking it decides how far she can see. The reach and the darkness itself
-// live in the engine, since they are drawn over the whole screen rather than
-// by any one object.
-//
-// Each lamp is a named part of the one sheet, and the level's glyph map says
-// which info digit picks which — so the reach is keyed by the part rather
-// than by the digit, and a pack can deal the three out however it likes.
-// 'fulllight' is the full light a level already starts in, so that lamp puts
-// it back.
-const LANTERN_REACH = { fulllight: 0, smalllight: 2, biglight: 6 };
-const LANTERN_DEFAULT_PART = 'fulllight';
-
+// Taking it decides how far she can see. The darkness itself lives in the
+// engine, since it is drawn over the whole screen rather than by any one
+// object; each lantern object says which lamp of its sprite it shows and how
+// far that lamp lets her see. A reach of 0 is the full light a level already
+// starts in, so that lamp puts it back.
 class Lantern extends Pickup {
   static bucket = 'lanterns';
-  static glyph = 'N';   // 'T' and 'L' are spoken for, by the tileset and the door
-
-  constructor(obj, x, y, id = 0) { super(obj, x, y); this.id = id; }
-
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2), data);
-  }
-
-  part() { return atlas.partFor(Lantern.glyph, this.id) || LANTERN_DEFAULT_PART; }
+  static editor = {
+    label: 'Lantern',
+    glyphs: 'N',   // 'T' and 'L' are spoken for, by the tileset and the door
+    props: {
+      part: { type: 'part', default: '', label: 'Lamp (part of the sprite)' },
+      reach: { type: 'int', default: 0, label: 'How far she sees, in tiles (0 = full light)' },
+      pickSound: { type: 'sound', default: 'sound::lantern', label: 'Sound when taken' }
+    }
+  };
 
   // Its part is a span of frames, so the flame breathes within that lamp
   // rather than running the whole sheet.
-  frame() { return atlas.partFrame(this.obj, this.part()) ?? atlas.frame(this.obj); }
+  frame() { return atlas.partFrame(this.obj, this.props.part) ?? atlas.frame(this.obj); }
 
   take() {
-    lightReach = LANTERN_REACH[this.part()] || 0;
-    playSound('lantern');
+    lightReach = this.props.reach || 0;
+    playSound(this.props.pickSound);
   }
 }
 
 </script>
 <!-- js/key.js -->
 <script>
+// Its code takes any digit, which is its id: the door it opens and the
+// colour it glows. 0 is the master key.
 class Key extends Pickup {
   static bucket = 'keyPickups';
-  static glyph = 'K';
-  constructor(obj, x, y, id = 0) { super(obj, x, y); this.id = id; }
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2), data);
-  }
+  static editor = {
+    label: 'Key',
+    glyphs: 'K',
+    props: {
+      pickSound: { type: 'sound', default: 'sound::key', label: 'Sound when taken' }
+    }
+  };
+
+  static takesId = true;
   take() {
     keysHeld.push(this.id || 0);
-    playSound('key');
+    playSound(this.props.pickSound);
   }
 }
 
 </script>
 <!-- js/platform.js -->
 <script>
+// A moving ledge. Its glyph is also its way of moving: '>' and '<' run
+// sideways, '^' and 'v' up and down, each setting off the way it points, so
+// one platform object usually takes all four codes. game.js builds them after
+// the terrain, since how far one travels depends on what is around it.
 class Platform extends Entity {
-  constructor(obj, baseX, baseY, wTiles, axis, amplitude, speed) {
-    super(obj, baseX, baseY);
+  static editor = {
+    label: 'Platform',
+    glyphs: '><^v',
+    props: {
+      speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)' }
+    }
+  };
+
+  static cellAnchor = [0, 0];   // placed by its left end, on the cell's top
+
+  constructor(name, baseX, baseY, wTiles, axis, amplitude, speed) {
+    super(name, baseX, baseY);
     this.baseX = baseX;
     this.baseY = baseY;
     this.prevX = baseX;
     this.prevY = baseY;
     this.w = wTiles * TILE;
-    this.h = atlas.hit(obj).h;
+    this.h = atlas.hit(this.obj).h;
     this.axis = axis;
     this.amplitude = amplitude;
     this.speed = speed;
@@ -4002,20 +4120,19 @@ class Platform extends Entity {
 // Hazards that drop from above at fixed x spots (mostly near the cave/
 // tunnel sections) and fall under gravity until they hit the ground or
 // her. A shield absorbs one and shatters it; without a shield, it costs
-// a life just like an enemy. How heavily one falls is its object's own
-// `fall`, so two rocks can share a sprite and still drop at different speeds.
-const ROCK_INTERVAL = 140;      // frames between drops
-
+// a life just like an enemy. It is made mid-play by its spawner, whose sprite
+// it wears and whose gravity it falls by; no block places one.
 class Rock extends Entity {
-  constructor(obj, x, y) {
-    super(obj, x, y);
-    const fall = atlas.def(obj).fall || {};
-    this.gravity = fall.gravity ?? GRAVITY;
-    this.maxFall = fall.max ?? MAX_FALL;
+  constructor(spawner) {
+    super(spawner.name, spawner.x, spawner.y);
+    this.gravity = spawner.props.gravity;
+    this.maxFall = spawner.props.maxFall;
     this.vy = 0;
     this.alive = true;
     this.spin = (Math.random() - 0.5) * 0.2;
   }
+
+  mapCell() { return null; }
 
   update() {
     if (!this.alive) return;
@@ -4055,31 +4172,42 @@ class Rock extends Entity {
 </script>
 <!-- js/rock-spawner.js -->
 <script>
-// The ledge a rock drops from. It isn't drawn — the hazard is the rock.
+// The ledge a rock drops from. It isn't drawn — the hazard is the rock, which
+// wears the spawner's sprite and falls as the spawner says, so two spawners
+// can share a sprite and still drop at different speeds.
 class RockSpawner extends Entity {
   static bucket = 'rockSpawners';
-  static glyph = 'R';
+  static editor = {
+    label: 'Falling rock',
+    glyphs: 'R',
+    props: {
+      interval: { type: 'int', default: 140, label: 'Frames between drops' },
+      gravity: { type: 'float', default: 0.55, label: 'Gravity' },
+      maxFall: { type: 'float', default: 12, label: 'Top falling speed' }
+    }
+  };
 
-  constructor(obj, x, y, phase) {
-    super(obj, x, y);
-    this.interval = ROCK_INTERVAL;
+  constructor(name, x, y, phase) {
+    super(name, x, y);
     this.timer = phase;
   }
 
-  static spawn(row, col, data, obj, index) {
+  // on the ledge's top edge, which is where its rocks start falling
+  static cellAnchor = [0.5, 0];
+
+  static spawn(row, col, data, name, index) {
     // staggered so a row of them doesn't drop in unison
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE), index * 37 % 90);
+    return new this(name, ...this.spawnPoint(row, col, name), index * 37 % 90);
   }
 
   update() {
     this.timer--;
     if (this.timer > 0) return;
-    this.timer = this.interval;
-    rocks.push(new Rock(this.obj, this.x, this.y));
+    this.timer = this.props.interval;
+    rocks.push(new Rock(this));
   }
 
-  reset() { this.timer = this.interval; }
-
+  reset() { this.timer = this.props.interval; }
   draw() {}
   debugShape() { return null; }
 }
@@ -4091,19 +4219,28 @@ class RockSpawner extends Entity {
 // Rooted to the ground, closed and harmless normally. If she's airborne
 // and passes close overhead (jumping over it), it lunges straight up
 // trying to catch her, then retracts and waits before it can strike again.
-const PLANT_RISE_FRAMES = 16;
-const PLANT_HOLD_FRAMES = 10;
-const PLANT_FALL_FRAMES = 20;
-const PLANT_COOLDOWN = 50;
-const PLANT_MAX_HEIGHT = 100;
-const PLANT_TRIGGER_RADIUS = 40;
 
 class Plant extends Entity {
   static bucket = 'plants';
-  static glyph = 'V';
+  static editor = {
+    label: 'Plant',
+    glyphs: 'V',
+    props: {
+      reach: { type: 'int', default: 100, label: 'How high it lunges, px' },
+      trigger: { type: 'int', default: 40, label: 'How near overhead sets it off, px' },
+      rise: { type: 'int', default: 16, label: 'Frames to lunge up' },
+      hold: { type: 'int', default: 10, label: 'Frames held at the top' },
+      fall: { type: 'int', default: 20, label: 'Frames to sink back' },
+      cooldown: { type: 'int', default: 50, label: 'Frames before it can strike again' },
+      bounce: { type: 'float', default: 0.4, label: 'How far a bite throws her, as a share of a jump' },
+      bud: { type: 'part', default: 'bud', label: 'Part when resting' },
+      stem: { type: 'part', default: 'stem', label: 'Part stretched up to the head' },
+      head: { type: 'part', default: 'head', label: 'Part that bites' }
+    }
+  };
 
-  constructor(obj, x, groundY) {
-    super(obj, x, groundY);
+  constructor(name, x, groundY) {
+    super(name, x, groundY);
     this.groundY = groundY;
     this.state = 'idle';
     this.t = 0;
@@ -4111,43 +4248,41 @@ class Plant extends Entity {
   }
 
   // rooted to the floor of its cell
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, (row + 1) * TILE));
-  }
+  static cellAnchor = [0.5, 1];
 
   reset() { this.state = 'idle'; this.t = 0; this.height = 0; }
 
   update() {
     switch (this.state) {
       case 'idle':
-        if (!warm.grounded && warm.y < this.groundY - 20 && Math.abs(warm.x - this.x) < PLANT_TRIGGER_RADIUS) {
+        if (!warm.grounded && warm.y < this.groundY - 20 && Math.abs(warm.x - this.x) < this.props.trigger) {
           this.state = 'rising';
           this.t = 0;
         }
         break;
       case 'rising':
         this.t++;
-        this.height = Math.min(PLANT_MAX_HEIGHT, (this.t / PLANT_RISE_FRAMES) * PLANT_MAX_HEIGHT);
-        if (this.t >= PLANT_RISE_FRAMES) { this.state = 'holding'; this.t = 0; }
+        this.height = Math.min(this.props.reach, (this.t / this.props.rise) * this.props.reach);
+        if (this.t >= this.props.rise) { this.state = 'holding'; this.t = 0; }
         break;
       case 'holding':
         this.t++;
-        if (this.t >= PLANT_HOLD_FRAMES) { this.state = 'falling'; this.t = 0; }
+        if (this.t >= this.props.hold) { this.state = 'falling'; this.t = 0; }
         break;
       case 'falling':
         this.t++;
-        this.height = Math.max(0, PLANT_MAX_HEIGHT * (1 - this.t / PLANT_FALL_FRAMES));
-        if (this.t >= PLANT_FALL_FRAMES) { this.height = 0; this.state = 'cooldown'; this.t = 0; }
+        this.height = Math.max(0, this.props.reach * (1 - this.t / this.props.fall));
+        if (this.t >= this.props.fall) { this.height = 0; this.state = 'cooldown'; this.t = 0; }
         break;
       case 'cooldown':
         this.t++;
-        if (this.t >= PLANT_COOLDOWN) this.state = 'idle';
+        if (this.t >= this.props.cooldown) this.state = 'idle';
         break;
     }
 
     if (this.height <= 4) return;
     const headY = this.groundY - this.height;
-    if (Math.hypot(warm.x - this.x, warm.y - headY) < R + this.r) hurtWarm(0.4);
+    if (Math.hypot(warm.x - this.x, warm.y - headY) < R + this.r) hurtWarm(this.props.bounce);
   }
 
   draw() {
@@ -4155,16 +4290,16 @@ class Plant extends Entity {
     // each part may be one frame or an animation of several
     const frame = part => atlas.partFrame(this.obj, part) ?? 0;
     if (this.height < 2) {
-      atlas.draw(this.obj, this.x, this.groundY, frame('bud'));
+      atlas.draw(this.obj, this.x, this.groundY, frame(this.props.bud));
       return;
     }
     // the stem is a plain bar, so stretching it to reach the head is safe
     ctx.save();
     ctx.translate(this.x, this.groundY);
-    ctx.scale(1, this.height / PLANT_MAX_HEIGHT);
-    atlas.draw(this.obj, 0, 0, frame('stem'));
+    ctx.scale(1, this.height / this.props.reach);
+    atlas.draw(this.obj, 0, 0, frame(this.props.stem));
     ctx.restore();
-    atlas.draw(this.obj, this.x, this.groundY - this.height, frame('head'));
+    atlas.draw(this.obj, this.x, this.groundY - this.height, frame(this.props.head));
   }
 }
 
@@ -4172,15 +4307,14 @@ class Plant extends Entity {
 <!-- js/portal.js -->
 <script>
 // ---------- Pads, gates and goals ----------
-// All four are the plain Entity drawing: an animated sprite plus its glow
-// mask tinted by the id that pairs it with something else.
+// Portal and flag are the plain Entity drawing: an animated sprite plus its
+// glow mask tinted by the id that pairs it with something else. Their codes
+// take any digit, which is that id.
 class Portal extends Entity {
   static bucket = 'portals';
-  static glyph = 'O';
-  constructor(obj, x, y, id = 0) { super(obj, x, y); this.id = id; }
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2), data);
-  }
+  static editor = { label: 'Portal', glyphs: 'O', props: {} };
+
+  static takesId = true;
 }
 
 </script>
@@ -4188,52 +4322,70 @@ class Portal extends Entity {
 <script>
 class Checkpoint extends Entity {
   static bucket = 'checkpoints';
-  static glyph = '!';
-  constructor(obj, x, y) { super(obj, x, y); this.activated = false; }
+  static editor = {
+    label: 'Checkpoint',
+    glyphs: '!',
+    props: {
+      off: { type: 'part', default: 'off', label: 'Part before she reaches it' },
+      on: { type: 'part', default: 'on', label: 'Part once reached' },
+      sound: { type: 'sound', default: 'sound::checkpoint', label: 'Sound when reached' }
+    }
+  };
+
+  constructor(name, x, y) { super(name, x, y); this.activated = false; }
   reset() { this.activated = false; }
   update() {
     if (this.activated || !this.touches()) return;
     this.activated = true;
     respawnPoint = { x: this.x, y: this.y };
-    playSound('checkpoint');
+    playSound(this.props.sound);
   }
   draw() {
-    atlas.draw(this.obj, this.x, this.y, atlas.partFrame(this.obj, this.activated ? 'on' : 'off') ?? 0);
+    atlas.draw(this.obj, this.x, this.y, atlas.partFrame(this.obj, this.activated ? this.props.on : this.props.off) ?? 0);
   }
 }
 
 </script>
 <!-- js/flag.js -->
 <script>
+// The level's finish. Its id picks which of the level's exits it leads to.
 class Flag extends Entity {
   static bucket = 'finishPoints';
-  static glyph = 'F';
-  constructor(obj, x, y, id = 0) { super(obj, x, y); this.id = id; }
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2), data);
-  }
+  static editor = { label: 'Flag', glyphs: 'F', props: {} };
+
+  static takesId = true;
 }
 
 </script>
 <!-- js/door.js -->
 <script>
 // A gate, not a tile — it stamps its own cell solid and clears it when opened.
+// Its code takes any digit, which is its id: the key that opens it, and the
+// colour it glows. 0 takes any key.
 class Door extends Entity {
   static bucket = 'lockedDoorSpots';
-  constructor(obj, row, col, id = 0) {
-    super(obj, col * TILE, row * TILE);
+  static mainLayerOnly = true;   // only the solid layer has cells to stamp
+  static cellAnchor = [0, 0];     // it is its whole cell
+  static takesId = true;
+  static editor = {
+    label: 'Door',
+    glyphs: 'L',
+    props: {
+      openSound: { type: 'sound', default: 'sound::unlock', label: 'Sound when opened' }
+    }
+  };
+
+  constructor(name, row, col, id = 0) {
+    super(name, col * TILE, row * TILE);
     this.row = row;
     this.col = col;
     this.id = id;
     this.open = false;
   }
-  static spawn(row, col, data, obj) { return new this(obj, row, col, data); }
+  static spawn(row, col, data, name) { return new this(name, row, col, data); }
   reset() { this.open = false; }
   draw() { if (!this.open) super.draw(); }
-  mapCell() {
-    return this.open ? null
-      : { ch: 'L', data: this.id, x: this.col * TILE + TILE / 2, y: this.row * TILE + TILE / 2 };
-  }
+  mapCell() { return this.open ? null : { ...super.mapCell(), x: this.col * TILE + TILE / 2, y: this.row * TILE + TILE / 2 }; }
   debugShape() { return null; }   // its cell is already solid in the terrain view
 }
 
@@ -4245,11 +4397,11 @@ class Door extends Entity {
 // '1M0' and '2M0' are three different notes on the same post.
 class Sign extends Entity {
   static bucket = 'signs';
-  static glyph = 'M';
-  constructor(obj, x, y, id = 0) { super(obj, x, y); this.id = id; this.reading = false; }
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2), data);
-  }
+  static editor = { label: 'Sign', glyphs: 'M', props: {} };
+
+  static takesId = true;
+
+  constructor(name, x, y) { super(name, x, y); this.reading = false; }
   reset() { this.reading = false; }
   update() {
     const near = this.touches();
@@ -4269,29 +4421,32 @@ class Sign extends Entity {
 // not how much room it takes. Nothing reads its size, so nothing minds.
 class Decoration extends Entity {
   static bucket = 'decorations';
-  static glyph = 'W';
+  static editor = { label: 'Decoration', glyphs: 'W', props: {} };
 
   // Never collides, so it has no ring to show in the collision view.
   debugShape() { return null; }
 }
 
 </script>
-<!-- js/spawn.js -->
+<!-- js/classes.js -->
 <script>
-// Which glyph spawns what. An array picks by the block's info digit, which is
-// how one 'E' covers three kinds of enemy. Platforms aren't here because they
-// can only be sized once the terrain around them is known, and 'P' marks her
-// start rather than spawning anything.
-const SPAWN = {
-  E: [Beetle, Moth, Frog],
-  C: Coin, G: Gem, K: Key, S: Shield, N: Lantern,
-  O: Portal, '!': Checkpoint, V: Plant, R: RockSpawner,
-  L: Door, F: Flag, M: Sign, W: Decoration
-};
+// ---------- The classes a pack's objects can be ----------
+// Every class the game offers to objects.json — and the list the asset editor
+// shows when a new object is made, each with the glyphs and properties its
+// `editor` block declares. A new kind of thing is a class file, its script tag
+// in index.html (and the asset editor's), and a name here.
+const GAME_CLASSES = [
+  Beetle, Moth, Frog,
+  Coin, Gem, Key, Shield, Lantern,
+  Portal, Checkpoint, Flag, Door, Sign,
+  Plant, RockSpawner, Platform, Decoration
+];
+const CLASS_BY_NAME = new Map(GAME_CLASSES.map(C => [C.name, C]));
 
-const spawnClass = (ch, data) => {
-  const named = SPAWN[ch];
-  return Array.isArray(named) ? (named[data] || named[0]) : named;
+// The class an object is, by its name in objects.json.
+const classOf = name => {
+  const o = atlas.object(name);
+  return o ? CLASS_BY_NAME.get(o.class) || null : null;
 };
 
 </script>

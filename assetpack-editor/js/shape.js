@@ -20,14 +20,13 @@ const SHAPES = [
 ];
 const SNAP = 0.5;                  // half a pixel, which is what a centred odd size needs
 
-// Where in its cell each kind spawns, as the game's own `static spawn` puts
-// it — the same table the level editor draws by.
-const CELL_ANCHOR = {
-  door: [0, 0],
-  beetle: [0.5, 0], frog: [0.5, 0],
-  rock: [0.5, 0], rock2: [0.5, 0],
-  plant: [0.5, 1]
-};
+// Where in its cell a sprite is placed: as its class has it (cellAnchor) for
+// the first object that wears it, or the middle for one nothing wears yet.
+function spriteAnchor(o) {
+  const user = pack.objects.find(x => refName(x.props.sprite) === o.name);
+  const C = user && gameClass(user.cls);
+  return C ? C.cellAnchor : [0.5, 0.5];
+}
 
 // The pairing colours, as src/js/atlas.js has them. A glow without a colour of
 // its own takes the one of whatever it is paired with, and an object paired
@@ -56,15 +55,13 @@ function setPlaying(on) {
 }
 $('#pvPlay').onclick = () => setPlaying(!pv.playing);
 
-// A copy is drawn and placed by its source; only its collision is its own,
-// and a copy that sets none takes the source's.
+// Everything the preview and its handles work from, for the sprite open now.
+// (`art` is the sprite itself; it once could be another's, for a copy.)
 function shapeOf(o = current) {
   if (!o) return null;
-  const src = o.copy ? objByName(o.copy) : null;
-  const art = src || o;
-  const own = o.collision && o.collision.shape !== 'none';
+  const art = o;
   const scale = (art.tiles * TILE) / art.fw;
-  const a = CELL_ANCHOR[o.name] || [0.5, 0.5];
+  const a = spriteAnchor(o);
   const off = art.offset || [0, 0];
   const size = { w: art.fw * scale, h: art.fh * scale };
   const C = { x: a[0] * TILE + off[0], y: a[1] * TILE + off[1] };       // collision centre
@@ -72,16 +69,15 @@ function shapeOf(o = current) {
     o, art, scale, size, C,
     S: { x: a[0] * TILE, y: a[1] * TILE },                              // where its kind spawns
     T: { x: C.x - art.pivot[0] * size.w, y: C.y - art.pivot[1] * size.h },  // sprite's top-left
-    col: own || !src ? (o.collision || { shape: 'none' }) : (src.collision || { shape: 'none' }),
-    inherited: !own && !!src,
-    locked: !!src
+    col: o.collision || { shape: 'none' },
+    inherited: false,
+    locked: false
   };
 }
 
-// The collision to write into: an inherited one becomes the copy's own the
-// moment it is touched.
+// The collision to write into.
 function ownCol(s) {
-  if (s.inherited) { s.o.collision = { ...s.col }; s.col = s.o.collision; s.inherited = false; }
+  if (!s.o.collision) s.o.collision = s.col;
   return s.col;
 }
 
@@ -459,9 +455,8 @@ function renderShape() {
           `<button data-anchor="${i}" title="Sprite's ${ANCHOR_NAMES[i]} on the cell's ${ANCHOR_NAMES[i]}" aria-label="Align ${ANCHOR_NAMES[i]}" ${locked ? 'disabled' : ''}></button>`).join('')}</div>
         <div class="nfs three">${field('tx', 'x', 1, locked)}${field('ty', 'y', 1, locked)}${field('tiles', 'Tiles wide', 0.125, locked)}</div>
       </div>
-      ${locked ? `<p class="hint">A copy is placed and sized like <b>${esc(s.o.copy)}</b>, so that is set there.</p>` : ''}
     </div>
-    <div class="ctl"><span>Collision on the sprite${inherited ? ` <em class="muted">(from ${esc(s.o.copy)})</em>` : ''}</span>
+    <div class="ctl"><span>Collision on the sprite</span>
       <div class="seg shapeseg">${SHAPES.map(([k, label, icon]) =>
         `<button data-shape="${k}" class="${k === col.shape ? 'on' : ''}" title="${label}">
           ${icon ? `<svg viewBox="0 0 26 12" fill="none" stroke="currentColor" stroke-width="1.4">${icon}</svg>` : ''}<span>${label}</span></button>`).join('')}</div>

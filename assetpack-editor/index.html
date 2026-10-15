@@ -21,18 +21,19 @@
 </header>
 
 <nav class="tabs" id="tabs">
-  <button class="tab on" data-tab="objects">Objects</button>
+  <button class="tab on" data-tab="objects">Sprites</button>
+  <button class="tab" data-tab="gameobjects">Objects</button>
   <button class="tab" data-tab="tiles">Tiles</button>
   <button class="tab" data-tab="backgrounds">Backgrounds</button>
   <button class="tab" data-tab="sounds">Sounds</button>
   <button class="tab" data-tab="pack">Pack</button>
 </nav>
 
-<!-- ---------------- objects ---------------- -->
+<!-- ---------------- sprites ---------------- -->
 <main class="page on" data-page="objects">
   <aside class="rail">
     <div class="panel">
-      <div class="ph"><h2>Objects</h2><button class="btn sm" id="objAdd">+ New</button></div>
+      <div class="ph"><h2>Sprites</h2><button class="btn sm" id="objAdd">+ New</button></div>
       <div class="list" id="objList"></div>
     </div>
   </aside>
@@ -76,6 +77,32 @@
           </div>
         </div>
         <div id="objShape" class="shape"></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<!-- ---------------- objects ---------------- -->
+<main class="page" data-page="gameobjects">
+  <aside class="rail">
+    <div class="panel">
+      <div class="ph"><h2>Objects</h2><button class="btn sm" id="goAdd">+ New</button></div>
+      <div class="list" id="goList"></div>
+    </div>
+  </aside>
+  <section class="work">
+    <div class="panel">
+      <div class="ph"><h2 id="goTitle">Object</h2></div>
+      <div class="pb" id="goForm"></div>
+    </div>
+  </section>
+  <aside class="side">
+    <div class="panel">
+      <div class="ph"><h2>Looks like</h2></div>
+      <div class="pb">
+        <div class="stage" id="goStage"><canvas id="goPv"></canvas></div>
+        <p class="hint" id="goAbout"></p>
+        <p class="hint">An object is what a level places: one of the game's classes, the codes a map block names it by, and a value for each property the class reads. Its look is a sprite, made on the Sprites tab.</p>
       </div>
     </div>
   </aside>
@@ -264,6 +291,30 @@
 <audio id="bgMusic" loop preload="auto"></audio>
 
 <script src="js/util.js"></script>
+<!-- the game's own classes: what an object can be, and the properties each
+     reads. Loaded for their declarations only; nothing here runs the game. -->
+<script src="../src/js/entity.js"></script>
+<script src="../src/js/enemy.js"></script>
+<script src="../src/js/beetle.js"></script>
+<script src="../src/js/moth.js"></script>
+<script src="../src/js/frog.js"></script>
+<script src="../src/js/pickup.js"></script>
+<script src="../src/js/coin.js"></script>
+<script src="../src/js/gem.js"></script>
+<script src="../src/js/shield.js"></script>
+<script src="../src/js/lantern.js"></script>
+<script src="../src/js/key.js"></script>
+<script src="../src/js/platform.js"></script>
+<script src="../src/js/rock.js"></script>
+<script src="../src/js/rock-spawner.js"></script>
+<script src="../src/js/plant.js"></script>
+<script src="../src/js/portal.js"></script>
+<script src="../src/js/checkpoint.js"></script>
+<script src="../src/js/flag.js"></script>
+<script src="../src/js/door.js"></script>
+<script src="../src/js/sign.js"></script>
+<script src="../src/js/decoration.js"></script>
+<script src="../src/js/classes.js"></script>
 <script src="js/zip.js"></script>
 <script src="js/db.js"></script>
 <script src="js/pack.js"></script>
@@ -271,6 +322,7 @@
 <script src="js/paint.js"></script>
 <script src="js/objects.js"></script>
 <script src="js/shape.js"></script>
+<script src="js/gameobjects.js"></script>
 <script src="js/tiles.js"></script>
 <script src="js/backgrounds.js"></script>
 <script src="../src/js/sound.js"></script>

@@ -44,10 +44,9 @@ function collisionOut(col, anchor) {
   return { shape: 'circle', ...at, r: num(col.r) };
 }
 
-async function packObjects() {
-  const usable = pack.objects.filter(o => o.name.trim());
-  const drawn = usable.filter(o => !o.copy && o.frames.length);
-  if (!drawn.length) throw new Error('no object has any frames yet');
+async function packSprites() {
+  const drawn = pack.sprites.filter(o => o.name.trim() && o.frames.length);
+  if (!drawn.length) throw new Error('no sprite has any frames yet');
 
   const built = new Map();
   for (const o of drawn) {
@@ -109,23 +108,22 @@ async function packObjects() {
   for (const b of built.values()) {
     const def = entryFor(b);
     if (b.o.collision && b.o.collision.shape !== 'none') def.collision = collisionOut(b.o.collision, def.anchor);
-    if (b.o.fall) def.fall = { gravity: num(b.o.fall.gravity, 3), max: num(b.o.fall.max, 3) };
     defs[b.o.name] = def;
-  }
-
-  // A copy is a second object on another's art: it owns nothing in the sheet,
-  // only the fields that make it behave differently.
-  for (const o of usable.filter(x => x.copy)) {
-    const src = built.get(o.copy);
-    if (!src) throw new Error(`${o.name} copies "${o.copy}", which has no frames`);
-    const def = entryFor(src);
-    const col = o.collision && o.collision.shape !== 'none' ? o.collision : src.o.collision;
-    if (col && col.shape !== 'none') def.collision = collisionOut(col, def.anchor);
-    if (o.fall) def.fall = { gravity: num(o.fall.gravity, 3), max: num(o.fall.max, 3) };
-    defs[o.name] = def;
   }
 
   const ordered = {};
   for (const name of Object.keys(defs).sort()) ordered[name] = defs[name];
-  return { sheet, manifest: { texture: 'objects.png', objects: ordered } };
+  return { sheet, manifest: { texture: 'objects.png', sprites: ordered } };
+}
+
+// objects.json: each object's class, codes and every property its class
+// declares, so the file reads on its own. A lone code is written bare.
+function objectsManifest() {
+  const objects = {};
+  for (const o of [...pack.objects].sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!o.name.trim()) continue;
+    fillProps(o);
+    objects[o.name] = { class: o.cls, code: o.code.length === 1 ? o.code[0] : [...o.code], props: { ...o.props } };
+  }
+  return { sprites: 'sprites.json', objects };
 }

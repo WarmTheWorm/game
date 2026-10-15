@@ -114,7 +114,7 @@ function tryOpenDoor(col, row) {
   door.open = true;
   collideGrid[row][col] = HIT_NONE;
   updateHud();
-  playSound('unlock');
+  playSound(door.props.openSound);
   return true;
 }
 
@@ -427,7 +427,7 @@ function drawDeathAnimation() {
 let score = 0;
 let lives = 3;
 let hasShield = false;
-let shieldObj = null;      // the object of the shield she holds, whose "worn" part she wears
+let shieldWorn = null;     // { sprite, part } of the shield she holds, drawn over her head
 let gameState = 'start'; // 'start' | 'playing' | 'gameover'
 
 const scoreEl = document.getElementById('score');
@@ -617,7 +617,6 @@ function loseLife() {
 // optional same-shape "info" layer, whichever keeps the map readable.
 // Angular speed is quoted for a reference travel distance; makeRangedPlatform
 // rescales it per platform so they all cross at the same px/frame.
-const PLATFORM_SPEED = 0.04;
 const PLATFORM_REF_AMPLITUDE = 2.5 * TILE;
 
 // First travel boundary out from (row,col) in direction `step`: an explicit
@@ -636,8 +635,8 @@ function platformBound(hits, gRows, gCols, marks, row, col, axis, step) {
   }
 }
 
-function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir) {
-  const p = new Platform(atlas.objectFor(dir), col * TILE, row * TILE, 1, axis, 0, 0.02);
+function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir, name) {
+  const p = new Platform(name, col * TILE, row * TILE, 1, axis, 0, 0.02);
   const lo = platformBound(hits, gRows, gCols, marks, row, col, axis, -1);
   const hi = platformBound(hits, gRows, gCols, marks, row, col, axis, 1);
 
@@ -662,8 +661,8 @@ function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir) {
   // Frequency scales inversely with travel, so a long run takes
   // proportionally longer and every platform crosses at the same px/frame.
   p.speed = amplitude > 0.001
-    ? PLATFORM_SPEED * PLATFORM_REF_AMPLITUDE / amplitude
-    : PLATFORM_SPEED;
+    ? p.props.speed * PLATFORM_REF_AMPLITUDE / amplitude
+    : p.props.speed;
   p.amplitude = amplitude;
   p.phase = phase;
   if (axis === 'x') { p.baseX = base; p.x = p.prevX = from; }
@@ -764,9 +763,9 @@ function parseBlockMap(text, sheet) {
 }
 
 function loadCustomLevel(text, opts = {}) {
-  // A level brings its own object manifest and glyph map; a pasted one falls
-  // back to the root manifest and the built-in glyphs.
-  atlas.use(opts.manifest || atlas.root, opts.glyphs);
+  // A level brings its own object manifest, whose objects' codes say what
+  // each block spawns; a pasted one falls back to the root manifest.
+  atlas.use(opts.manifest || atlas.root);
   const sheet = new Tileset(opts.tileset);
   const map = parseBlockMap(text, sheet);
   if (!map) return { ok: false, error: 'That looks empty — paste a level first.' };
@@ -797,17 +796,21 @@ function loadCustomLevel(text, opts = {}) {
   const platformSpots = [];
   let startPos = null;
 
-  // Entities spawn into the one world whichever layer their glyph sits in,
-  // carrying that block's own data character — and the layer itself, which is
-  // all that decides when they are drawn.
-  const spawnEntity = (ch, d, r, c, layer) => {
+  // A block's two characters name an object through the objects' codes, and
+  // the object names its class. Entities spawn into the one world whichever
+  // layer their block sits in, carrying that block's own digit — and the layer
+  // itself, which is all that decides when they are drawn.
+  const spawnEntity = (ch, d, r, c, layer, onMain) => {
     if (ch === 'P') { startPos = { x: c * TILE + TILE / 2, y: r * TILE }; return; }
-    if (ch === '>' || ch === '<') { platformSpots.push({ row: r, col: c, axis: 'x', dir: ch, layer }); return; }
-    if (ch === '^' || ch === 'v') { platformSpots.push({ row: r, col: c, axis: 'y', dir: ch, layer }); return; }
-    const Cls = spawnClass(ch, d);
+    const name = atlas.objectAt(ch, d);
+    const Cls = name && classOf(name);
     if (!Cls) return;
+    // a door is the one thing that only counts in the solid layer
+    if (Cls.mainLayerOnly && !onMain) return;
+    // platforms wait for the terrain, since how far they travel depends on it
+    if (Cls === Platform) { platformSpots.push({ row: r, col: c, axis: ch === '>' || ch === '<' ? 'x' : 'y', dir: ch, name, layer }); return; }
     const into = spawned[Cls.bucket];
-    const e = Cls.spawn(r, c, d, atlas.objectFor(ch, d), into.length);
+    const e = Cls.spawn(r, c, d, name, into.length);
     e.layer = layer;
     into.push(e);
   };
@@ -819,9 +822,7 @@ function loadCustomLevel(text, opts = {}) {
         const ch = layer.glyphs[r][c];
         const d = layer.data[r][c];
         if (TERRAIN.has(ch)) continue;              // drawn from the layer, inert
-        // a door is the one thing that only counts in the solid layer
-        if (ch === 'L' && layer !== map.main) continue;
-        spawnEntity(ch, d, r, c, li);
+        spawnEntity(ch, d, r, c, li, layer === map.main);
       }
       // only the main layer is solid, and only its terrain glyphs are
       const mid = map.main.glyphs[r][c];
@@ -835,7 +836,7 @@ function loadCustomLevel(text, opts = {}) {
 
   // Platform ranges read the finished terrain, so they wait for the grid.
   for (const s of platformSpots) {
-    const p = makeRangedPlatform(map.main.collide, newRows, newCols, markGrid, s.row, s.col, s.axis, s.dir);
+    const p = makeRangedPlatform(map.main.collide, newRows, newCols, markGrid, s.row, s.col, s.axis, s.dir, s.name);
     p.layer = s.layer;
     newPlatforms.push(p);
   }
@@ -904,9 +905,10 @@ function applyPicks() {
     if (typeof block !== 'string' || block.length < 2) continue;
     const data = asDigit(block[0]);
     const glyph = block[1];
-    const Cls = spawnClass(glyph, data);
+    const name = atlas.objectAt(glyph, data);
+    const Cls = name && classOf(name);
     if (!Cls || !(Cls.prototype instanceof Pickup)) continue;
-    Cls.spawn(0, 0, data, atlas.objectFor(glyph, data), 0).take();
+    Cls.spawn(0, 0, data, name, 0).take();
   }
   sound.effectsOn = effects;
   lightRadius = lightTarget();     // a level opens at its own reach rather than easing into it
@@ -1115,7 +1117,7 @@ async function loadLevelPack(url) {
     tileset: { ...sheet, texture: resolveTexture(sheet.texture, url) },
     background: parseBackground(data.background, url),
     music: typeof data.music === 'string' ? data.music : null,
-    glyphs: objects.glyphs,    manifestUrl: objects.manifest ? new URL(objects.manifest, url) : null,
+    manifestUrl: objects.manifest ? new URL(objects.manifest, url) : null,
     soundsUrl: data.sounds ? new URL(data.sounds, url) : null
   };
 }
@@ -1198,7 +1200,6 @@ async function loadBuiltinLevels() {
       manifest: null,
       soundsUrl: data.sounds ? new URL(data.sounds, url) : pack.soundsUrl,
       sounds: null,
-      glyphs: objects.glyphs || pack.glyphs,
       exits: [],
       returns
     });
@@ -1286,7 +1287,7 @@ function captureWorld(flag) {
 
 function restoreWorld(w) {
   const level = BUILTIN_LEVELS[w.index];
-  atlas.use(level.manifest || atlas.root, level.glyphs);   // the cast this world was built from
+  atlas.use(level.manifest || atlas.root);   // the cast this world was built from
   grid = w.grid; backGrid = w.backGrid; frontGrid = w.frontGrid;
   collideGrid = w.collideGrid; gridMeta = w.gridMeta; backMeta = w.backMeta; frontMeta = w.frontMeta;
   tileset = w.tileset;
@@ -1466,7 +1467,6 @@ function startGame(keepCurtain) {
 }
 
 // ---------- Enemies ----------
-const ENEMY_SPEED = 1.1;
 
 // ---------- Entities ----------
 // One file per kind under js/, loaded by the script tags in the page. What
@@ -1498,18 +1498,18 @@ function checkEnemyCollisions() {
       if (warm.vy > 0 && warm.y < e.y - e.r * 0.3) {
         // stomped from above
         e.alive = false;
-        warm.vy = JUMP_V * 0.55;
-        score++;
+        warm.vy = JUMP_V * e.props.stompBounce;
+        score += e.props.stompScore;
         stats.stomps++;
         saveStats();
         checkStatAchievements();
         updateHud();
-        playSound('eat');
+        playSound(e.props.stompSound);
       } else if (hasShield) {
         // the shield absorbs one side hit AND takes the enemy out with it
         hasShield = false;
         e.alive = false;
-        score++;
+        score += e.props.stompScore;
         stats.stomps++;
         saveStats();
         checkStatAchievements();
@@ -1932,7 +1932,7 @@ function drawWorm() {
   const squish = isDucking ? 0.6 : 1;
 
   // the shield's own "worn" art if it has some, or a plain ring behind her
-  const worn = hasShield && shieldObj ? atlas.partFrame(shieldObj, SHIELD_WORN_PART) : null;
+  const worn = hasShield && shieldWorn ? atlas.partFrame(shieldWorn.sprite, shieldWorn.part) : null;
   if (hasShield && worn === null) {
     ctx.beginPath();
     ctx.arc(head.x, head.y, head.r + 5, 0, Math.PI * 2);
@@ -1954,7 +1954,7 @@ function drawWorm() {
   if (worn !== null) {
     ctx.save();
     ctx.globalAlpha = headVis;
-    atlas.draw(shieldObj, head.x, head.y, worn);
+    atlas.draw(shieldWorn.sprite, head.x, head.y, worn);
     ctx.restore();
   }
   ctx.globalAlpha = 1;

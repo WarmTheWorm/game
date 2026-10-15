@@ -1,8 +1,15 @@
+// walks its ledge, turning at a wall or a drop
 class Beetle extends Enemy {
-  static kind = 0;
+  static editor = {
+    label: 'Beetle',
+    glyphs: 'E',
+    props: {
+      speed: { type: 'float', default: 1.1, label: 'Walking speed, px a frame' }
+    }
+  };
 
-  constructor(obj, x, y) {
-    super(obj, x, y);
+  constructor(name, x, y) {
+    super(name, x, y);
     this.type = 'beetle';
     this.vy = 0;
     this.frame = 0;
@@ -31,7 +38,7 @@ class Beetle extends Enemy {
     }
 
     // patrol: walk until a wall or a ledge is ahead, then turn around
-    const nextX = this.x + this.dir * ENEMY_SPEED;
+    const nextX = this.x + this.dir * this.props.speed;
     const aheadCol = Math.floor((nextX + this.dir * this.r) / TILE);
     const bodyRow = Math.floor(this.y / TILE);
     const footRow = Math.floor((this.y + this.r + 2) / TILE);

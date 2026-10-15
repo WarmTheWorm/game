@@ -6,7 +6,7 @@
 // not how much room it takes. Nothing reads its size, so nothing minds.
 class Decoration extends Entity {
   static bucket = 'decorations';
-  static glyph = 'W';
+  static editor = { label: 'Decoration', glyphs: 'W', props: {} };
 
   // Never collides, so it has no ring to show in the collision view.
   debugShape() { return null; }

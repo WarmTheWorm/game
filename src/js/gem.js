@@ -1,12 +1,20 @@
 class Gem extends Pickup {
   static bucket = 'gems';
-  static glyph = 'G';
+  static editor = {
+    label: 'Gem',
+    glyphs: 'G',
+    props: {
+      score: { type: 'int', default: 5, label: 'Score' },
+      pickSound: { type: 'sound', default: 'sound::gem', label: 'Sound when taken' }
+    }
+  };
+
   take() {
     this.popT = 0;
-    score += GEM_VALUE;
+    score += this.props.score;
     stats.gems++;
     saveStats();
     checkStatAchievements();
-    playSound('gem');
+    playSound(this.props.pickSound);
   }
 }

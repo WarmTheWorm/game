@@ -1,12 +1,26 @@
+// A moving ledge. Its glyph is also its way of moving: '>' and '<' run
+// sideways, '^' and 'v' up and down, each setting off the way it points, so
+// one platform object usually takes all four codes. game.js builds them after
+// the terrain, since how far one travels depends on what is around it.
 class Platform extends Entity {
-  constructor(obj, baseX, baseY, wTiles, axis, amplitude, speed) {
-    super(obj, baseX, baseY);
+  static editor = {
+    label: 'Platform',
+    glyphs: '><^v',
+    props: {
+      speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)' }
+    }
+  };
+
+  static cellAnchor = [0, 0];   // placed by its left end, on the cell's top
+
+  constructor(name, baseX, baseY, wTiles, axis, amplitude, speed) {
+    super(name, baseX, baseY);
     this.baseX = baseX;
     this.baseY = baseY;
     this.prevX = baseX;
     this.prevY = baseY;
     this.w = wTiles * TILE;
-    this.h = atlas.hit(obj).h;
+    this.h = atlas.hit(this.obj).h;
     this.axis = axis;
     this.amplitude = amplitude;
     this.speed = speed;

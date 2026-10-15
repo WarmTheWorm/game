@@ -1,22 +1,27 @@
+// Every enemy is stomped from above and hurts from the side; what a stomp is
+// worth is each enemy object's own.
 class Enemy extends Entity {
   static bucket = 'enemies';
-  static glyph = 'E';
+  static editor = {
+    props: {
+      stompScore: { type: 'int', default: 1, label: 'Score for a stomp' },
+      stompSound: { type: 'sound', default: 'sound::eat', label: 'Sound when stomped' },
+      stompBounce: { type: 'float', default: 0.55, label: 'Bounce off it, as a share of a jump' }
+    }
+  };
 
-  constructor(obj, x, y) {
-    super(obj, x, y);
+  constructor(name, x, y) {
+    super(name, x, y);
     this.dir = 1;
     this.alive = true;
   }
 
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE));
-  }
+  // standing on the top edge of its cell, to fall onto whatever is below
+  static cellAnchor = [0.5, 0];
 
   reset() { this.alive = true; this.dir = 1; }
 
-  mapCell() {
-    return this.alive ? { ch: 'E', data: this.constructor.kind, x: this.x, y: this.y } : null;
-  }
+  mapCell() { return this.alive ? super.mapCell() : null; }
 
   draw() { if (this.alive) this.drawBody(); }
 

@@ -86,11 +86,14 @@ old/            the project as it stood before the reorganisation
 `npm run creator` opens a browser app that builds a whole asset pack and hands
 it back as a zip to unzip into `assetpacks/`.
 
-- **Objects** — one per sprite the game spawns. Frames come from image files, a
-  sliced strip, or the built-in pixel editor (onion skin, mirror, flood fill,
-  undo). A *part* is a named run of frames, which is what `object:part` picks.
-  Per object you set how many tiles wide it is drawn, its pivot, frame rate,
-  collision shape, glow part and whether it shares another object's art.
+- **Sprites** — the art. Frames come from image files, a sliced strip, or the
+  built-in pixel editor (onion skin, mirror, flood fill, copy and paste, undo).
+  A *part* is a named run of frames. Per sprite you set its size on the tile
+  grid, where its body sits in it, frame rate, collision shape and glow part.
+- **Objects** — what a level places. **+ New** asks for one of the game's
+  classes; the form is built from the properties that class declares (scores,
+  sounds, speeds, which sprite and part it wears), and its code is the two
+  characters a map block names it by.
 - **Tiles** — load a `tiles.png` and set the four strings that label it.
 - **Backgrounds** — drop in tiling sprites and give each a colour and distance.
 - **Sounds** — synthesized defs edited against the engine's own sound board, so
@@ -106,18 +109,16 @@ procedural art; the creator is the way to assemble and edit a pack by hand.
 
 ## From object to game class
 
-An object in `objects.json` is only art and a body; what it *does* comes from
-the class that spawns it. Two tables join them, both keyed by the map glyph:
+The game only spawns objects. A map block's first two characters, a digit and
+a glyph, are a code; the object in `objects/objects.json` with that code is
+placed as its class, with its own property values over the class's defaults,
+wearing the sprite its `sprite` property names from `objects/sprites.json`.
+Each class declares its glyphs and properties in a `static editor` block, and
+`src/js/classes.js` lists every class the game offers — which is also the
+list the asset pack creator's **+ New** shows.
 
-- **glyph → object** — `DEFAULT_GLYPH_OBJECTS` in `src/js/atlas.js`, or a level
-  pack's own `objects.glyphs`, which replaces it whole. An entry may name a part
-  as `object:part`.
-- **glyph → class** — `SPAWN` in `src/js/spawn.js`.
-
-[docs/objects.md](docs/objects.md) lists every object a block can spawn as
-`Class::object`, with what its spawn takes from the block and every setting
-its class holds in code today — the map for moving those settings into
-`objects.json`.
+[docs/objects.md](docs/objects.md) has garden's objects as `Class::object`,
+every class's properties with their defaults, and how to add a class.
 
 ## Generating artwork
 

@@ -23,22 +23,37 @@ async function importPack(dir) {
     next.tiles.src = await blobDataUrl(new Blob([bytes], { type: 'image/png' }));
   } catch { /* a pack without a sheet still opens */ }
 
-  // objects
+  // objects, and the sprites they wear. A pack from before the two were apart
+  // has one manifest of art-and-behaviour, which comes in as sprites with no
+  // objects; migrateSplit makes the objects once it is open.
   const manPath = (lib.objects && lib.objects.manifest) || 'objects/objects.json';
   const manDir = manPath.slice(0, manPath.lastIndexOf('/') + 1);
-  const man = await get(manPath, 'json');
+  const objMan = await get(manPath, 'json');
+  const split = !!objMan.sprites;
+  const man = split ? await get(manDir + objMan.sprites, 'json') : objMan;
+  const artDefs = split ? man.sprites : man.objects;
+  const artDir = split ? (manDir + objMan.sprites).slice(0, (manDir + objMan.sprites).lastIndexOf('/') + 1) : manDir;
   const sheetImg = await loadImg(URL.createObjectURL(
-    new Blob([new Uint8Array(await get(manDir + man.texture))], { type: 'image/png' })));
+    new Blob([new Uint8Array(await get(artDir + man.texture))], { type: 'image/png' })));
+  const into = split ? next.sprites : (next.objects = []);
+  if (!split) delete next.sprites;
 
-  // a copy is any object landing on a rect another already claimed
+  if (split) {
+    for (const [name, def] of Object.entries(objMan.objects)) {
+      const code = Array.isArray(def.code) ? [...def.code] : def.code ? [def.code] : [];
+      next.objects.push({ id: uid(), name, cls: def.class, code, props: { ...(def.props || {}) } });
+    }
+  }
+
+  // a copy is any old object landing on a rect another already claimed
   const byRect = new Map();
-  for (const [name, def] of Object.entries(man.objects)) {
+  for (const [name, def] of Object.entries(artDefs)) {
     const key = `${def.frame.x},${def.frame.y},${def.frame.w},${def.frame.h}`;
     if (!byRect.has(key)) byRect.set(key, name);
   }
 
-  for (const [name, def] of Object.entries(man.objects)) {
-    const o = newObject(name);
+  for (const [name, def] of Object.entries(artDefs)) {
+    const o = newSprite(name);
     const { x, y, w, h } = def.frame;
     const scale = def.scale === undefined ? 1 : def.scale;
     o.fw = w;
@@ -68,7 +83,7 @@ async function importPack(dir) {
     if (def.fall) o.fall = { ...def.fall };
 
     const owner = byRect.get(`${x},${y},${w},${h}`);
-    if (owner !== name) { o.copy = owner; next.objects.push(o); continue; }
+    if (!split && owner !== name) { o.copy = owner; into.push(o); continue; }
 
     // parts become the frame grouping; whatever they leave out is one run
     const spans = def.parts ? Object.entries(def.parts)
@@ -96,7 +111,7 @@ async function importPack(dir) {
       o.frames.push(f);
     }
     normalizeObject(o);
-    next.objects.push(o);
+    into.push(o);
   }
 
   // backgrounds

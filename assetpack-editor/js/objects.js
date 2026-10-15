@@ -59,9 +59,9 @@ function insertFrame(o, partId, afterId, canvas) {
 
 // ---------- the object list ----------
 function renderObjectList() {
-  $('#objList').innerHTML = pack.objects.map(o => `
+  $('#objList').innerHTML = pack.sprites.map(o => `
     <button class="item ${current && o.id === current.id ? 'on' : ''}" data-oid="${o.id}">
-      <b>${esc(o.name)}</b><small>${o.copy ? '= ' + esc(o.copy) : o.frames.length + ' fr'}</small>
+      <b>${esc(o.name)}</b><small>${o.frames.length} fr${usersOf(o).length ? ' · ' + usersOf(o).length + ' obj' : ''}</small>
     </button>`).join('') || '<p class="empty">No objects yet.</p>';
 }
 
@@ -75,7 +75,7 @@ function renderObjects() {
 $('#objList').addEventListener('click', e => {
   const b = e.target.closest('[data-oid]');
   if (!b) return;
-  current = objById(b.dataset.oid);
+  current = spriteById(b.dataset.oid);
   selFrames.clear();
   renderObjects();
   savePack();
@@ -84,9 +84,9 @@ $('#objList').addEventListener('click', e => {
 $('#objAdd').onclick = () => {
   markUndo();
   let n = 1;
-  while (objByName('object' + n)) n++;
-  const o = newObject('object' + n);
-  pack.objects.push(o);
+  while (spriteByName('sprite' + n)) n++;
+  const o = newSprite('sprite' + n);
+  pack.sprites.push(o);
   current = o;
   renderObjects();
   savePack();
@@ -105,25 +105,34 @@ function laneHTML(o, p) {
     </div></section>`;
 }
 
-// Part names the game's own code asks for, by object — what each is for, as
-// src/js has it. Shown under the parts, so a name the game will look for is
-// not left to guesswork.
-const KNOWN_PARTS = {
-  shield: { worn: 'drawn round the worm while she has it, instead of the plain ring' },
-  plant: { bud: 'resting', stem: 'stretched to reach the head', head: 'the snapping end' },
-  checkpoint: { off: 'not reached yet', on: 'reached' },
-  worm: { body: 'her segments, head shade to tail shade', tail: 'the tip', headLeft: 'facing left', headRight: 'facing right' },
-  lantern: { fulllight: 'lamp N0', biglight: 'lamp N1', smalllight: 'lamp N2' }
-};
+// The objects that wear a sprite.
+const usersOf = s => pack.objects.filter(o => refName(o.props.sprite) === s.name);
 
+// The worm is drawn by game.js itself rather than by an object, so the parts
+// it reads are the one list kept here.
+const WORM_PARTS = { body: 'her segments, head shade to tail shade', tail: 'the tip', headLeft: 'facing left', headRight: 'facing right' };
+
+// The part names the game will look for on this sprite: every part property
+// of every object that wears it, with what the property is for. Shown under
+// the parts, so a name the game reads is not left to guesswork.
 function renderPartNames(o) {
   const el = $('#partNames');
-  const known = o && KNOWN_PARTS[o.name];
-  el.hidden = !known;
-  if (!known) return;
+  const known = {};
+  if (o && o.name === 'worm') Object.assign(known, WORM_PARTS);
+  if (o) {
+    for (const user of usersOf(o)) {
+      for (const [k, d] of Object.entries(classDefs(user.cls))) {
+        const v = user.props[k];
+        if (d.type === 'part' && v) known[v] = `${user.name}'s ${d.label || k}`.toLowerCase();
+      }
+    }
+  }
+  const names = Object.keys(known);
+  el.hidden = !names.length;
+  if (!names.length) return;
   const have = new Set(o.parts.map(p => p.name));
-  el.innerHTML = 'The game looks for: ' + Object.entries(known).map(([n, what]) =>
-    `<code>${n}</code> ${esc(what)}${have.has(n) ? '' : ' <em class="missing">— not here</em>'}`).join(' · ');
+  el.innerHTML = 'The game looks for: ' + names.map(n =>
+    `<code>${esc(n)}</code> ${esc(known[n])}${have.has(n) ? '' : ' <em class="missing">— not here</em>'}`).join(' · ');
 }
 
 function renderObjectFrames() {
@@ -140,7 +149,7 @@ function renderObjectFrames() {
       <div class="meta"><span class="mono">${framesOfPart(o, p.id).length} fr</span></div>
     </div>`).join('') + '<button class="btn sm" id="partAdd">+ Part</button>';
 
-  $('#objLanes').innerHTML = !o ? '<p class="empty">Pick an object, or make one.</p>'
+  $('#objLanes').innerHTML = !o ? '<p class="empty">Pick a sprite, or make one.</p>'
     : o.parts.map(p => laneHTML(o, p)).join('');
 
   if (o) {
@@ -471,14 +480,11 @@ $('#frStrip').onclick = async () => {
 };
 
 // ---------- properties ----------
-const otherNames = o => pack.objects.filter(x => x !== o && !x.copy).map(x => x.name);
-
 function renderProps() {
   const o = current;
   const box = $('#objProps');
   if (!o) { box.innerHTML = '<p class="empty">Nothing selected.</p>'; return; }
-  const others = otherNames(o);
-  const opt = (list, v) => ['', ...list].map(n => `<option ${n === v ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const users = usersOf(o);
   box.innerHTML = `
     <label class="ctl"><span>Name</span><input data-p="name" value="${esc(o.name)}"></label>
     <label class="ctl"><div class="row"><span>Frames per second</span><output>${o.fps || 'still'}</output></div>
@@ -493,10 +499,12 @@ function renderProps() {
       </div>
       <p class="hint">${o.glow ? 'Always glows this colour.' : 'Glows in the colour of whatever it is paired with.'}</p>` : ''}
     </div>
-    <label class="ctl"><span>Same art as</span><select data-p="copy">${opt(others, o.copy)}</select></label>
     <label class="ctl"><div class="row"><span>Slice (stretch middle)</span><output>${num(o.slice)}</output></div>
       <input type="range" data-p="slice" min="0" max="64" step="0.5" value="${o.slice}"></label>
-    <div class="ctl"><span>&nbsp;</span><button class="btn sm danger" data-p="delete">Delete this object</button></div>`;
+    <div class="ctl"><span>Worn by</span><p class="hint" style="margin:0">${users.length
+      ? users.map(u => `<code>${esc(u.cls)}::${esc(u.name)}</code>`).join(' ')
+      : 'no object yet — make one on the Objects tab.'}</p></div>
+    <div class="ctl"><span>&nbsp;</span><button class="btn sm danger" data-p="delete">Delete this sprite</button></div>`;
   renderCalc();                  // fills in the rate warning the fields above just made room for
 }
 
@@ -519,7 +527,6 @@ $('#objProps').addEventListener('input', e => {
     savePack();
     return;
   }
-  else if (key === 'copy') { o.copy = v; renderShape(); }
 
   const out = e.target.parentElement.querySelector('output');
   if (out) out.textContent = key === 'fps' ? (o.fps || 'still') : num(+v);
@@ -530,10 +537,21 @@ $('#objProps').addEventListener('input', e => {
 
 // A name becomes a key in objects.json, so it is slugged — but only once the
 // field is left, or every space would reshape what is still being typed.
+// The objects that wear it name it, so a new name is carried to them.
+let renameFrom = null;
+$('#objProps').addEventListener('focusin', e => { if (e.target.dataset.p === 'name' && current) renameFrom = current.name; });
 $('#objProps').addEventListener('change', e => {
   if (e.target.dataset.p !== 'name' || !current) return;
-  current.name = slug(e.target.value) || current.name;
+  current.name = slug(e.target.value) || renameFrom || current.name;
   e.target.value = current.name;
+  if (renameFrom && renameFrom !== current.name) {
+    for (const o of pack.objects) {
+      for (const [k, d] of Object.entries(classDefs(o.cls))) {
+        if (d.type === 'sprite' && refName(o.props[k]) === renameFrom) o.props[k] = 'sprite::' + current.name;
+      }
+    }
+  }
+  renameFrom = current.name;
   renderObjectList();
   renderProps();
   savePack();
@@ -542,10 +560,13 @@ $('#objProps').addEventListener('change', e => {
 $('#objProps').addEventListener('click', e => {
   if (e.target.dataset.p !== 'delete' || !current) return;
   markUndo();
-  pack.objects = pack.objects.filter(o => o !== current);
-  current = pack.objects[0] || null;
+  const users = usersOf(current);
+  pack.sprites = pack.sprites.filter(o => o !== current);
+  current = pack.sprites[0] || null;
   renderObjects();
   savePack();
-  toast('Object deleted — Ctrl+Z brings it back');
+  toast(users.length
+    ? `Sprite deleted — ${users.map(u => u.name).join(', ')} now ${users.length > 1 ? 'have' : 'has'} no look. Ctrl+Z brings it back`
+    : 'Sprite deleted — Ctrl+Z brings it back');
 });
 

@@ -1,5 +1,11 @@
 # Part two of two: packs an asset pack's sprites/ into the single atlas the
-# game loads, objects/objects.png and objects/objects.json.
+# game loads, objects/objects.png and objects/sprites.json.
+#
+# That is only the art. What the game places — each object's class, codes and
+# property values, which sprite it wears among them — is objects/objects.json,
+# made in the asset pack creator and left alone here. A sprite json that says
+# `copy` was once a second object on another's art; it is behaviour, not art,
+# so it is skipped, and objects.json says what it does.
 #
 # Every sheet in sprites/ is a horizontal strip of frames with a json beside it
 # saying how to read it. Nothing here knows what any particular object is, so
@@ -165,16 +171,9 @@ foreach ($o in $drawn) {
 }
 foreach ($b in $bitmaps.Values) { $b.Dispose() }
 
-# Copies point at the rect their source just took, so sharing a sprite costs
-# nothing in the sheet: all they own is how they behave.
-foreach ($o in $objects | Where-Object { $_.copy }) {
-  $src = $drawn | Where-Object { $_.n -ceq $o.copy }
-  if (-not $src) { throw "$($o.n) copies '$($o.copy)', which isn't a sheet in the folder" }
-  foreach ($k in 'rect', 'frames', 'fps', 'anchor', 'offset', 'scale', 'slice', 'parts', 'maskSpan', 'glow') { $o[$k] = $src[$k] }
-  if (-not $o.col) { $o.col = $src.col }
-}
-# a mask lives in its sprite's strip now, so it is no object of its own
-$objects = @($objects | Where-Object { -not $_.isMask })
+# only drawn sprites: a copy is an object's business, and a mask lives in
+# its sprite's strip
+$objects = @($objects | Where-Object { -not $_.copy -and -not $_.isMask })
 $attr.Dispose()
 $ag.Dispose()
 $atlas.Save((Join-Path $dir 'objects.png'), [System.Drawing.Imaging.ImageFormat]::Png)
@@ -184,7 +183,7 @@ $atlas.Dispose()
 $lines = New-Object System.Collections.Generic.List[string]
 $lines.Add('{')
 $lines.Add('  "texture": "objects.png",')
-$lines.Add('  "objects": {')
+$lines.Add('  "sprites": {')
 for ($i = 0; $i -lt $objects.Count; $i++) {
   $o = $objects[$i]
   $parts = New-Object System.Collections.Generic.List[string]
@@ -223,11 +222,13 @@ for ($i = 0; $i -lt $objects.Count; $i++) {
     elseif ($c.shape -eq 'box') { $parts.Add(('"collision": {{ "shape": "box", {0}"w": {1}, "h": {2} }}' -f $pos, (Json-Num $c.w), (Json-Num $c.h))) }
     else { $parts.Add('"collision": { "shape": "tile" }') }
   }
-  if ($o.fall) { $parts.Add(('"fall": {{ "gravity": {0}, "max": {1} }}' -f (Json-Num $o.fall.gravity), (Json-Num $o.fall.max))) }
   $comma = if ($i -lt $objects.Count - 1) { ',' } else { '' }
   $lines.Add(('    "{0}": {{ {1} }}{2}' -f $o.n, ($parts -join ', '), $comma))
 }
 $lines.Add('  }')
 $lines.Add('}')
-Set-Content (Join-Path $dir 'objects.json') ($lines -join "`n") -NoNewline -Encoding utf8
-"  {0,-18} {1} objects" -f 'objects.json', $objects.Count
+Set-Content (Join-Path $dir 'sprites.json') ($lines -join "`n") -NoNewline -Encoding utf8
+"  {0,-18} {1} sprites" -f 'sprites.json', $objects.Count
+if (-not (Test-Path (Join-Path $dir 'objects.json'))) {
+  Write-Warning "no objects/objects.json yet - make the objects in the asset pack creator"
+}

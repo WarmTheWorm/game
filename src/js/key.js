@@ -1,12 +1,18 @@
+// Its code takes any digit, which is its id: the door it opens and the
+// colour it glows. 0 is the master key.
 class Key extends Pickup {
   static bucket = 'keyPickups';
-  static glyph = 'K';
-  constructor(obj, x, y, id = 0) { super(obj, x, y); this.id = id; }
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2), data);
-  }
+  static editor = {
+    label: 'Key',
+    glyphs: 'K',
+    props: {
+      pickSound: { type: 'sound', default: 'sound::key', label: 'Sound when taken' }
+    }
+  };
+
+  static takesId = true;
   take() {
     keysHeld.push(this.id || 0);
-    playSound('key');
+    playSound(this.props.pickSound);
   }
 }

@@ -1,18 +1,23 @@
 // hopping frog: sits on the ground, periodically leaps forward, turns
 // around at a wall or ledge (checked while grounded, same as the beetle)
-const HOPPER_HOP_VY = -8.5;
-const HOPPER_HOP_VX = 2.2;
-const HOPPER_PAUSE = 40; // frames to wait on the ground between hops
 
 class Frog extends Enemy {
-  static kind = 2;
+  static editor = {
+    label: 'Frog',
+    glyphs: 'E',
+    props: {
+      hopUp: { type: 'float', default: 8.5, label: 'Hop strength, up' },
+      hopForward: { type: 'float', default: 2.2, label: 'Hop strength, forward' },
+      pause: { type: 'int', default: 40, label: 'Frames on the ground between hops' }
+    }
+  };
 
-  constructor(obj, x, y) {
-    super(obj, x, y);
+  constructor(name, x, y) {
+    super(name, x, y);
     this.type = 'hopper';
     this.vx = 0;
     this.vy = 0;
-    this.pauseT = HOPPER_PAUSE;
+    this.pauseT = this.props.pause;
     this.grounded = false;
   }
 
@@ -41,9 +46,9 @@ class Frog extends Enemy {
     const bodyRow = Math.floor(this.y / TILE);
     const footRow = Math.floor((this.y + this.r + 2) / TILE);
     if (solidAt(aheadCol, bodyRow) || !solidAt(aheadCol, footRow)) this.dir *= -1;
-    this.vy = HOPPER_HOP_VY;
-    this.vx = this.dir * HOPPER_HOP_VX;
-    this.pauseT = HOPPER_PAUSE;
+    this.vy = -this.props.hopUp;
+    this.vx = this.dir * this.props.hopForward;
+    this.pauseT = this.props.pause;
   }
 
   drawBody() {

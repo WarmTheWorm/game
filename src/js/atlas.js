@@ -1,10 +1,10 @@
-// ---------- Object atlas ----------
-// Every object the game draws or collides with is described in a manifest
-// like an asset pack's objects/objects.json: where its frames sit in the
-// shared sheet, how fast they run, where its own position lands inside a
-// frame, and what it collides as. Nothing about an object's size or anchoring
-// lives in code. A level names the manifest it wants and which of its objects
-// each map glyph spawns, so both are data.
+// ---------- Sprites and objects ----------
+// An asset pack's objects/objects.json says what a level can place: each
+// object is a game class, the 2-char code a map block names it by, and its
+// property values — the sprite it wears among them. The art is sprites.json
+// beside it: where each sprite's frames sit in the shared sheet, how fast they
+// run, where its own position lands inside a frame, and what it collides as.
+// Nothing about a thing's look, size or settings lives in code.
 // A page may say where its root manifest is before loading this, which is how
 // a downloaded pack points the game at its own copy.
 const ROOT_OBJECTS_URL = window.OBJECTS_URL || '/assetpacks/garden/objects/objects.json';
@@ -15,26 +15,24 @@ const ROOT_OBJECTS_URL = window.OBJECTS_URL || '/assetpacks/garden/objects/objec
 const KEY_COLORS = ['#ffffff', '#ff5a5a', '#ffa23a', '#ffd93a', '#5fe86b',
                     '#4fc9e8', '#6a8cff', '#b06aff', '#ff6ad5', '#9a7b5a'];
 
-// Which object each map glyph spawns. An array picks by the block's info
-// digit, which is how one 'E' covers three kinds of enemy. An entry may also
-// name a part of that object as 'object:part', which is how one 'N' covers the
-// three lamps that share a sheet — so which digit gets which lamp is the
-// level's business rather than the lantern's. A level may replace this
-// wholesale, so the same map text can wear a different cast.
-const DEFAULT_GLYPH_OBJECTS = {
-  E: ['beetle', 'moth', 'frog'],
-  C: 'coin', G: 'gem', K: 'key', S: 'shield',
-  N: ['lantern:fulllight', 'lantern:biglight', 'lantern:smalllight'],
-  O: 'portal', '!': 'checkpoint', V: 'plant', R: ['rock', 'rock2'],
-  L: 'door', F: 'flag', M: 'sign', W: 'cloud',
-  '>': 'platform', '<': 'platform', '^': 'platform', v: 'platform',
+// One element names another with the other's kind in front: "sprite::coin",
+// "sound::coin". Lookups take either form.
+const refName = v => {
+  const s = String(v ?? '');
+  const cut = s.indexOf('::');
+  return cut < 0 ? s : s.slice(cut + 2);
 };
+
+// An object's codes as a list. "1C" is digit 1 of glyph C; "nK" is any digit,
+// which the class then reads as the thing's own id.
+const codesOf = def => !def || !def.code ? [] : Array.isArray(def.code) ? def.code : [def.code];
 
 class ObjectAtlas {
   constructor() {
-    this.defs = {};
+    this.defs = {};                // sprite name -> its art
+    this.objects = {};             // object name -> { class, code, props }
+    this.codes = new Map();        // glyph -> { any, byDigit: [] } object names
     this.sheet = new Image();
-    this.glyphs = DEFAULT_GLYPH_OBJECTS;
     this.root = null;
     // Seconds of elapsed play, so sprites animate at their own frame rate
     // however often the game steps or the display refreshes.
@@ -46,18 +44,24 @@ class ObjectAtlas {
   async loadManifest(url, base) {
     const href = new URL(url, base || location.href).href;
     if (this.manifests.has(href)) return this.manifests.get(href);
-    const res = await fetch(href);
-    if (!res.ok) throw new Error(`${href}: HTTP ${res.status}`);
-    const data = await res.json();
-    if (!data || !data.objects) throw new Error(`${href}: no objects`);
+    const get = async u => {
+      const res = await fetch(u);
+      if (!res.ok) throw new Error(`${u}: HTTP ${res.status}`);
+      return res.json();
+    };
+    const data = await get(href);
+    if (!data || !data.objects || !data.sprites) throw new Error(`${href}: no objects`);
+    const spritesHref = new URL(data.sprites, href).href;
+    const art = await get(spritesHref);
+    if (!art || !art.sprites) throw new Error(`${spritesHref}: no sprites`);
     const sheet = new Image();
-    sheet.src = new URL(data.texture, href).href;
+    sheet.src = new URL(art.texture, spritesHref).href;
     await new Promise((ok, fail) => {
       if (sheet.complete && sheet.naturalWidth) return ok();
       sheet.addEventListener('load', ok, { once: true });
       sheet.addEventListener('error', () => fail(new Error(`${sheet.src}: failed to load`)), { once: true });
     });
-    const entry = { defs: data.objects, sheet };
+    const entry = { defs: art.sprites, objects: data.objects, sheet };
     this.manifests.set(href, entry);
     return entry;
   }
@@ -69,44 +73,52 @@ class ObjectAtlas {
     this.use(this.root);
   }
 
-  use(entry, glyphs) {
+  use(entry) {
     this.defs = entry.defs;
+    this.objects = entry.objects;
     this.sheet = entry.sheet;
-    this.glyphs = glyphs || DEFAULT_GLYPH_OBJECTS;
+    // which object each block names, built from the objects' own codes
+    this.codes = new Map();
+    for (const [name, def] of Object.entries(this.objects)) {
+      for (const code of codesOf(def)) {
+        const glyph = code[1];
+        if (!glyph) continue;
+        if (!this.codes.has(glyph)) this.codes.set(glyph, { any: null, byDigit: [] });
+        const slot = this.codes.get(glyph);
+        if (code[0] === 'n') slot.any = slot.any || name;
+        else slot.byDigit[+code[0]] = slot.byDigit[+code[0]] || name;
+      }
+    }
   }
 
-  def(name) { return this.defs[name] || {}; }
+  // ---- objects ----
+  object(name) { return this.objects[refName(name)] || null; }
+
+  // The object a block names: its exact digit, else the glyph's any-digit
+  // object, else the glyph's first — so "5E" is still an enemy.
+  objectAt(glyph, digit = 0) {
+    const slot = this.codes.get(glyph);
+    if (!slot) return null;
+    return slot.byDigit[digit] || slot.any || slot.byDigit.find(Boolean) || null;
+  }
+
+  // The sprite an object wears.
+  spriteOf(name) {
+    const o = this.object(name);
+    return o && o.props ? refName(o.props.sprite) : '';
+  }
+
+  // ---- sprites ----
+  def(name) { return this.defs[refName(name)] || {}; }
   hit(name) { return this.def(name).collision || {}; }
   radius(name) { return this.hit(name).r || 0; }
 
-  // Where an object stands, given the point its kind spawns at. A def's
+  // Where a sprite stands, given the point its kind spawns at. A def's
   // `offset` moves it off that point — art that sits low in its tile, with its
   // body going along — and a manifest without one means none.
   place(name, x, y) {
     const o = this.def(name).offset;
     return o ? [x + o[0], y + o[1]] : [x, y];
-  }
-
-  // What a glyph names at that info digit, 'object' or 'object:part'.
-  entryFor(ch, data = 0) {
-    const named = this.glyphs[ch];
-    return Array.isArray(named) ? (named[data] || named[0]) : named;
-  }
-
-  objectFor(ch, data = 0) {
-    const entry = this.entryFor(ch, data);
-    if (!entry) return entry;
-    const cut = entry.indexOf(':');
-    return cut < 0 ? entry : entry.slice(0, cut);
-  }
-
-  // The part of that object the glyph asked for, or null for the whole thing.
-  // What a part means is the entity's own business — for a lantern it is both
-  // the frames it shows and how far it lets her see.
-  partFor(ch, data = 0) {
-    const entry = this.entryFor(ch, data);
-    const cut = entry ? entry.indexOf(':') : -1;
-    return cut < 0 ? null : entry.slice(cut + 1);
   }
 
   // Where a named part sits on the sheet: a [first, last] span, a single

@@ -1,19 +1,29 @@
 // A gate, not a tile — it stamps its own cell solid and clears it when opened.
+// Its code takes any digit, which is its id: the key that opens it, and the
+// colour it glows. 0 takes any key.
 class Door extends Entity {
   static bucket = 'lockedDoorSpots';
-  constructor(obj, row, col, id = 0) {
-    super(obj, col * TILE, row * TILE);
+  static mainLayerOnly = true;   // only the solid layer has cells to stamp
+  static cellAnchor = [0, 0];     // it is its whole cell
+  static takesId = true;
+  static editor = {
+    label: 'Door',
+    glyphs: 'L',
+    props: {
+      openSound: { type: 'sound', default: 'sound::unlock', label: 'Sound when opened' }
+    }
+  };
+
+  constructor(name, row, col, id = 0) {
+    super(name, col * TILE, row * TILE);
     this.row = row;
     this.col = col;
     this.id = id;
     this.open = false;
   }
-  static spawn(row, col, data, obj) { return new this(obj, row, col, data); }
+  static spawn(row, col, data, name) { return new this(name, row, col, data); }
   reset() { this.open = false; }
   draw() { if (!this.open) super.draw(); }
-  mapCell() {
-    return this.open ? null
-      : { ch: 'L', data: this.id, x: this.col * TILE + TILE / 2, y: this.row * TILE + TILE / 2 };
-  }
+  mapCell() { return this.open ? null : { ...super.mapCell(), x: this.col * TILE + TILE / 2, y: this.row * TILE + TILE / 2 }; }
   debugShape() { return null; }   // its cell is already solid in the terrain view
 }

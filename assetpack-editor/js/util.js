@@ -6,6 +6,14 @@ const $$ = s => [...document.querySelectorAll(s)];
 let uidN = 0;
 const uid = () => Date.now().toString(36) + (uidN++).toString(36);
 
+// One element names another with the other's kind in front: "sprite::coin",
+// "sound::coin" — the same rule src/js/atlas.js reads them by.
+const refName = v => {
+  const t = String(v ?? '');
+  const cut = t.indexOf('::');
+  return cut < 0 ? t : t.slice(cut + 2);
+};
+
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // What a name becomes on disk. Objects, backgrounds and sound ids all end up

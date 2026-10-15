@@ -2,7 +2,8 @@
 // One model for the whole app. Everything a tab edits lives in here, and
 // export.js is the only thing that knows how it turns into files.
 //
-//   objects[]      one per sprite the game spawns; frames are data: URLs
+//   sprites[]      art: frames (data: URLs), parts, glow, size, pivot, collision
+//   objects[]      what a level places: a game class, its codes, its property values
 //   tiles          the terrain sheet plus the four strings that label it
 //   backgrounds[]  tiling sprites a level can sit in front of
 //   sounds.defs    id -> an engine sound def (synth, clip or looping track)
@@ -13,7 +14,7 @@ const PART_COLORS = ['#ffb84d', '#5ec8ff', '#8be37a', '#ff7ab6', '#b48cff', '#4d
 
 let pack = null;
 
-function newObject(name) {
+function newSprite(name) {
   const part = { id: uid(), name: 'all', color: PART_COLORS[0] };
   return {
     id: uid(),
@@ -28,15 +29,60 @@ function newObject(name) {
     fps: 0,                       // 0 = still, or animated on its own clock
     slice: 0,
     glow: '',                     // a colour its glow part is filled with, rather than its pairing's
-    copy: '',
-    collision: { shape: 'none' },
-    fall: null
+    collision: { shape: 'none' }
   };
+}
+
+// ---------- objects ----------
+// What a level places. The class is one of the game's own (GAME_CLASSES, read
+// from src/js), and its `editor` block says which glyphs its codes may use and
+// which properties it reads; this keeps a value for each.
+//
+//   code   2-char block codes: a digit, or n for any digit, then a glyph
+//   props  property name -> value; references carry their kind, "sound::coin"
+
+const gameClass = name => CLASS_BY_NAME.get(name) || null;
+const classDefs = name => { const C = gameClass(name); return C ? C.propDefs() : {}; };
+const objectByName = name => pack.objects.find(o => o.name === name);
+
+// Every property its class declares, keeping the values it already had for
+// those, defaults for the rest — so changing class keeps what still applies.
+function fillProps(o) {
+  const defs = classDefs(o.cls);
+  const props = {};
+  for (const [k, d] of Object.entries(defs)) props[k] = o.props && o.props[k] !== undefined ? o.props[k] : d.default;
+  o.props = props;
+}
+
+// A code nothing else uses yet, on the class's first glyph: an id class takes
+// any digit, the rest the first digit free.
+function freeCode(cls, except) {
+  const C = gameClass(cls);
+  const glyph = (C && C.editor.glyphs || '?')[0];
+  const used = new Set(pack.objects.filter(o => o !== except).flatMap(o => o.code));
+  if (C && C.takesId && !used.has('n' + glyph)) return 'n' + glyph;
+  for (let d = 0; d <= 9; d++) if (!used.has(d + glyph)) return d + glyph;
+  return '0' + glyph;
+}
+
+function newGameObject(name, cls, sprite) {
+  const o = { id: uid(), name, cls, code: [], props: { sprite: sprite ? 'sprite::' + sprite : '' } };
+  fillProps(o);
+  o.code = [freeCode(cls, o)];
+  return o;
+}
+
+// The codes two objects both claim, by code.
+function clashingCodes() {
+  const seen = new Map();
+  for (const o of pack.objects) for (const c of o.code) seen.set(c, [...(seen.get(c) || []), o.name]);
+  return [...seen].filter(([, names]) => names.length > 1);
 }
 
 function newPack() {
   return {
     name: 'My Pack',
+    sprites: [],
     objects: [],
     tiles: {
       src: null, w: 0, h: 0,
@@ -53,8 +99,8 @@ function newPack() {
 }
 
 // ---------- lookups the tabs share ----------
-const objByName = name => pack.objects.find(o => o.name === name);
-const objById = id => pack.objects.find(o => o.id === id);
+const spriteByName = name => pack.sprites.find(o => o.name === name);
+const spriteById = id => pack.sprites.find(o => o.id === id);
 const partsOf = o => o.parts;
 const framesOfPart = (o, pid) => o.frames.filter(f => f.partId === pid);
 const partById = (o, id) => o.parts.find(p => p.id === id);
@@ -121,12 +167,12 @@ function maskSpan(o) {
 // fine: every frame is drawn into its object's frame size.
 function migrateGlow(p) {
   const served = new Set();
-  for (const o of p.objects) {
+  for (const o of p.sprites) {
     const name = typeof o.mask === 'string' ? o.mask : '';
     delete o.mask;
     delete o.maskWas;
     if (!name || o.copy) continue;
-    const m = p.objects.find(x => x.name === name);
+    const m = p.sprites.find(x => x.name === name);
     if (!m || !m.frames.length || glowPart(o)) continue;
     const part = { id: uid(), name: 'glow', color: '#ffffff', glow: true };
     o.parts.push(part);
@@ -135,9 +181,65 @@ function migrateGlow(p) {
     served.add(name);
   }
   // only those nothing else still uses — as art for a copy, say
-  const gone = [...served].filter(n => !p.objects.some(o => o.copy === n));
-  p.objects = p.objects.filter(o => !gone.includes(o.name));
+  const gone = [...served].filter(n => !p.sprites.some(o => o.copy === n));
+  p.sprites = p.sprites.filter(o => !gone.includes(o.name));
   return gone;
+}
+
+// A pack from before sprites and objects were apart: one list of objects,
+// each art and behaviour at once, some "copies" of another's art, a rock's
+// fall on the art itself, and which block spawned what decided by the game's
+// old fixed tables. The list becomes the sprites; the objects are made from
+// those tables with the game's defaults, as tools did for the packs on disk.
+const OLD_GLYPHS = {
+  E: ['beetle', 'moth', 'frog'], C: ['coin', 'coin2'], G: 'gem', K: 'key', S: 'shield',
+  N: ['lantern:fulllight', 'lantern:biglight', 'lantern:smalllight'],
+  O: 'portal', '!': 'checkpoint', V: 'plant', R: ['rock', 'rock2'],
+  L: 'door', F: 'flag', M: 'sign', W: 'cloud',
+  '>': 'platform', '<': 'platform', '^': 'platform', v: 'platform'
+};
+const OLD_CLASSES = {
+  E: ['Beetle', 'Moth', 'Frog'], C: 'Coin', G: 'Gem', K: 'Key', S: 'Shield', N: 'Lantern',
+  O: 'Portal', '!': 'Checkpoint', V: 'Plant', R: 'RockSpawner', L: 'Door', F: 'Flag',
+  M: 'Sign', W: 'Decoration', '>': 'Platform', '<': 'Platform', '^': 'Platform', v: 'Platform'
+};
+const OLD_LANTERNS = { fulllight: ['lanternFull', 0], biglight: ['lanternBig', 6], smalllight: ['lanternSmall', 2] };
+
+function migrateSplit(p) {
+  if (p.sprites) return false;
+  p.sprites = p.objects || [];
+  p.objects = [];
+  migrateGlow(p);
+  const art = name => {
+    const s = p.sprites.find(x => x.name === name);
+    return s && s.copy ? s.copy : name;
+  };
+  const byName = {};
+  for (const [glyph, named] of Object.entries(OLD_GLYPHS)) {
+    const list = Array.isArray(named) ? named : [named];
+    list.forEach((entry, i) => {
+      const cls = Array.isArray(OLD_CLASSES[glyph]) ? OLD_CLASSES[glyph][i] : OLD_CLASSES[glyph];
+      const [base, part] = entry.split(':');
+      const sprite = p.sprites.find(x => x.name === base);
+      if (!sprite || !gameClass(cls)) return;
+      const C = gameClass(cls);
+      const code = (Array.isArray(named) && !C.takesId ? String(i) : 'n') + glyph;
+      let name = base, extra = {};
+      if (cls === 'Lantern') { const [n, reach] = OLD_LANTERNS[part] || [base + part, 0]; name = n; extra = { part, reach }; }
+      if (cls === 'RockSpawner' && sprite.fall) extra = { gravity: sprite.fall.gravity, maxFall: sprite.fall.max };
+      if (!byName[name]) {
+        const o = { id: uid(), name, cls, code: [], props: { sprite: 'sprite::' + art(base), ...extra } };
+        fillProps(o);
+        byName[name] = o;
+        p.objects.push(o);
+      }
+      byName[name].code.push(code);
+    });
+  }
+  // copies were only ever art someone else drew
+  p.sprites = p.sprites.filter(s => !s.copy);
+  for (const s of p.sprites) { delete s.copy; delete s.fall; }
+  return true;
 }
 
 // ---------- persistence ----------

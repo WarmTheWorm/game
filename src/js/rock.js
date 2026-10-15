@@ -2,20 +2,19 @@
 // Hazards that drop from above at fixed x spots (mostly near the cave/
 // tunnel sections) and fall under gravity until they hit the ground or
 // her. A shield absorbs one and shatters it; without a shield, it costs
-// a life just like an enemy. How heavily one falls is its object's own
-// `fall`, so two rocks can share a sprite and still drop at different speeds.
-const ROCK_INTERVAL = 140;      // frames between drops
-
+// a life just like an enemy. It is made mid-play by its spawner, whose sprite
+// it wears and whose gravity it falls by; no block places one.
 class Rock extends Entity {
-  constructor(obj, x, y) {
-    super(obj, x, y);
-    const fall = atlas.def(obj).fall || {};
-    this.gravity = fall.gravity ?? GRAVITY;
-    this.maxFall = fall.max ?? MAX_FALL;
+  constructor(spawner) {
+    super(spawner.name, spawner.x, spawner.y);
+    this.gravity = spawner.props.gravity;
+    this.maxFall = spawner.props.maxFall;
     this.vy = 0;
     this.alive = true;
     this.spin = (Math.random() - 0.5) * 0.2;
   }
+
+  mapCell() { return null; }
 
   update() {
     if (!this.alive) return;

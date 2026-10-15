@@ -34,12 +34,14 @@ async function applySnapshot(snap) {
   pack = snap;
   fcan.clear();
   mediaUrls.clear();
-  current = (current && pack.objects.find(o => o.id === current.id)) || pack.objects[0] || null;
+  current = (current && pack.sprites.find(o => o.id === current.id)) || pack.sprites[0] || null;
+  currentObj = (currentObj && pack.objects.find(o => o.id === currentObj.id)) || pack.objects[0] || null;
   if (!sndSel || !pack.sounds.defs[sndSel]) sndSel = Object.keys(pack.sounds.defs)[0] || null;
   laySel = 0;
   await warmFrames();
   useSounds();
   renderObjects();
+  renderGameObjects();
   renderTiles();
   renderBackgrounds();
   renderSounds();

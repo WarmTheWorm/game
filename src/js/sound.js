@@ -99,8 +99,10 @@ class SoundBoard {
     }
   }
 
+  // `name` is a sound id, or a reference to one: "sound::coin".
   play(name) {
-    const def = this.defs[name];
+    const id = String(name ?? '').replace(/^sound::/, '');
+    const def = this.defs[id];
     if (!def || def.loop || !this.effectsOn) return;
     if (def.shake && navigator.vibrate) navigator.vibrate(def.shake);
     try {

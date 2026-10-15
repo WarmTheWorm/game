@@ -1,33 +1,26 @@
-// Taking it decides how far she can see. The reach and the darkness itself
-// live in the engine, since they are drawn over the whole screen rather than
-// by any one object.
-//
-// Each lamp is a named part of the one sheet, and the level's glyph map says
-// which info digit picks which — so the reach is keyed by the part rather
-// than by the digit, and a pack can deal the three out however it likes.
-// 'fulllight' is the full light a level already starts in, so that lamp puts
-// it back.
-const LANTERN_REACH = { fulllight: 0, smalllight: 2, biglight: 6 };
-const LANTERN_DEFAULT_PART = 'fulllight';
-
+// Taking it decides how far she can see. The darkness itself lives in the
+// engine, since it is drawn over the whole screen rather than by any one
+// object; each lantern object says which lamp of its sprite it shows and how
+// far that lamp lets her see. A reach of 0 is the full light a level already
+// starts in, so that lamp puts it back.
 class Lantern extends Pickup {
   static bucket = 'lanterns';
-  static glyph = 'N';   // 'T' and 'L' are spoken for, by the tileset and the door
-
-  constructor(obj, x, y, id = 0) { super(obj, x, y); this.id = id; }
-
-  static spawn(row, col, data, obj) {
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE + TILE / 2), data);
-  }
-
-  part() { return atlas.partFor(Lantern.glyph, this.id) || LANTERN_DEFAULT_PART; }
+  static editor = {
+    label: 'Lantern',
+    glyphs: 'N',   // 'T' and 'L' are spoken for, by the tileset and the door
+    props: {
+      part: { type: 'part', default: '', label: 'Lamp (part of the sprite)' },
+      reach: { type: 'int', default: 0, label: 'How far she sees, in tiles (0 = full light)' },
+      pickSound: { type: 'sound', default: 'sound::lantern', label: 'Sound when taken' }
+    }
+  };
 
   // Its part is a span of frames, so the flame breathes within that lamp
   // rather than running the whole sheet.
-  frame() { return atlas.partFrame(this.obj, this.part()) ?? atlas.frame(this.obj); }
+  frame() { return atlas.partFrame(this.obj, this.props.part) ?? atlas.frame(this.obj); }
 
   take() {
-    lightReach = LANTERN_REACH[this.part()] || 0;
-    playSound('lantern');
+    lightReach = this.props.reach || 0;
+    playSound(this.props.pickSound);
   }
 }

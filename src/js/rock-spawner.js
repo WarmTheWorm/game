@@ -1,28 +1,39 @@
-// The ledge a rock drops from. It isn't drawn — the hazard is the rock.
+// The ledge a rock drops from. It isn't drawn — the hazard is the rock, which
+// wears the spawner's sprite and falls as the spawner says, so two spawners
+// can share a sprite and still drop at different speeds.
 class RockSpawner extends Entity {
   static bucket = 'rockSpawners';
-  static glyph = 'R';
+  static editor = {
+    label: 'Falling rock',
+    glyphs: 'R',
+    props: {
+      interval: { type: 'int', default: 140, label: 'Frames between drops' },
+      gravity: { type: 'float', default: 0.55, label: 'Gravity' },
+      maxFall: { type: 'float', default: 12, label: 'Top falling speed' }
+    }
+  };
 
-  constructor(obj, x, y, phase) {
-    super(obj, x, y);
-    this.interval = ROCK_INTERVAL;
+  constructor(name, x, y, phase) {
+    super(name, x, y);
     this.timer = phase;
   }
 
-  static spawn(row, col, data, obj, index) {
+  // on the ledge's top edge, which is where its rocks start falling
+  static cellAnchor = [0.5, 0];
+
+  static spawn(row, col, data, name, index) {
     // staggered so a row of them doesn't drop in unison
-    return new this(obj, ...atlas.place(obj, col * TILE + TILE / 2, row * TILE), index * 37 % 90);
+    return new this(name, ...this.spawnPoint(row, col, name), index * 37 % 90);
   }
 
   update() {
     this.timer--;
     if (this.timer > 0) return;
-    this.timer = this.interval;
-    rocks.push(new Rock(this.obj, this.x, this.y));
+    this.timer = this.props.interval;
+    rocks.push(new Rock(this));
   }
 
-  reset() { this.timer = this.interval; }
-
+  reset() { this.timer = this.props.interval; }
   draw() {}
   debugShape() { return null; }
 }

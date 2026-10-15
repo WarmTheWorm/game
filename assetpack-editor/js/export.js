@@ -6,15 +6,16 @@ function packProblems() {
   const bad = [];
   if (!slug(pack.name)) bad.push('The pack needs a name.');
   if (!pack.tiles.src) bad.push('No terrain sheet — load a tiles.png on the Tiles tab.');
-  const drawn = pack.objects.filter(o => !o.copy && o.frames.length);
-  if (!drawn.length) bad.push('No object has any frames yet.');
-  const names = pack.objects.map(o => o.name);
-  const dupe = names.find((n, i) => names.indexOf(n) !== i);
-  if (dupe) bad.push(`Two objects are both called "${dupe}".`);
-  for (const o of pack.objects) {
-    if (!o.copy && o.frames.length && !bodyFrames(o).length) bad.push(`${o.name} has glow frames but none of its own to glow over.`);
-    if (o.copy && !pack.objects.some(x => x.name === o.copy && x.frames.length)) bad.push(`${o.name} copies "${o.copy}", which has no frames.`);
+  const drawn = pack.sprites.filter(o => o.frames.length);
+  if (!drawn.length) bad.push('No sprite has any frames yet.');
+  const dupeOf = list => { const names = list.map(o => o.name); return names.find((n, i) => names.indexOf(n) !== i); };
+  if (dupeOf(pack.sprites)) bad.push(`Two sprites are both called "${dupeOf(pack.sprites)}".`);
+  if (dupeOf(pack.objects)) bad.push(`Two objects are both called "${dupeOf(pack.objects)}".`);
+  for (const o of pack.sprites) {
+    if (o.frames.length && !bodyFrames(o).length) bad.push(`The sprite ${o.name} has glow frames but none of its own to glow over.`);
   }
+  for (const o of pack.objects) bad.push(...objectProblems(o).map(p => `${o.name}: ${p}`));
+  for (const [code, names] of clashingCodes()) bad.push(`${names.join(' and ')} both use the code ${code}.`);
   for (const [id, d] of Object.entries(pack.sounds.defs)) {
     if (d && d.src && !pack.sounds.media[d.src]) bad.push(`The sound "${id}" names ${d.src}, which is not in the pack.`);
     if (d && !d.src && d.layers && !d.layers.length) bad.push(`The sound "${id}" has no layers left, so it would make no noise.`);
@@ -46,16 +47,35 @@ function soundsJson() {
   return JSON.stringify(doc, null, 2) + '\n';
 }
 
-// The manifest is written by hand rather than stringified so an object stays
-// on one line: it is meant to be read beside the sheet.
-function objectsJson(manifest) {
-  const lines = ['{', '  "texture": "objects.png",', '  "objects": {'];
-  const names = Object.keys(manifest.objects);
-  names.forEach((name, i) => {
-    lines.push(`    ${JSON.stringify(name)}: ${JSON.stringify(manifest.objects[name])}${i < names.length - 1 ? ',' : ''}`);
-  });
-  lines.push('  }', '}', '');
-  return lines.join('\n');
+// What is wrong with one object, in words: a class the game hasn't got, a
+// code its class can't use, or a property naming something not in the pack.
+function objectProblems(o) {
+  const bad = [];
+  const C = gameClass(o.cls);
+  if (!C) return [`its class "${o.cls}" is not one the game has.`];
+  if (!o.code.length) bad.push('it has no code, so no block places it.');
+  for (const c of o.code) {
+    if (!/^[n0-9].$/.test(c)) bad.push(`"${c}" is not a digit (or n) and a glyph.`);
+    else if (!(C.editor.glyphs || '').includes(c[1])) bad.push(`"${c}" uses ${c[1]}, which isn't one of ${C.name}'s glyphs (${C.editor.glyphs}).`);
+  }
+  const sprite = spriteByName(refName(o.props.sprite));
+  if (!sprite) bad.push(`its sprite "${o.props.sprite || 'none'}" is not in the pack.`);
+  for (const [k, d] of Object.entries(classDefs(o.cls))) {
+    const v = o.props[k];
+    if (d.type === 'sound' && v && !pack.sounds.defs[refName(v)]) bad.push(`${k} names ${v}, which is not one of the pack's sounds.`);
+    if (d.type === 'sprite' && k !== 'sprite' && v && !spriteByName(refName(v))) bad.push(`${k} names ${v}, which is not one of the pack's sprites.`);
+    if (d.type === 'part' && v && !d.optional && sprite && !sprite.parts.some(p => p.name === v)) bad.push(`${k} names the part "${v}", which ${sprite.name} hasn't got.`);
+  }
+  return bad;
+}
+
+// Both manifests are written by hand rather than stringified, so an entry
+// stays on one line: they are meant to be read, the sprites beside the sheet.
+function manifestJson(head, key, map) {
+  const names = Object.keys(map);
+  return ['{', ...head, `  ${JSON.stringify(key)}: {`,
+    ...names.map((n, i) => `    ${JSON.stringify(n)}: ${JSON.stringify(map[n])}${i < names.length - 1 ? ',' : ''}`),
+    '  }', '}', ''].join('\n');
 }
 
 // Every path the zip will hold, in the order it is written. Media keys are
@@ -65,6 +85,7 @@ function packFiles() {
     'assetpack.json',
     'tiles/tiles.png',
     'objects/objects.json',
+    'objects/sprites.json',
     'objects/objects.png',
     ...pack.backgrounds.map(b => 'backgrounds/' + b.file),
     'sounds/default.json',
@@ -74,11 +95,13 @@ function packFiles() {
 
 // Every file of the finished pack, as the zip and the level editor both get it.
 async function buildPackFiles() {
-  const { sheet, manifest } = await packObjects();
+  const { sheet, manifest } = await packSprites();
+  const objects = objectsManifest();
   const files = [
     { name: 'assetpack.json', data: assetpackJson() },
     { name: 'tiles/tiles.png', data: dataUrlBytes(pack.tiles.src) },
-    { name: 'objects/objects.json', data: objectsJson(manifest) },
+    { name: 'objects/objects.json', data: manifestJson(['  "sprites": "sprites.json",'], 'objects', objects.objects) },
+    { name: 'objects/sprites.json', data: manifestJson(['  "texture": "objects.png",'], 'sprites', manifest.sprites) },
     { name: 'objects/objects.png', data: canvasBytes(sheet) },
     { name: 'sounds/default.json', data: soundsJson() }
   ];
@@ -127,14 +150,15 @@ async function openInLevelEditor() {
 }
 
 function renderPackTab() {
-  const drawn = pack.objects.filter(o => !o.copy && o.frames.length).length;
-  const copies = pack.objects.filter(o => o.copy).length;
+  const drawn = pack.sprites.filter(o => o.frames.length).length;
+  const classes = new Set(pack.objects.map(o => o.cls)).size;
   const kinds = Object.values(pack.sounds.defs);
   const problems = packProblems();
 
   $('#packSummary').innerHTML = `
     <div class="insp">
-      <div class="ctl"><span>Objects</span><output>${drawn} drawn${copies ? ` · ${copies} sharing art` : ''}</output></div>
+      <div class="ctl"><span>Sprites</span><output>${drawn} drawn</output></div>
+      <div class="ctl"><span>Objects</span><output>${pack.objects.length} of ${classes} classes</output></div>
       <div class="ctl"><span>Terrain sheet</span><output>${pack.tiles.src ? 'loaded' : 'missing'}</output></div>
       <div class="ctl"><span>Backgrounds</span><output>${pack.backgrounds.length}</output></div>
       <div class="ctl"><span>Sounds</span><output>${kinds.filter(d => defKind(d) === 'synth').length} synth · ${kinds.filter(d => defKind(d) === 'clip').length} clips · ${kinds.filter(d => defKind(d) === 'track').length} tracks</output></div>
