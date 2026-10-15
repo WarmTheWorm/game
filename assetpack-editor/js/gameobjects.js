@@ -69,9 +69,9 @@ function propField(o, k, d) {
       // a picker of its own rather than a <select>, which can't show the icons
       const cur = refName(v);
       const missing = v && !spriteByName(cur) ? ' — missing' : '';
-      return `<div class="ctl">${head}<div class="sprpick">
+      return `<div class="ctl">${head}<div class="sprrow"><div class="sprpick">
         <button type="button" class="sprbtn" data-sprbtn="${k}" aria-haspopup="listbox">${spriteIcon(cur)}<span class="nm">${esc(v || '—')}${missing}</span><span class="caret">▾</span></button>
-      </div>${hint}</div>`;
+      </div><button type="button" class="btn sm" data-newsprite="${k}" title="Make a new sprite for this object and draw it">+ New</button></div>${hint}</div>`;
     }
     case 'background': input = `<select data-prop="${k}">${options(pack.backgrounds.map(b => b.name), 'background::')}</select>`; break;
     case 'part': {
@@ -202,6 +202,25 @@ $('#goForm').addEventListener('change', e => {
   }
 });
 
+// A new sprite for this object, named after it — coin3's is sprite::coin3, a
+// second sprite property's coin3Worn — worn at once and opened on the Sprites
+// tab to be drawn. One undo takes the lot back.
+function newSpriteFor(o, k) {
+  const base = k === 'sprite' ? o.name : o.name + k[0].toUpperCase() + k.slice(1);
+  let name = base, n = 2;
+  while (spriteByName(name)) name = base + n++;
+  markUndo();
+  const s = newSprite(name);
+  pack.sprites.push(s);
+  o.props[k] = 'sprite::' + name;
+  current = s;
+  showTab('objects');
+  renderObjects();
+  renderGoList();
+  savePack();
+  toast(`Made sprite::${name} for ${o.name} — add its frames`);
+}
+
 // The sprite picker's list: every sprite with its icon, the current one marked.
 function closeSpritePicker() { $$('.sprlist').forEach(l => l.remove()); }
 
@@ -236,6 +255,8 @@ $('#goForm').addEventListener('click', e => {
   }
   const opt = e.target.closest('[data-sprset]');
   if (opt) { closeSpritePicker(); setProp(o, opt.dataset.sprset, opt.dataset.v); return; }
+  const ns = e.target.closest('[data-newsprite]');
+  if (ns) { newSpriteFor(o, ns.dataset.newsprite); return; }
   const play = e.target.closest('[data-play]');
   if (play) { sound.play(o.props[play.dataset.play]); return; }
   const g = e.target.dataset.g;

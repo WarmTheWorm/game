@@ -248,3 +248,8 @@ dialog#ask::backdrop{background:#0b0818cc}
   color:var(--fg);cursor:pointer;font-family:var(--mono);font-size:12.5px;text-align:start}
 .spropt:hover,.spropt:focus-visible{background:var(--panel2);outline:none}
 .spropt.on{box-shadow:inset 3px 0 0 var(--amber);background:var(--panel2)}
+.sprrow{display:flex;gap:6px;align-items:center}
+.sprrow .sprpick{flex:1;min-width:0}
+.linkcode{appearance:none;border:1px solid var(--line);background:var(--panel2);color:var(--fg);border-radius:4px;padding:1px 6px;
+  font-family:var(--mono);font-size:12px;cursor:pointer;margin:0 4px 4px 0}
+.linkcode:hover,.linkcode:focus-visible{border-color:var(--amber);color:var(--amber)}

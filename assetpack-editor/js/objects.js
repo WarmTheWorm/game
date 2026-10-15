@@ -523,7 +523,7 @@ function renderProps() {
     <label class="ctl"><div class="row"><span>Slice (stretch middle)</span><output>${num(o.slice)}</output></div>
       <input type="range" data-p="slice" min="0" max="64" step="0.5" value="${o.slice}"></label>
     <div class="ctl"><span>Worn by</span><p class="hint" style="margin:0">${users.length
-      ? users.map(u => `<code>${esc(u.cls)}::${esc(u.name)}</code>`).join(' ')
+      ? users.map(u => `<button type="button" class="linkcode" data-goto="${u.id}" title="Open this object">${esc(u.cls)}::${esc(u.name)}</button>`).join(' ')
       : 'no object yet — make one on the Objects tab.'}</p></div>
     <div class="ctl"><span>&nbsp;</span><button class="btn sm danger" data-p="delete">Delete this sprite</button></div>`;
   renderCalc();                  // fills in the rate warning the fields above just made room for
@@ -579,6 +579,14 @@ $('#objProps').addEventListener('change', e => {
 });
 
 $('#objProps').addEventListener('click', e => {
+  // an object that wears this sprite, opened on the Objects tab
+  const go = e.target.closest('[data-goto]');
+  if (go) {
+    currentObj = pack.objects.find(o => o.id === go.dataset.goto) || currentObj;
+    showTab('gameobjects');
+    renderGameObjects();
+    return;
+  }
   if (e.target.dataset.p !== 'delete' || !current) return;
   markUndo();
   const users = usersOf(current);
