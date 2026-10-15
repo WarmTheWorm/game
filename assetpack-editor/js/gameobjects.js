@@ -19,7 +19,7 @@ function renderGoList() {
   $('#goList').innerHTML = pack.objects.map(o => {
     const bad = clash.has(o.name) || objectProblems(o).length;
     return `<button class="item ${o === currentObj ? 'on' : ''}" data-goid="${o.id}">
-      <b>${spriteIcon(refName(o.props.sprite))}${esc(o.name)}</b><small class="${bad ? 'warn' : ''}">${esc(o.code.join(' '))} · ${esc(o.cls)}</small>
+      <b>${spriteIcon(refName(o.props.sprite))}${esc(o.name)}</b><small class="${bad ? 'warn' : ''}">${esc(o.cls)}</small>
     </button>`;
   }).join('') || '<p class="empty">No objects yet.</p>';
   paintIcons($('#goList'));
@@ -63,7 +63,8 @@ function propField(o, k, d) {
     case 'choice': input = `<select data-prop="${k}">${(d.options || []).map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`; break;
     case 'sound':
       input = `<div class="row gap"><select data-prop="${k}">${options(Object.keys(pack.sounds.defs), 'sound::')}</select>
-        <button class="btn sm" data-play="${k}" title="Play it" aria-label="Play">▶</button></div>`;
+        <button class="btn sm" data-play="${k}" title="Play it" aria-label="Play">▶</button>
+        <button type="button" class="btn sm" data-newsound="${k}" title="Make a new sound for this object, starting from this one">+ New</button></div>`;
       break;
     case 'sprite': {
       // a picker of its own rather than a <select>, which can't show the icons
@@ -221,6 +222,28 @@ function newSpriteFor(o, k) {
   toast(`Made sprite::${name} for ${o.name} — add its frames`);
 }
 
+// A new sound for this object, named after it and what the property is for —
+// coin2's pickSound is coin2Pick, a beetle's stompSound beetleStomp. It starts
+// as a copy of the sound the property had, so it is a variant to tweak rather
+// than a blank beep, and opens on the Sounds tab. One undo takes it back.
+function newSoundFor(o, k) {
+  const what = k === 'sound' ? '' : k.replace(/Sound$/, '');
+  const base = o.name + (what ? what[0].toUpperCase() + what.slice(1) : '');
+  const id = freeId(base);
+  const from = refName(o.props[k]);
+  const was = pack.sounds.defs[from];
+  markUndo();
+  pack.sounds.defs[id] = was ? structuredClone(was) : { layers: [newOsc(988)], shake: 20 };
+  o.props[k] = 'sound::' + id;
+  sndSel = id;
+  laySel = 0;
+  useSounds();
+  showTab('sounds');
+  renderGoForm();
+  savePack();
+  toast(was ? `Made sound::${id}, a copy of sound::${from} to change` : `Made sound::${id}`);
+}
+
 // The sprite picker's list: every sprite with its icon, the current one marked.
 function closeSpritePicker() { $$('.sprlist').forEach(l => l.remove()); }
 
@@ -257,6 +280,8 @@ $('#goForm').addEventListener('click', e => {
   if (opt) { closeSpritePicker(); setProp(o, opt.dataset.sprset, opt.dataset.v); return; }
   const ns = e.target.closest('[data-newsprite]');
   if (ns) { newSpriteFor(o, ns.dataset.newsprite); return; }
+  const nd = e.target.closest('[data-newsound]');
+  if (nd) { newSoundFor(o, nd.dataset.newsound); return; }
   const play = e.target.closest('[data-play]');
   if (play) { sound.play(o.props[play.dataset.play]); return; }
   const g = e.target.dataset.g;

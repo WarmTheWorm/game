@@ -175,11 +175,33 @@ const waveSeg = l => `<div class="ctl"><span>Waveform</span><div class="seg" rol
     `<svg viewBox="0 0 26 12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="${WAVE_PATHS[w]}"/></svg>${w}</button>`).join('')
   }</div></div>`;
 
+// The objects whose sound properties name this one, each a way back to it.
+function soundUsers(id) {
+  return pack.objects.filter(o => Object.entries(classDefs(o.cls))
+    .some(([k, d]) => d.type === 'sound' && refName(o.props[k]) === id));
+}
+
+function renderSoundUsers() {
+  const users = sndSel ? soundUsers(sndSel) : [];
+  $('#sndUsers').innerHTML = !sndSel ? '' : users.length
+    ? 'Used by ' + users.map(u => `<button type="button" class="linkcode" data-goto="${u.id}" title="Open this object">${esc(u.cls)}::${esc(u.name)}</button>`).join(' ')
+    : 'No object uses it yet.';
+}
+
+$('#sndUsers').addEventListener('click', e => {
+  const go = e.target.closest('[data-goto]');
+  if (!go) return;
+  currentObj = pack.objects.find(o => o.id === go.dataset.goto) || currentObj;
+  showTab('gameobjects');
+  renderGameObjects();
+});
+
 // ---------- the panels ----------
 function renderSoundPanels() {
   const d = curDef();
   ensureLayers(d);
   $('#sndTitle').textContent = sndSel || 'Nothing selected';
+  renderSoundUsers();
   $('#sndDel').disabled = !sndSel;
   $('#sndPlay').disabled = !sndSel;
   $('#sndCopy').disabled = !sndSel;
@@ -455,6 +477,12 @@ $('#sndProps').addEventListener('input', e => {
     const defs = {};
     for (const [key, def] of Object.entries(pack.sounds.defs)) defs[key === sndSel ? id : key] = def;
     pack.sounds.defs = defs;
+    // the objects that name it follow it to its new name
+    for (const o of soundUsers(sndSel)) {
+      for (const [p, d] of Object.entries(classDefs(o.cls))) {
+        if (d.type === 'sound' && refName(o.props[p]) === sndSel) o.props[p] = 'sound::' + id;
+      }
+    }
     sndSel = id;
     useSounds();              // the board plays by id, so it has to learn the new one
     // the field being typed in lives in this panel, so only the list redraws
