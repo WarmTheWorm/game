@@ -114,33 +114,37 @@ the class that spawns it. Two tables join them, both keyed by the map glyph:
   as `object:part`.
 - **glyph → class** — `SPAWN` in `src/js/spawn.js`.
 
-Where either is a list, the block's info digit picks the entry, so `1E` is a
-moth. Each class's `static spawn` decides where in its cell the object stands,
-and the object's `offset` moves it from there.
+A map block is two characters: a digit, then the glyph — `1E` is a moth. In
+the table `n` is any digit (anything that isn't one counts as 0). Where the
+digit isn't choosing between objects it is the thing's own id: the pairing
+colour for `K`, `L`, `O` and `F`, the message for `M`.
 
-| Glyph | Object | Class (extends) | Stands at | What the class reads from the object |
-|---|---|---|---|---|
-| `E` digit 0 | `beetle` | `Beetle` (Enemy) | top of the cell | walks, falls onto the floor |
-| `E` digit 1 | `moth` | `Moth` (Enemy) | cell centre | flies side to side |
-| `E` digit 2 | `frog` | `Frog` (Enemy) | top of the cell | hops |
-| `C` | `coin` (garden: `coin`, `coin2` by digit) | `Coin` (Pickup) | cell centre | |
-| `G` | `gem` | `Gem` (Pickup) | cell centre | |
-| `K` | `key` | `Key` (Pickup) | cell centre | glows in its pairing colour |
-| `S` | `shield` | `Shield` (Pickup) | cell centre | part `worn`: drawn on the worm while she has it |
-| `N` digits 0–2 | `lantern:fulllight`, `:biglight`, `:smalllight` | `Lantern` (Pickup) | cell centre | the part is both the lamp shown and how far she sees |
-| `O` | `portal` | `Portal` (Entity) | cell centre | glows in its pairing colour |
-| `!` | `checkpoint` | `Checkpoint` (Entity) | cell centre | parts `off`, `on` |
-| `V` | `plant` | `Plant` (Entity) | floor of the cell | parts `bud`, `stem`, `head` |
-| `R` digits 0/1 | `rock`, `rock2` | `RockSpawner` (Entity), which drops `Rock`s | top of the cell | `fall`: gravity and top speed |
-| `L` | `door` | `Door` (Entity) | the cell's corner | stamps its cell solid until opened |
-| `F` | `flag` | `Flag` (Entity) | cell centre | the level's finish |
-| `M` | `sign` | `Sign` (Entity) | cell centre | shows the level message its digit names |
-| `W` | `cloud` | `Decoration` (Entity) | cell centre | scenery only — no collision, no update |
-| `>` `<` `^` `v` | `platform` | `Platform` (Entity) | its left end | box `h` and `w`; built after the terrain, since its travel depends on it |
-| — | `worm` | the player, drawn by `game.js` | her start, `P` | parts `body`, `tail`, `headLeft`, `headRight` |
+| 2char | Object | Class |
+|---|---|---|
+| `0E` | `beetle` | `Beetle` |
+| `1E` | `moth` | `Moth` |
+| `2E` | `frog` | `Frog` |
+| `nC` | `coin` — garden: `0C` `coin`, `1C` `coin2` | `Coin` |
+| `nG` | `gem` | `Gem` |
+| `nK` | `key` | `Key` |
+| `nS` | `shield` | `Shield` |
+| `0N` | `lantern:fulllight` | `Lantern` |
+| `1N` | `lantern:biglight` | `Lantern` |
+| `2N` | `lantern:smalllight` | `Lantern` |
+| `nO` | `portal` | `Portal` |
+| `n!` | `checkpoint` | `Checkpoint` |
+| `nV` | `plant` | `Plant` |
+| `0R` | `rock` | `RockSpawner`, which drops `Rock`s |
+| `1R` | `rock2` | `RockSpawner`, which drops `Rock`s |
+| `nL` | `door` | `Door` |
+| `nF` | `flag` | `Flag` |
+| `nM` | `sign` | `Sign` |
+| `nW` | `cloud` | `Decoration` |
+| `n>` `n<` `n^` `nv` | `platform` | `Platform` |
+| `nP` | `worm` | none — her start; `game.js` draws her |
 
-`garden`'s glyph table has no `W`, so its levels spawn no clouds. `P` marks
-where she starts and spawns nothing.
+A digit past the end of a list takes its first entry, so `5E` is a beetle.
+`garden`'s glyph table has no `W`, so its levels spawn no clouds.
 
 ## Generating artwork
 
