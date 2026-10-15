@@ -90,7 +90,7 @@ it back as a zip to unzip into `assetpacks/`.
   sliced strip, or the built-in pixel editor (onion skin, mirror, flood fill,
   undo). A *part* is a named run of frames, which is what `object:part` picks.
   Per object you set how many tiles wide it is drawn, its pivot, frame rate,
-  collision shape, glow mask and whether it shares another object's art.
+  collision shape, glow part and whether it shares another object's art.
 - **Tiles** — load a `tiles.png` and set the four strings that label it.
 - **Backgrounds** — drop in tiling sprites and give each a colour and distance.
 - **Sounds** — synthesized defs edited against the engine's own sound board, so
@@ -103,6 +103,44 @@ On export it packs every object's frames into one `objects.png` and writes the
 manifest, reproducing `tools/gen/pack-objects.ps1` exactly: the same atlas, to
 the pixel. The generators in `tools/gen/` remain the way to produce the
 procedural art; the creator is the way to assemble and edit a pack by hand.
+
+## From object to game class
+
+An object in `objects.json` is only art and a body; what it *does* comes from
+the class that spawns it. Two tables join them, both keyed by the map glyph:
+
+- **glyph → object** — `DEFAULT_GLYPH_OBJECTS` in `src/js/atlas.js`, or a level
+  pack's own `objects.glyphs`, which replaces it whole. An entry may name a part
+  as `object:part`.
+- **glyph → class** — `SPAWN` in `src/js/spawn.js`.
+
+Where either is a list, the block's info digit picks the entry, so `1E` is a
+moth. Each class's `static spawn` decides where in its cell the object stands,
+and the object's `offset` moves it from there.
+
+| Glyph | Object | Class (extends) | Stands at | What the class reads from the object |
+|---|---|---|---|---|
+| `E` digit 0 | `beetle` | `Beetle` (Enemy) | top of the cell | walks, falls onto the floor |
+| `E` digit 1 | `moth` | `Moth` (Enemy) | cell centre | flies side to side |
+| `E` digit 2 | `frog` | `Frog` (Enemy) | top of the cell | hops |
+| `C` | `coin` (garden: `coin`, `coin2` by digit) | `Coin` (Pickup) | cell centre | |
+| `G` | `gem` | `Gem` (Pickup) | cell centre | |
+| `K` | `key` | `Key` (Pickup) | cell centre | glows in its pairing colour |
+| `S` | `shield` | `Shield` (Pickup) | cell centre | part `worn`: drawn on the worm while she has it |
+| `N` digits 0–2 | `lantern:fulllight`, `:biglight`, `:smalllight` | `Lantern` (Pickup) | cell centre | the part is both the lamp shown and how far she sees |
+| `O` | `portal` | `Portal` (Entity) | cell centre | glows in its pairing colour |
+| `!` | `checkpoint` | `Checkpoint` (Entity) | cell centre | parts `off`, `on` |
+| `V` | `plant` | `Plant` (Entity) | floor of the cell | parts `bud`, `stem`, `head` |
+| `R` digits 0/1 | `rock`, `rock2` | `RockSpawner` (Entity), which drops `Rock`s | top of the cell | `fall`: gravity and top speed |
+| `L` | `door` | `Door` (Entity) | the cell's corner | stamps its cell solid until opened |
+| `F` | `flag` | `Flag` (Entity) | cell centre | the level's finish |
+| `M` | `sign` | `Sign` (Entity) | cell centre | shows the level message its digit names |
+| `W` | `cloud` | `Decoration` (Entity) | cell centre | scenery only — no collision, no update |
+| `>` `<` `^` `v` | `platform` | `Platform` (Entity) | its left end | box `h` and `w`; built after the terrain, since its travel depends on it |
+| — | `worm` | the player, drawn by `game.js` | her start, `P` | parts `body`, `tail`, `headLeft`, `headRight` |
+
+`garden`'s glyph table has no `W`, so its levels spawn no clouds. `P` marks
+where she starts and spawns nothing.
 
 ## Generating artwork
 
