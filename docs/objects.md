@@ -45,9 +45,9 @@ its **Sprites** tab.
 | `0G0` | `Gem::gem` | `sprite::gem` | |
 | `nK0` | `Key::key` | `sprite::key` | |
 | `0S0` | `Shield::shield` | `sprite::shield` | |
-| `0N0` | `Lantern::lanternFull` | `sprite::lantern` | `part: fulllight` |
-| `0N1` | `Lantern::lanternBig` | `sprite::lantern` | `part: biglight`, `reach: 6` |
-| `0N2` | `Lantern::lanternSmall` | `sprite::lantern` | `part: smalllight`, `reach: 2` |
+| `0N0` | `Lantern::lanternFull` | `sprite::lanternFull` | |
+| `0N1` | `Lantern::lanternBig` | `sprite::lanternBig` | `radius: 6` |
+| `0N2` | `Lantern::lanternSmall` | `sprite::lanternSmall` | `radius: 2` |
 | `nO0` | `Portal::portal` | `sprite::portal` | |
 | `0!0` | `Checkpoint::checkpoint` | `sprite::checkpoint` | |
 | `0V0` | `Plant::plant` | `sprite::plant` | |
@@ -154,8 +154,7 @@ Lantern · extends `Pickup` · code `0N` · stands at 50%, 50% of its cell
 | Property | Type | Default | What it is |
 |---|---|---|---|
 | `sprite` | sprite | — | Sprite |
-| `part` | part | — | Lamp (part of the sprite) |
-| `reach` | int | `0` | How far she sees, in tiles (0 = full light) |
+| `radius` | int | `0` | Light radius, in tiles (0 = full light) |
 | `pickSound` | sound | `sound::lantern` | Sound when taken |
 
 ### Portal

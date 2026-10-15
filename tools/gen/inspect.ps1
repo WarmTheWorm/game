@@ -1,7 +1,7 @@
 # Blows a sprite sheet up so single pixels can be looked at.
 #
-#   pwsh -NoProfile -File tools\gen\inspect.ps1 -Sheet lantern.png -Zoom 4
-param([string]$Pack = 'garden', [string]$Sheet = 'lantern.png', [int]$Zoom = 3)
+#   pwsh -NoProfile -File tools\gen\inspect.ps1 -Sheet lanternFull.png -Zoom 4
+param([string]$Pack = 'garden', [string]$Sheet = 'lanternFull.png', [int]$Zoom = 3)
 . (Join-Path $PSScriptRoot '_pack.ps1')
 
 Add-Type -AssemblyName System.Drawing

@@ -448,7 +448,8 @@ const objClass = (glyph, digit, v) => {
 };
 
 // The part an object shows by — the first part property its class reads, a
-// lantern's lamp or a plant's bud — or null for its whole strip.
+// plant's bud or a checkpoint's flag before it is reached — or null for its
+// whole strip.
 const objPart = (glyph, digit, v) => {
   const o = atlas.object(objName(glyph, digit, v));
   const C = objClass(glyph, digit, v);

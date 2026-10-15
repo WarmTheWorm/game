@@ -79,6 +79,39 @@ function newGameObject(name, cls, sprite) {
   return o;
 }
 
+// Lanterns once shared one sprite, each showing a part of it, and said how far
+// they lit as `reach`. Each now wears a sprite of its own, cut here from the
+// part it showed, and the reach is its `radius`. The shared sprite goes once
+// nothing wears it.
+function migrateLanterns(p) {
+  const split = new Set();
+  let n = 0;
+  for (const o of p.objects) {
+    if (o.cls !== 'Lantern') continue;
+    if (o.props.reach !== undefined && o.props.radius === undefined) o.props.radius = o.props.reach;
+    const partName = o.props.part;
+    delete o.props.reach;
+    delete o.props.part;
+    const s = p.sprites.find(x => x.name === refName(o.props.sprite));
+    const part = partName && s && s.parts.find(x => x.name === partName);
+    if (!part) continue;
+    let name = o.name, k = 2;
+    while (p.sprites.some(x => x.name === name)) name = o.name + k++;
+    const all = { id: uid(), name: 'all', color: PART_COLORS[0] };
+    const own = {
+      ...structuredClone({ ...s, frames: [], parts: [] }),
+      id: uid(), name, parts: [all], active: all.id,
+      frames: s.frames.filter(f => f.partId === part.id).map(f => ({ id: uid(), src: f.src, partId: all.id }))
+    };
+    p.sprites.splice(p.sprites.indexOf(s) + 1, 0, own);
+    o.props.sprite = 'sprite::' + name;
+    split.add(s.name);
+    n++;
+  }
+  p.sprites = p.sprites.filter(s => !split.has(s.name) || p.objects.some(o => refName(o.props.sprite) === s.name));
+  return n;
+}
+
 // An object whose codes aren't its class's — the class's code has changed in
 // the game since it was saved, as platforms' did — takes the class's again,
 // keeping its own third character.

@@ -111,7 +111,7 @@ function renderGoForm() {
 }
 
 // The sprite it wears, as the game would show it: the part a property picks
-// if it has one (a lantern's lamp), its first frame otherwise.
+// if it has one (a plant's bud), its first frame otherwise.
 function drawGoPreview() {
   const cv = $('#goPv');
   const o = currentObj;

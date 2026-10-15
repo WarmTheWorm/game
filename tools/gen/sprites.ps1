@@ -472,10 +472,11 @@ $shield.g.FillPath((B 255 '#6fe3ff'), $crest)
 $crest.Dispose()
 Save-Sheet $shield 'shield.png'
 
-# Lantern: one lamp per reach it can give, each with its own three-frame
-# flame, laid out in that order so the manifest can name the three spans as
-# parts. The art has to say which lamp it is at a glance, so the halo, the
-# flame and the pane all change with it:
+# Lantern: one lamp per radius it can give, each with its own three-frame
+# flame. They are drawn side by side so they share the work below, then saved
+# as a sheet each — lanternFull, lanternSmall, lanternBig — since each lamp is
+# a sprite of its own, worn by its own Lantern object. The art has to say which
+# lamp it is at a glance, so the halo, the flame and the pane all change with it:
 #   fulllight   wide open, nothing held back — the whole level stays lit
 #   smalllight  shuttered down to a couple of tiles
 #   biglight    a broad flare between the two
@@ -542,7 +543,16 @@ foreach ($kind in $LANT_KINDS) {
 $bloom = New-GlowLayer $lantBloom $LANTSIZE 7 0.85 '#ffd98a'
 $lantern.g.DrawImage($bloom, 0, 0)
 $bloom.Dispose()
-Save-Sheet $lantern 'lantern.png'
+$lantern.g.Dispose()
+$LANT_NAMES = @('lanternFull', 'lanternSmall', 'lanternBig')   # $LANT_KINDS' order
+for ($k = 0; $k -lt $LANT_KINDS.Count; $k++) {
+  $w = $LANT_PULSE.Count * $LANTSIZE
+  $one = $lantern.bmp.Clone((New-Object System.Drawing.Rectangle(($k * $w), 0, $w, $LANTSIZE)), $lantern.bmp.PixelFormat)
+  $one.Save((Join-Path $spr ($LANT_NAMES[$k] + '.png')), [System.Drawing.Imaging.ImageFormat]::Png)
+  "  {0,-18} {1}x{2}" -f ($LANT_NAMES[$k] + '.png'), $one.Width, $one.Height
+  $one.Dispose()
+}
+$lantern.bmp.Dispose()
 
 # Rock: the tumble is a transform, so one lumpy frame serves.
 $ROCKSIZE = 64; $ROCK_R = 18
@@ -652,7 +662,9 @@ $sprites = @(
   @{ n = 'plant';      frames = 3; fps = 0;   tiles = 4.0;     pivot = @(0.5, 0.859375); col = @{ shape = 'circle'; r = 13 }; parts = @{ bud = 0; stem = 1; head = 2 } }
   @{ n = 'gem';        frames = 4; fps = 6;   tiles = 1.0;     pivot = @(0.5, 0.5);      col = @{ shape = 'circle'; r = 8 } }
   @{ n = 'shield';     frames = 1; fps = 0;   tiles = 1.0;     pivot = @(0.5, 0.5);      col = @{ shape = 'circle'; r = 10 } }
-  @{ n = 'lantern';    frames = 9; fps = 6;   tiles = 1.25;    pivot = @(0.5, 0.5);      col = @{ shape = 'circle'; r = 11 }; parts = @{ fulllight = @(0, 2); smalllight = @(3, 5); biglight = @(6, 8) } }
+  @{ n = 'lanternFull';  frames = 3; fps = 6; tiles = 1.25;  pivot = @(0.5, 0.5);      col = @{ shape = 'circle'; r = 11 } }
+  @{ n = 'lanternSmall'; frames = 3; fps = 6; tiles = 1.25;  pivot = @(0.5, 0.5);      col = @{ shape = 'circle'; r = 11 } }
+  @{ n = 'lanternBig';   frames = 3; fps = 6; tiles = 1.25;  pivot = @(0.5, 0.5);      col = @{ shape = 'circle'; r = 11 } }
   @{ n = 'rock';       frames = 1; fps = 0;   tiles = 1.0;     pivot = @(0.5, 0.5);      col = @{ shape = 'circle'; r = 9 }; fall = @{ gravity = 0.55; max = 12 } }
   # the same stone, lighter on its feet: one sheet, two things to dodge
   @{ n = 'rock2';      copy = 'rock';                                                     col = @{ shape = 'circle'; r = 9 }; fall = @{ gravity = 0.22; max = 4.5 } }

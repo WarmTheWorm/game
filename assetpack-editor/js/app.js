@@ -90,6 +90,7 @@ async function boot(already) {
   const split = migrateSplit(pack);
   const folded = split ? [] : migrateGlow(pack);
   // both run: an old pack may need its codes made, then brought up to date
+  const lamps = migrateLanterns(pack);
   const madeCodes = migrateCodes(pack);
   const recoded = recodeObjects(pack) > 0 || madeCodes;
   for (const o of pack.objects) fillProps(o);
@@ -105,6 +106,10 @@ async function boot(already) {
   renderBackgrounds();
   renderSounds();
   renderPackTab();
+  if (lamps) {
+    savePack();
+    toast(`Each lantern wears its own sprite now — ${lamps} cut from the one they shared`);
+  }
   if (recoded && !split) {
     savePack();
     toast('Codes belong to the classes now — each object keeps its own third character');
