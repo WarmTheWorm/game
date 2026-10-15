@@ -19,9 +19,10 @@ function renderGoList() {
   $('#goList').innerHTML = pack.objects.map(o => {
     const bad = clash.has(o.name) || objectProblems(o).length;
     return `<button class="item ${o === currentObj ? 'on' : ''}" data-goid="${o.id}">
-      <b>${esc(o.name)}</b><small class="${bad ? 'warn' : ''}">${esc(o.code.join(' '))} · ${esc(o.cls)}</small>
+      <b>${spriteIcon(refName(o.props.sprite))}${esc(o.name)}</b><small class="${bad ? 'warn' : ''}">${esc(o.code.join(' '))} · ${esc(o.cls)}</small>
     </button>`;
   }).join('') || '<p class="empty">No objects yet.</p>';
+  paintIcons($('#goList'));
 }
 
 // ---------- the form ----------
@@ -64,7 +65,14 @@ function propField(o, k, d) {
       input = `<div class="row gap"><select data-prop="${k}">${options(Object.keys(pack.sounds.defs), 'sound::')}</select>
         <button class="btn sm" data-play="${k}" title="Play it" aria-label="Play">▶</button></div>`;
       break;
-    case 'sprite': input = `<select data-prop="${k}">${options(pack.sprites.map(s => s.name), 'sprite::')}</select>`; break;
+    case 'sprite': {
+      // a picker of its own rather than a <select>, which can't show the icons
+      const cur = refName(v);
+      const missing = v && !spriteByName(cur) ? ' — missing' : '';
+      return `<div class="ctl">${head}<div class="sprpick">
+        <button type="button" class="sprbtn" data-sprbtn="${k}" aria-haspopup="listbox">${spriteIcon(cur)}<span class="nm">${esc(v || '—')}${missing}</span><span class="caret">▾</span></button>
+      </div>${hint}</div>`;
+    }
     case 'background': input = `<select data-prop="${k}">${options(pack.backgrounds.map(b => b.name), 'background::')}</select>`; break;
     case 'part': {
       const s = spriteByName(refName(o.props.sprite));
@@ -107,6 +115,7 @@ function renderGoForm() {
       ...problems, ...clash.map(([code, names]) => `${code} is also ${names.filter(n => n !== o.name).join(', ')}'s code.`)
     ].map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
     <div class="row gap" style="margin-top:12px"><button class="btn sm danger" data-g="delete">Delete this object</button></div>`;
+  paintIcons(box);
   drawGoPreview();
 }
 
@@ -148,6 +157,16 @@ $('#goList').addEventListener('click', e => {
 // Names are keys in objects.json, so they keep to letters, digits, _ and -.
 const objName = s => String(s).trim().replace(/[^A-Za-z0-9_-]+/g, '');
 
+function setProp(o, k, v) {
+  const d = classDefs(o.cls)[k] || {};
+  markUndo();
+  o.props[k] = v;
+  // a new sprite has other parts to choose from, and its own icon
+  if (d.type === 'sprite') renderGoForm(); else drawGoPreview();
+  renderGoList();
+  savePack();
+}
+
 $('#goForm').addEventListener('input', e => {
   const o = currentObj;
   if (!o) return;
@@ -157,12 +176,7 @@ $('#goForm').addEventListener('input', e => {
     let v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (d.type === 'int') { v = parseInt(v, 10); if (!Number.isFinite(v)) return; }
     if (d.type === 'float') { v = parseFloat(v); if (!Number.isFinite(v)) return; }
-    markUndo();
-    o.props[k] = v;
-    // a new sprite has other parts to choose from
-    if (d.type === 'sprite' && k === 'sprite') renderGoForm(); else drawGoPreview();
-    renderGoList();
-    savePack();
+    setProp(o, k, v);
     return;
   }
   if (e.target.dataset.g === 'name') {
@@ -188,9 +202,40 @@ $('#goForm').addEventListener('change', e => {
   }
 });
 
+// The sprite picker's list: every sprite with its icon, the current one marked.
+function closeSpritePicker() { $$('.sprlist').forEach(l => l.remove()); }
+
+function openSpritePicker(btn) {
+  const o = currentObj;
+  const k = btn.dataset.sprbtn;
+  const cur = refName(o.props[k]);
+  closeSpritePicker();
+  const list = document.createElement('div');
+  list.className = 'sprlist';
+  list.setAttribute('role', 'listbox');
+  list.innerHTML = pack.sprites.map(s => `
+    <button type="button" role="option" class="spropt ${s.name === cur ? 'on' : ''}" data-sprset="${k}" data-v="sprite::${esc(s.name)}"
+      aria-selected="${s.name === cur}">${spriteIcon(s.name)}<span>sprite::${esc(s.name)}</span></button>`).join('')
+    || '<p class="empty">No sprites yet — make one on the Sprites tab.</p>';
+  btn.parentElement.appendChild(list);
+  paintIcons(list);
+  const focus = list.querySelector('.on') || list.querySelector('button');
+  if (focus) focus.focus();
+}
+
+document.addEventListener('click', e => { if (!e.target.closest('.sprpick')) closeSpritePicker(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSpritePicker(); });
+
 $('#goForm').addEventListener('click', e => {
   const o = currentObj;
   if (!o) return;
+  const sb = e.target.closest('[data-sprbtn]');
+  if (sb) {
+    if ($('.sprlist')) closeSpritePicker(); else openSpritePicker(sb);
+    return;
+  }
+  const opt = e.target.closest('[data-sprset]');
+  if (opt) { closeSpritePicker(); setProp(o, opt.dataset.sprset, opt.dataset.v); return; }
   const play = e.target.closest('[data-play]');
   if (play) { sound.play(o.props[play.dataset.play]); return; }
   const g = e.target.dataset.g;

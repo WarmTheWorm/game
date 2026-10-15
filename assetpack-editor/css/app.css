@@ -67,10 +67,10 @@ input[type=checkbox]{accent-color:var(--amber);width:auto}
 /* ---------- lists ---------- */
 .list{display:grid;gap:2px;padding:6px;max-height:60vh;overflow:auto}
 .item{appearance:none;border:0;background:transparent;text-align:start;padding:6px 10px;border-radius:6px;cursor:pointer;
-  display:flex;justify-content:space-between;gap:8px;align-items:baseline;color:inherit}
+  display:flex;justify-content:space-between;gap:8px;align-items:center;color:inherit}
 .item:hover{background:var(--panel2)}
 .item.on{background:var(--panel2);box-shadow:inset 3px 0 0 var(--amber)}
-.item b{font-family:var(--mono);font-weight:500;font-size:13px}
+.item b{font-family:var(--mono);font-weight:500;font-size:13px;display:flex;align-items:center;gap:8px;min-width:0}
 .item small{color:var(--muted);font-size:11.5px;white-space:nowrap}
 
 /* ---------- inspector ---------- */
@@ -233,3 +233,18 @@ dialog#ask::backdrop{background:#0b0818cc}
 .probs{color:var(--amber)}
 .bigcode{font-size:15px;padding:3px 8px;color:var(--amber)}
 .codes .hint{flex-basis:100%;margin:4px 0 0}
+
+/* ---------- sprite icons and picker ---------- */
+.ico{width:24px;height:24px;flex:0 0 auto;border-radius:4px;background:#120e21;image-rendering:pixelated}
+.sprpick{position:relative}
+.sprbtn{appearance:none;width:100%;display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid var(--line);
+  border-radius:6px;background:var(--panel2);color:var(--fg);cursor:pointer;font-family:var(--mono);font-size:12.5px;text-align:start}
+.sprbtn:hover,.sprbtn:focus-visible{border-color:var(--amber)}
+.sprbtn .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sprbtn .caret{color:var(--muted)}
+.sprlist{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 4px);max-height:280px;overflow:auto;display:grid;gap:1px;
+  padding:4px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);box-shadow:0 8px 24px #0008}
+.spropt{appearance:none;display:flex;align-items:center;gap:8px;padding:4px 6px;border:0;border-radius:5px;background:transparent;
+  color:var(--fg);cursor:pointer;font-family:var(--mono);font-size:12.5px;text-align:start}
+.spropt:hover,.spropt:focus-visible{background:var(--panel2);outline:none}
+.spropt.on{box-shadow:inset 3px 0 0 var(--amber);background:var(--panel2)}

@@ -57,12 +57,33 @@ function insertFrame(o, partId, afterId, canvas) {
   return f;
 }
 
+// ---------- icons ----------
+// A sprite at a glance, for lists and pickers: its first frame of its own (not
+// its glow), fitted into a small square. Markup first, painted once in the page.
+const ICON = 24;
+const spriteIcon = name => `<canvas class="ico" width="${ICON}" height="${ICON}" data-ico="${esc(name)}" aria-hidden="true"></canvas>`;
+
+function paintIcons(root) {
+  root.querySelectorAll('canvas[data-ico]').forEach(cv => {
+    const g = cv.getContext('2d');
+    g.clearRect(0, 0, ICON, ICON);
+    const s = spriteByName(cv.dataset.ico);
+    const f = s && (bodyFrames(s)[0] || s.frames[0]);
+    if (!f) return;
+    const k = Math.min(ICON / s.fw, ICON / s.fh);
+    const w = s.fw * k, h = s.fh * k;
+    g.imageSmoothingEnabled = k < 1;       // shrinking wants smoothing; growing stays crisp
+    g.drawImage(frameCanvas(s, f), (ICON - w) / 2, (ICON - h) / 2, w, h);
+  });
+}
+
 // ---------- the object list ----------
 function renderObjectList() {
   $('#objList').innerHTML = pack.sprites.map(o => `
     <button class="item ${current && o.id === current.id ? 'on' : ''}" data-oid="${o.id}">
-      <b>${esc(o.name)}</b><small>${o.frames.length} fr${usersOf(o).length ? ' · ' + usersOf(o).length + ' obj' : ''}</small>
-    </button>`).join('') || '<p class="empty">No objects yet.</p>';
+      <b>${spriteIcon(o.name)}${esc(o.name)}</b><small>${o.frames.length} fr${usersOf(o).length ? ' · ' + usersOf(o).length + ' obj' : ''}</small>
+    </button>`).join('') || '<p class="empty">No sprites yet.</p>';
+  paintIcons($('#objList'));
 }
 
 function renderObjects() {
