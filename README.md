@@ -119,32 +119,46 @@ the table `n` is any digit (anything that isn't one counts as 0). Where the
 digit isn't choosing between objects it is the thing's own id: the pairing
 colour for `K`, `L`, `O` and `F`, the message for `M`.
 
-| 2char | Object | Class |
-|---|---|---|
-| `0E` | `beetle` | `Beetle` |
-| `1E` | `moth` | `Moth` |
-| `2E` | `frog` | `Frog` |
-| `nC` | `coin` — garden: `0C` `coin`, `1C` `coin2` | `Coin` |
-| `nG` | `gem` | `Gem` |
-| `nK` | `key` | `Key` |
-| `nS` | `shield` | `Shield` |
-| `0N` | `lantern:fulllight` | `Lantern` |
-| `1N` | `lantern:biglight` | `Lantern` |
-| `2N` | `lantern:smalllight` | `Lantern` |
-| `nO` | `portal` | `Portal` |
-| `n!` | `checkpoint` | `Checkpoint` |
-| `nV` | `plant` | `Plant` |
-| `0R` | `rock` | `RockSpawner`, which drops `Rock`s |
-| `1R` | `rock2` | `RockSpawner`, which drops `Rock`s |
-| `nL` | `door` | `Door` |
-| `nF` | `flag` | `Flag` |
-| `nM` | `sign` | `Sign` |
-| `nW` | `cloud` | `Decoration` |
-| `n>` `n<` `n^` `nv` | `platform` | `Platform` |
-| `nP` | `worm` | none — her start; `game.js` draws her |
+One line per object a block can spawn, written `Class::object` — the class
+that spawns it, then its name in `objects.json`. A lantern's entry names its
+part as well.
 
-A digit past the end of a list takes its first entry, so `5E` is a beetle.
-`garden`'s glyph table has no `W`, so its levels spawn no clouds.
+| 2char | Class::object |
+|---|---|
+| `0E` | `Beetle::beetle` |
+| `1E` | `Moth::moth` |
+| `2E` | `Frog::frog` |
+| `0C` | `Coin::coin` |
+| `1C` | `Coin::coin2` |
+| `nG` | `Gem::gem` |
+| `nK` | `Key::key` |
+| `nS` | `Shield::shield` |
+| `0N` | `Lantern::lantern:fulllight` |
+| `1N` | `Lantern::lantern:biglight` |
+| `2N` | `Lantern::lantern:smalllight` |
+| `nO` | `Portal::portal` |
+| `n!` | `Checkpoint::checkpoint` |
+| `nV` | `Plant::plant` |
+| `0R` | `RockSpawner::rock` |
+| `1R` | `RockSpawner::rock2` |
+| `nL` | `Door::door` |
+| `nF` | `Flag::flag` |
+| `nM` | `Sign::sign` |
+| `nW` | `Decoration::cloud` |
+| `n>` | `Platform::platform` |
+| `n<` | `Platform::platform` |
+| `n^` | `Platform::platform` |
+| `nv` | `Platform::platform` |
+| `nP` | `Player::worm` |
+
+- `1C` is `garden`'s: its glyph table makes `C` a list. The default table has
+  only `coin`, for every digit.
+- A digit past the end of a list takes its first entry, so `2C` is
+  `Coin::coin` and `5E` is `Beetle::beetle`.
+- `RockSpawner` drops `Rock`s wearing the same object.
+- There is no `Player` class: `P` marks her start, and `game.js` draws the
+  `worm` object itself.
+- `garden`'s glyph table has no `W`, so its levels spawn no clouds.
 
 ## Generating artwork
 
