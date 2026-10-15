@@ -114,51 +114,10 @@ the class that spawns it. Two tables join them, both keyed by the map glyph:
   as `object:part`.
 - **glyph → class** — `SPAWN` in `src/js/spawn.js`.
 
-A map block is two characters: a digit, then the glyph — `1E` is a moth. In
-the table `n` is any digit (anything that isn't one counts as 0). Where the
-digit isn't choosing between objects it is the thing's own id: the pairing
-colour for `K`, `L`, `O` and `F`, the message for `M`.
-
-One line per object a block can spawn, written `Class::object` — the class
-that spawns it, then its name in `objects.json`. A lantern's entry names its
-part as well.
-
-| 2char | Class::object |
-|---|---|
-| `0E` | `Beetle::beetle` |
-| `1E` | `Moth::moth` |
-| `2E` | `Frog::frog` |
-| `0C` | `Coin::coin` |
-| `1C` | `Coin::coin2` |
-| `nG` | `Gem::gem` |
-| `nK` | `Key::key` |
-| `nS` | `Shield::shield` |
-| `0N` | `Lantern::lantern:fulllight` |
-| `1N` | `Lantern::lantern:biglight` |
-| `2N` | `Lantern::lantern:smalllight` |
-| `nO` | `Portal::portal` |
-| `n!` | `Checkpoint::checkpoint` |
-| `nV` | `Plant::plant` |
-| `0R` | `RockSpawner::rock` |
-| `1R` | `RockSpawner::rock2` |
-| `nL` | `Door::door` |
-| `nF` | `Flag::flag` |
-| `nM` | `Sign::sign` |
-| `nW` | `Decoration::cloud` |
-| `n>` | `Platform::platform` |
-| `n<` | `Platform::platform` |
-| `n^` | `Platform::platform` |
-| `nv` | `Platform::platform` |
-| `nP` | `Player::worm` |
-
-- `1C` is `garden`'s: its glyph table makes `C` a list. The default table has
-  only `coin`, for every digit.
-- A digit past the end of a list takes its first entry, so `2C` is
-  `Coin::coin` and `5E` is `Beetle::beetle`.
-- `RockSpawner` drops `Rock`s wearing the same object.
-- There is no `Player` class: `P` marks her start, and `game.js` draws the
-  `worm` object itself.
-- `garden`'s glyph table has no `W`, so its levels spawn no clouds.
+[docs/objects.md](docs/objects.md) lists every object a block can spawn as
+`Class::object`, with what its spawn takes from the block and every setting
+its class holds in code today — the map for moving those settings into
+`objects.json`.
 
 ## Generating artwork
 
