@@ -71,7 +71,7 @@ function propField(o, k, d) {
       const cur = refName(v);
       const missing = v && !spriteByName(cur) ? ' — missing' : '';
       return `<div class="ctl">${head}<div class="sprrow"><div class="sprpick">
-        <button type="button" class="sprbtn" data-sprbtn="${k}" aria-haspopup="listbox">${spriteIcon(cur)}<span class="nm">${esc(v || '—')}${missing}</span><span class="caret">▾</span></button>
+        <button type="button" class="sprbtn" data-sprbtn="${k}" aria-haspopup="listbox">${spriteIcon(cur)}<span class="nm">${esc(cur || '—')}${missing}</span><span class="caret">▾</span></button>
       </div><button type="button" class="btn sm" data-newsprite="${k}" title="Make a new sprite for this object and draw it">+ New</button></div>${hint}</div>`;
     }
     case 'background': input = `<select data-prop="${k}">${options(pack.backgrounds.map(b => b.name), 'background::')}</select>`; break;
@@ -257,7 +257,7 @@ function openSpritePicker(btn) {
   list.setAttribute('role', 'listbox');
   list.innerHTML = pack.sprites.map(s => `
     <button type="button" role="option" class="spropt ${s.name === cur ? 'on' : ''}" data-sprset="${k}" data-v="sprite::${esc(s.name)}"
-      aria-selected="${s.name === cur}">${spriteIcon(s.name)}<span>sprite::${esc(s.name)}</span></button>`).join('')
+      aria-selected="${s.name === cur}">${spriteIcon(s.name)}<span>${esc(s.name)}</span></button>`).join('')
     || '<p class="empty">No sprites yet — make one on the Sprites tab.</p>';
   btn.parentElement.appendChild(list);
   paintIcons(list);
