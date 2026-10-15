@@ -7,7 +7,7 @@ class Plant extends Entity {
   static bucket = 'plants';
   static editor = {
     label: 'Plant',
-    glyphs: 'V',
+    code: '0V',
     props: {
       reach: { type: 'int', default: 100, label: 'How high it lunges, px' },
       trigger: { type: 'int', default: 40, label: 'How near overhead sets it off, px' },

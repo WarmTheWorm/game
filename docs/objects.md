@@ -6,54 +6,57 @@ another (`sprite::coin`, `sound::coin`, `background::Rain`):
 | Kind | What it is | Lives in |
 |---|---|---|
 | **Sprite** | art and its body: frames, parts, glow part, size, pivot, offset, collision, fps, slice | `objects/sprites.json` + `objects/objects.png` |
-| **Object** | one thing a level can place: its class, its codes, its property values | `objects/objects.json` |
+| **Object** | one thing a level can place: its class, its code, its property values | `objects/objects.json` |
 | **Class** | the behaviour, and the properties it reads | `src/js/*.js`, listed in `src/js/classes.js` |
 
-The game only spawns objects. A map block's first two characters — a digit,
-then a glyph — are a **code**; the object whose `code` matches is placed, as
-its class, with its own property values over the class defaults. A code of
-`n` and a glyph takes any digit no other object claims; for a class whose
-digit is an id (a key's colour, a sign's message) that is the usual code. A
-digit nothing claims falls to the glyph's first object, so `5E` is still an
-enemy.
+The game only spawns objects. A map block is three characters, and they are
+its object's **code**:
+
+- the first two are the **class's**, fixed by the class itself — Beetle `0E`,
+  Moth `1E`, Frog `2E`, Coin `0C`. A class whose digit is an id (a key's
+  colour, a sign's message) has `n` there, for any digit: `nK`.
+- the third is the **object's**: which of that class's objects it is, given
+  automatically — the first coin `0C0`, the second `0C1`.
 
 ```json
-"coin2": {"class":"Coin","code":"1C","props":{"sprite":"sprite::coin2","score":1,"pickSound":"sound::coin"}}
+"coin2": {"class":"Coin","code":"0C1","props":{"sprite":"sprite::coin2","score":1,"pickSound":"sound::coin"}}
 ```
 
+The object is placed as its class, with its own property values over the
+class defaults. A block that matches no object exactly still places something
+of its glyph — the class its digit names, variant 0 — so `5E` is a beetle.
+
 Objects are made on the asset pack creator's **Objects** tab: **+ New** asks
-for one of the game's classes and a name, and the form below is built from
-what the class declares. Sprites are made on its **Sprites** tab.
+for one of the game's classes and a name; the code follows from the class,
+and the form below is built from what the class declares. Sprites are made on
+its **Sprites** tab.
 
 ## garden's objects
 
-| 2char | Class::object | Sprite | Set apart from the class defaults |
+| Code | Class::object | Sprite | Set apart from the class defaults |
 |---|---|---|---|
-| `0E` | `Beetle::beetle` | `sprite::beetle` | |
-| `1E` | `Moth::moth` | `sprite::moth` | |
-| `2E` | `Frog::frog` | `sprite::frog` | |
-| `0C` | `Coin::coin` | `sprite::coin` | |
-| `1C` | `Coin::coin2` | `sprite::coin2` | |
-| `nG` | `Gem::gem` | `sprite::gem` | |
-| `nK` | `Key::key` | `sprite::key` | |
-| `nS` | `Shield::shield` | `sprite::shield` | |
-| `0N` | `Lantern::lanternFull` | `sprite::lantern` | `part: fulllight` |
-| `1N` | `Lantern::lanternBig` | `sprite::lantern` | `part: biglight`, `reach: 6` |
-| `2N` | `Lantern::lanternSmall` | `sprite::lantern` | `part: smalllight`, `reach: 2` |
-| `nO` | `Portal::portal` | `sprite::portal` | |
-| `n!` | `Checkpoint::checkpoint` | `sprite::checkpoint` | |
-| `nV` | `Plant::plant` | `sprite::plant` | |
-| `0R` | `RockSpawner::rock` | `sprite::rock` | |
-| `1R` | `RockSpawner::rock2` | `sprite::rock` | `gravity: 0.22`, `maxFall: 4.5` |
-| `nL` | `Door::door` | `sprite::door` | |
-| `nF` | `Flag::flag` | `sprite::flag` | |
-| `nM` | `Sign::sign` | `sprite::sign` | |
-| `nW` | `Decoration::cloud` | `sprite::cloud` | |
-| `n>` | `Platform::platform` | `sprite::platform` | |
-| `n<` | `Platform::platform` | `sprite::platform` | |
-| `n^` | `Platform::platform` | `sprite::platform` | |
-| `nv` | `Platform::platform` | `sprite::platform` | |
-| `nP` | — her start | `sprite::worm`, drawn by `game.js` | parts `body`, `tail`, `headLeft`, `headRight` |
+| `0E0` | `Beetle::beetle` | `sprite::beetle` | |
+| `1E0` | `Moth::moth` | `sprite::moth` | |
+| `2E0` | `Frog::frog` | `sprite::frog` | |
+| `0C0` | `Coin::coin` | `sprite::coin` | |
+| `0C1` | `Coin::coin2` | `sprite::coin2` | |
+| `0G0` | `Gem::gem` | `sprite::gem` | |
+| `nK0` | `Key::key` | `sprite::key` | |
+| `0S0` | `Shield::shield` | `sprite::shield` | |
+| `0N0` | `Lantern::lanternFull` | `sprite::lantern` | `part: fulllight` |
+| `0N1` | `Lantern::lanternBig` | `sprite::lantern` | `part: biglight`, `reach: 6` |
+| `0N2` | `Lantern::lanternSmall` | `sprite::lantern` | `part: smalllight`, `reach: 2` |
+| `nO0` | `Portal::portal` | `sprite::portal` | |
+| `0!0` | `Checkpoint::checkpoint` | `sprite::checkpoint` | |
+| `0V0` | `Plant::plant` | `sprite::plant` | |
+| `0R0` | `RockSpawner::rock` | `sprite::rock` | |
+| `0R1` | `RockSpawner::rock2` | `sprite::rock` | `gravity: 0.22`, `maxFall: 4.5` |
+| `nL0` | `Door::door` | `sprite::door` | |
+| `nF0` | `Flag::flag` | `sprite::flag` | |
+| `nM0` | `Sign::sign` | `sprite::sign` | |
+| `0W0` | `Decoration::cloud` | `sprite::cloud` | |
+| `0>0` `0<0` `0^0` `0v0` | `Platform::platform` | `sprite::platform` | |
+| `0P0` | — her start | `sprite::worm`, drawn by `game.js` | parts `body`, `tail`, `headLeft`, `headRight` |
 
 ## The classes
 
@@ -64,7 +67,7 @@ chain — an `Enemy`'s stomp is every enemy's. Every class has `sprite`.
 
 ### Beetle
 
-Beetle · extends `Enemy` · glyphs `E` · stands at 50%, 0% of its cell
+Beetle · extends `Enemy` · code `0E` · stands at 50%, 0% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -76,7 +79,7 @@ Beetle · extends `Enemy` · glyphs `E` · stands at 50%, 0% of its cell
 
 ### Moth
 
-Moth · extends `Enemy` · glyphs `E` · stands at 50%, 50% of its cell
+Moth · extends `Enemy` · code `1E` · stands at 50%, 50% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -91,7 +94,7 @@ Moth · extends `Enemy` · glyphs `E` · stands at 50%, 50% of its cell
 
 ### Frog
 
-Frog · extends `Enemy` · glyphs `E` · stands at 50%, 0% of its cell
+Frog · extends `Enemy` · code `2E` · stands at 50%, 0% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -105,7 +108,7 @@ Frog · extends `Enemy` · glyphs `E` · stands at 50%, 0% of its cell
 
 ### Coin
 
-Coin · extends `Pickup` · glyphs `C` · stands at 50%, 50% of its cell
+Coin · extends `Pickup` · code `0C` · stands at 50%, 50% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -115,7 +118,7 @@ Coin · extends `Pickup` · glyphs `C` · stands at 50%, 50% of its cell
 
 ### Gem
 
-Gem · extends `Pickup` · glyphs `G` · stands at 50%, 50% of its cell
+Gem · extends `Pickup` · code `0G` · stands at 50%, 50% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -125,7 +128,7 @@ Gem · extends `Pickup` · glyphs `G` · stands at 50%, 50% of its cell
 
 ### Key
 
-Key · extends `Pickup` · glyphs `K` · stands at 50%, 50% of its cell · its digit is its id
+Key · extends `Pickup` · code `nK` · stands at 50%, 50% of its cell (its digit is its id)
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -134,7 +137,7 @@ Key · extends `Pickup` · glyphs `K` · stands at 50%, 50% of its cell · its d
 
 ### Shield
 
-Shield · extends `Pickup` · glyphs `S` · stands at 50%, 50% of its cell
+Shield · extends `Pickup` · code `0S` · stands at 50%, 50% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -144,7 +147,7 @@ Shield · extends `Pickup` · glyphs `S` · stands at 50%, 50% of its cell
 
 ### Lantern
 
-Lantern · extends `Pickup` · glyphs `N` · stands at 50%, 50% of its cell
+Lantern · extends `Pickup` · code `0N` · stands at 50%, 50% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -155,7 +158,7 @@ Lantern · extends `Pickup` · glyphs `N` · stands at 50%, 50% of its cell
 
 ### Portal
 
-Portal · extends `Entity` · glyphs `O` · stands at 50%, 50% of its cell · its digit is its id
+Portal · extends `Entity` · code `nO` · stands at 50%, 50% of its cell (its digit is its id)
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -163,7 +166,7 @@ Portal · extends `Entity` · glyphs `O` · stands at 50%, 50% of its cell · it
 
 ### Checkpoint
 
-Checkpoint · extends `Entity` · glyphs `!` · stands at 50%, 50% of its cell
+Checkpoint · extends `Entity` · code `0!` · stands at 50%, 50% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -174,7 +177,7 @@ Checkpoint · extends `Entity` · glyphs `!` · stands at 50%, 50% of its cell
 
 ### Flag
 
-Flag · extends `Entity` · glyphs `F` · stands at 50%, 50% of its cell · its digit is its id
+Flag · extends `Entity` · code `nF` · stands at 50%, 50% of its cell (its digit is its id)
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -182,7 +185,7 @@ Flag · extends `Entity` · glyphs `F` · stands at 50%, 50% of its cell · its 
 
 ### Door
 
-Door · extends `Entity` · glyphs `L` · stands at 0%, 0% of its cell · its digit is its id
+Door · extends `Entity` · code `nL` · stands at 0%, 0% of its cell (its digit is its id)
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -191,7 +194,7 @@ Door · extends `Entity` · glyphs `L` · stands at 0%, 0% of its cell · its di
 
 ### Sign
 
-Sign · extends `Entity` · glyphs `M` · stands at 50%, 50% of its cell · its digit is its id
+Sign · extends `Entity` · code `nM` · stands at 50%, 50% of its cell (its digit is its id)
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -199,7 +202,7 @@ Sign · extends `Entity` · glyphs `M` · stands at 50%, 50% of its cell · its 
 
 ### Plant
 
-Plant · extends `Entity` · glyphs `V` · stands at 50%, 100% of its cell
+Plant · extends `Entity` · code `0V` · stands at 50%, 100% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -217,7 +220,7 @@ Plant · extends `Entity` · glyphs `V` · stands at 50%, 100% of its cell
 
 ### RockSpawner
 
-Falling rock · extends `Entity` · glyphs `R` · stands at 50%, 0% of its cell
+Falling rock · extends `Entity` · code `0R` · stands at 50%, 0% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -228,7 +231,7 @@ Falling rock · extends `Entity` · glyphs `R` · stands at 50%, 0% of its cell
 
 ### Platform
 
-Platform · extends `Entity` · glyphs `><^v` · stands at 0%, 0% of its cell
+Platform · extends `Entity` · code `0> 0< 0^ 0v` · stands at 0%, 0% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -237,7 +240,7 @@ Platform · extends `Entity` · glyphs `><^v` · stands at 0%, 0% of its cell
 
 ### Decoration
 
-Decoration · extends `Entity` · glyphs `W` · stands at 50%, 50% of its cell
+Decoration · extends `Entity` · code `0W` · stands at 50%, 50% of its cell
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
@@ -246,8 +249,10 @@ Decoration · extends `Entity` · glyphs `W` · stands at 50%, 50% of its cell
 ## Adding a class
 
 1. Write it in `src/js/`, extending `Entity` (or `Pickup`, `Enemy`), with a
-   `static editor = { label, glyphs, props }` block and, if it doesn't stand
-   in the middle of its cell, a `static cellAnchor`. Read its settings from
+   `static editor = { label, code, props }` block — `code` the two characters
+   its blocks start with, a digit (or `n` if the digit is the thing's id) and a
+   glyph no other class uses with that digit — and, if it doesn't stand in the
+   middle of its cell, a `static cellAnchor`. Read its settings from
    `this.props`.
 2. Add its script tag to `src/index.html`, `editor/index.html` and
    `assetpack-editor/index.html`, and its name to `GAME_CLASSES` in

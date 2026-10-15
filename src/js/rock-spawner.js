@@ -5,7 +5,7 @@ class RockSpawner extends Entity {
   static bucket = 'rockSpawners';
   static editor = {
     label: 'Falling rock',
-    glyphs: 'R',
+    code: '0R',
     props: {
       interval: { type: 'int', default: 140, label: 'Frames between drops' },
       gravity: { type: 'float', default: 0.55, label: 'Gravity' },

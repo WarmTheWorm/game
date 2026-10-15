@@ -4,7 +4,7 @@
 class Frog extends Enemy {
   static editor = {
     label: 'Frog',
-    glyphs: 'E',
+    code: '2E',
     props: {
       hopUp: { type: 'float', default: 8.5, label: 'Hop strength, up' },
       hopForward: { type: 'float', default: 2.2, label: 'Hop strength, forward' },

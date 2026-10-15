@@ -4,13 +4,12 @@ class Key extends Pickup {
   static bucket = 'keyPickups';
   static editor = {
     label: 'Key',
-    glyphs: 'K',
+    code: 'nK',   // its digit is its id
     props: {
       pickSound: { type: 'sound', default: 'sound::key', label: 'Sound when taken' }
     }
   };
 
-  static takesId = true;
   take() {
     keysHeld.push(this.id || 0);
     playSound(this.props.pickSound);

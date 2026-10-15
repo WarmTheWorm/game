@@ -2,7 +2,7 @@ class Gem extends Pickup {
   static bucket = 'gems';
   static editor = {
     label: 'Gem',
-    glyphs: 'G',
+    code: '0G',
     props: {
       score: { type: 'int', default: 5, label: 'Score' },
       pickSound: { type: 'sound', default: 'sound::gem', label: 'Sound when taken' }

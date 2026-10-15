@@ -4,7 +4,6 @@
 // take any digit, which is that id.
 class Portal extends Entity {
   static bucket = 'portals';
-  static editor = { label: 'Portal', glyphs: 'O', props: {} };
+  static editor = { label: 'Portal', code: 'nO', props: {} };
 
-  static takesId = true;
 }

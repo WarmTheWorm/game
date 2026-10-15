@@ -3,9 +3,8 @@
 // '1M0' and '2M0' are three different notes on the same post.
 class Sign extends Entity {
   static bucket = 'signs';
-  static editor = { label: 'Sign', glyphs: 'M', props: {} };
+  static editor = { label: 'Sign', code: 'nM', props: {} };
 
-  static takesId = true;
 
   constructor(name, x, y) { super(name, x, y); this.reading = false; }
   reset() { this.reading = false; }

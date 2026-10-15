@@ -2,7 +2,7 @@
 class Beetle extends Enemy {
   static editor = {
     label: 'Beetle',
-    glyphs: 'E',
+    code: '0E',
     props: {
       speed: { type: 'float', default: 1.1, label: 'Walking speed, px a frame' }
     }

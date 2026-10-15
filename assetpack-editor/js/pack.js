@@ -35,10 +35,12 @@ function newSprite(name) {
 
 // ---------- objects ----------
 // What a level places. The class is one of the game's own (GAME_CLASSES, read
-// from src/js), and its `editor` block says which glyphs its codes may use and
-// which properties it reads; this keeps a value for each.
+// from src/js), and its `editor` block says the code that places it and which
+// properties it reads; this keeps a value for each.
 //
-//   code   2-char block codes: a digit, or n for any digit, then a glyph
+//   code   the 3-char block codes that place it: its class's two (a digit, or n
+//          for any digit read as an id, then a glyph), then its own variant —
+//          set here, never typed: the first one its class has free
 //   props  property name -> value; references carry their kind, "sound::coin"
 
 const gameClass = name => CLASS_BY_NAME.get(name) || null;
@@ -54,22 +56,42 @@ function fillProps(o) {
   o.props = props;
 }
 
-// A code nothing else uses yet, on the class's first glyph: an id class takes
-// any digit, the rest the first digit free.
-function freeCode(cls, except) {
-  const C = gameClass(cls);
-  const glyph = (C && C.editor.glyphs || '?')[0];
-  const used = new Set(pack.objects.filter(o => o !== except).flatMap(o => o.code));
-  if (C && C.takesId && !used.has('n' + glyph)) return 'n' + glyph;
-  for (let d = 0; d <= 9; d++) if (!used.has(d + glyph)) return d + glyph;
-  return '0' + glyph;
+// The third character, which tells the objects of one class apart.
+const VARIANTS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const variantOf = o => (o.code[0] || '')[2] || '';
+
+// The first variant no other object of that class has.
+function freeVariant(cls, except) {
+  const used = new Set(pack.objects.filter(o => o !== except && o.cls === cls).map(variantOf));
+  return [...VARIANTS].find(v => !used.has(v)) || '0';
+}
+
+// Its codes: every code its class has, with this variant on the end.
+function setVariant(o, v) {
+  const C = gameClass(o.cls);
+  o.code = C ? C.codes.map(c => c + v) : o.code.map(c => c.slice(0, 2) + v);
 }
 
 function newGameObject(name, cls, sprite) {
   const o = { id: uid(), name, cls, code: [], props: { sprite: sprite ? 'sprite::' + sprite : '' } };
   fillProps(o);
-  o.code = [freeCode(cls, o)];
+  setVariant(o, freeVariant(cls, o));
   return o;
+}
+
+// Packs from when an object chose its own 2-char code: each class's objects
+// are numbered in the order of the digit they had, as was done for the packs
+// on disk, so the first coin is 0C0 and the second 0C1.
+function migrateCodes(p) {
+  if (!p.objects.some(o => o.code.some(c => c.length === 2))) return false;
+  const byClass = {};
+  for (const o of p.objects) (byClass[o.cls] = byClass[o.cls] || []).push(o);
+  const digit = o => { const c = o.code[0] || 'n'; return c[0] === 'n' ? 0 : +c[0]; };
+  for (const list of Object.values(byClass)) {
+    list.sort((a, b) => digit(a) - digit(b) || a.name.localeCompare(b.name));
+    list.forEach((o, i) => setVariant(o, VARIANTS[i]));
+  }
+  return true;
 }
 
 // The codes two objects both claim, by code.

@@ -2,7 +2,7 @@ class Checkpoint extends Entity {
   static bucket = 'checkpoints';
   static editor = {
     label: 'Checkpoint',
-    glyphs: '!',
+    code: '0!',
     props: {
       off: { type: 'part', default: 'off', label: 'Part before she reaches it' },
       on: { type: 'part', default: 'on', label: 'Part once reached' },

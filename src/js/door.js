@@ -5,10 +5,9 @@ class Door extends Entity {
   static bucket = 'lockedDoorSpots';
   static mainLayerOnly = true;   // only the solid layer has cells to stamp
   static cellAnchor = [0, 0];     // it is its whole cell
-  static takesId = true;
   static editor = {
     label: 'Door',
-    glyphs: 'L',
+    code: 'nL',   // its digit is its id
     props: {
       openSound: { type: 'sound', default: 'sound::unlock', label: 'Sound when opened' }
     }

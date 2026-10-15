@@ -5,7 +5,7 @@ class Shield extends Pickup {
   static bucket = 'shieldPickups';
   static editor = {
     label: 'Shield',
-    glyphs: 'S',
+    code: '0S',
     props: {
       worn: { type: 'part', default: 'worn', optional: true, label: 'Part worn on her (without one, a plain ring)' },
       pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken' }

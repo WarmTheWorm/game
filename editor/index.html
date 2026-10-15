@@ -65,6 +65,7 @@
 
   #tints, #objDigits { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
   #tints button, #objDigits button { padding: 0; height: 22px; font-size: 11px; border-radius: 4px; }
+  #objDigits.locked { opacity: .35; pointer-events: none; }
 
   #bgList { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
   #bgList .tile {
@@ -250,7 +251,7 @@
     <div class="group">
       <label>Object</label>
       <div id="objPalette"></div>
-      <div class="field" style="margin-top:8px"><span>Variant / id</span><div id="objDigits"></div></div>
+      <div class="field" style="margin-top:8px"><span>Id — for a key, door, portal, flag or sign</span><div id="objDigits"></div></div>
       <div class="hint" id="objHint">Spawns from the layer it is drawn on. A door only counts on Mid. The block’s first character picks the variant, or the id that pairs a key with its door.</div>
     </div>
 
@@ -422,42 +423,47 @@ const HIT_TEXT = { ' ': 'no collision', 'S': 'solid', '^': 'top half only' };
 const hitText = h => HIT_TEXT[h] || (isRampHit(h) ? 'ramp ' + h : h);
 
 // ---------- the objects ----------
-// One entry per glyph a game class declares, in the game's own order. 'P' is
-// not in there at all — her start is not an object, and a level has exactly
-// one. Which object a glyph and digit place is the pack's: each object in its
-// objects.json carries the codes that name it.
-const OBJECTS = [...new Set(GAME_CLASSES.flatMap(C => [...(C.editor.glyphs || '')]))]
+// One entry per glyph a game class's code uses, in the game's own order — the
+// cells keep which glyph they hold by this. 'P' is not in there at all — her
+// start is not an object, and a level has exactly one. The class fixes a
+// block's first two characters and the object is its third, so which object
+// a cell places is the pack's: each object in its objects.json carries the
+// codes that name it.
+const OBJECTS = [...new Set(GAME_CLASSES.flatMap(C => C.codes.map(c => c[1])))]
   .map(glyph => ({ glyph }));
 const OBJ_BY_GLYPH = new Map(OBJECTS.map((o, i) => [o.glyph, i]));
 
-// The info digit is the variant for a glyph that covers several objects and a
-// pairing id for the rest, so the name is the only honest label.
-const objName = (glyph, digit) => atlas.objectAt(glyph, digit) || glyph;
-const objSprite = (glyph, digit) => atlas.spriteOf(objName(glyph, digit));
-const objClass = (glyph, digit) => {
-  const o = atlas.object(objName(glyph, digit));
+// A level saved before classes owned their codes may still say 1C for the
+// second coin, 1N/2N for the big and small lamps, 1R for the slow rock. No
+// class has those codes now, so reading them as what they meant is safe.
+const OLD_CODES = { '1C': '0C1', '1N': '0N1', '2N': '0N2', '1R': '0R1' };
+
+const objName = (glyph, digit, v) => atlas.objectAt(glyph, digit, v) || glyph;
+const objSprite = (glyph, digit, v) => atlas.spriteOf(objName(glyph, digit, v));
+const objClass = (glyph, digit, v) => {
+  const o = atlas.object(objName(glyph, digit, v));
   return o ? CLASS_BY_NAME.get(o.class) || null : null;
 };
 
 // The part an object shows by — the first part property its class reads, a
 // lantern's lamp or a plant's bud — or null for its whole strip.
-const objPart = (glyph, digit) => {
-  const o = atlas.object(objName(glyph, digit));
-  const C = objClass(glyph, digit);
+const objPart = (glyph, digit, v) => {
+  const o = atlas.object(objName(glyph, digit, v));
+  const C = objClass(glyph, digit, v);
   if (!o || !C) return null;
   const k = Object.entries(C.propDefs()).find(([, d]) => d.type === 'part');
-  const v = k && ((o.props || {})[k[0]] ?? k[1].default);
-  return v && atlas.partSpan(objSprite(glyph, digit), v) ? v : null;
+  const p = k && ((o.props || {})[k[0]] ?? k[1].default);
+  return p && atlas.partSpan(objSprite(glyph, digit, v), p) ? p : null;
 };
-const objFrame = (glyph, digit) => {
-  const span = atlas.partSpan(objSprite(glyph, digit), objPart(glyph, digit));
+const objFrame = (glyph, digit, v) => {
+  const span = atlas.partSpan(objSprite(glyph, digit, v), objPart(glyph, digit, v));
   return span ? span[0] : 0;
 };
 
 // Where in its cell an object lands, as a fraction of the cell — its class's
 // own cellAnchor, the same one its spawn uses.
-const cellAnchor = (glyph, digit) => {
-  const C = objClass(glyph, digit);
+const cellAnchor = (glyph, digit, v) => {
+  const C = objClass(glyph, digit, v);
   return C ? C.cellAnchor : [0.5, 0.5];
 };
 
@@ -479,6 +485,8 @@ let tileIndex = 0;
 let tintIndex = 0;
 let objIndex = 0;
 let objDigit = 0;
+let objVariant = '0';   // the object's own third character
+let objEntry = 0;       // which palette swatch: one per object code
 let zoom = 1;
 let dimOthers = false;   // off, so the board reads as the finished level
 
@@ -696,7 +704,7 @@ function blockAt(li, r, c) {
     const p = PALETTE[cell.pi];
     return p.id + p.glyph + sheet.tintName(cell.tint);
   }
-  return cell.id + OBJECTS[cell.oi].glyph + '0';
+  return cell.id + OBJECTS[cell.oi].glyph + (cell.v || '0');
 }
 
 function toBlockMap() {
@@ -885,7 +893,9 @@ function fromBlockMap(text) {
         if (glyph === 'P') { start = { r, c }; continue; }
         const digit = (id >= '0' && id <= '9') ? +id : 0;
         if (OBJ_BY_GLYPH.has(glyph)) {
-          layers[li][r][c] = { oi: OBJ_BY_GLYPH.get(glyph), id: digit };
+          const old = OLD_CODES[digit + glyph];
+          const v = old ? old[2] : (isBlank(tintCh) || !tintCh ? '0' : tintCh);
+          layers[li][r][c] = { oi: OBJ_BY_GLYPH.get(glyph), id: old ? +old[0] : digit, v };
           continue;
         }
         const idCh = isBlank(id) ? '0' : id;
@@ -969,11 +979,11 @@ function render() {
 // glyph named.
 function drawObjectCell(cell, c, r) {
   const glyph = OBJECTS[cell.oi].glyph;
-  const name = objSprite(glyph, cell.id);
-  if (!atlas.def(name).frame) { objPlaceholder(c, r, cell.id + glyph); return; }
-  const [ax, ay] = cellAnchor(glyph, cell.id);
+  const name = objSprite(glyph, cell.id, cell.v);
+  if (!atlas.def(name).frame) { objPlaceholder(c, r, cell.id + glyph + (cell.v || '0')); return; }
+  const [ax, ay] = cellAnchor(glyph, cell.id, cell.v);
   const [x, y] = atlas.place(name, (c + ax) * TILE, (r + ay) * TILE);
-  const frame = objFrame(glyph, cell.id);
+  const frame = objFrame(glyph, cell.id, cell.v);
   // tiles want nearest-neighbour, but object art is packed finer than it is
   // shown and has to be resampled down
   boardCtx.imageSmoothingEnabled = true;
@@ -1029,7 +1039,7 @@ function apply(at, how) {
   if (how === 'start') { start = { r, c }; return; }
   layers[activeLayer][r][c] = mode === 'tile'
     ? { pi: tileIndex, tint: tintIndex }
-    : { oi: objIndex, id: objDigit };
+    : { oi: objIndex, id: objDigit, v: objVariant };
 }
 
 let stroke = null;        // {how, last} while a drag is live
@@ -1641,7 +1651,7 @@ function renderProps(focus) {
 
   const glyph = OBJECTS[objIndex].glyph;
   const key = glyph + ':' + objDigit;
-  propLabel.textContent = `${objName(glyph, objDigit)} · ${objDigit}${glyph}0`;
+  propLabel.textContent = `${objName(glyph, objDigit, objVariant)} · ${objDigit}${glyph}${objVariant}`;
   propHint.textContent = props.map(p => p.hint).filter(Boolean).join(' ');
   if (key !== propsKey) {
     propsKey = key;
@@ -1721,8 +1731,8 @@ function selectionText() {
     return `${p.label} · ${sheet.tintName(tintIndex)} · ${hitText(p.hit)}`;
   }
   const glyph = OBJECTS[objIndex].glyph;
-  const part = objPart(glyph, objDigit);
-  return `${objDigit}${glyph}0 · ${objName(glyph, objDigit)}${part ? ' · ' + part : ''}`;
+  const part = objPart(glyph, objDigit, objVariant);
+  return `${objDigit}${glyph}${objVariant} · ${objName(glyph, objDigit, objVariant)}${part ? ' · ' + part : ''}`;
 }
 
 function updateStatus(at) {
@@ -1750,9 +1760,12 @@ function flagDigits() {
 // of which one a click will paint.
 function refreshSelection() {
   swatches.forEach((s, j) => s.cell.classList.toggle('on', mode === 'tile' && j === tileIndex));
-  objSwatches.forEach((s, j) => s.cell.classList.toggle('on', mode === 'object' && j === objIndex));
+  objSwatches.forEach((s, j) => s.cell.classList.toggle('on', mode === 'object' && j === objEntry));
   pick(tintsEl, tintIndex, 'tint');
   pick(objDigitsEl, objDigit, 'tint');
+  // the digit is only the object's to choose when it is an id
+  const entry = objSwatches[objEntry];
+  objDigitsEl.classList.toggle('locked', !!entry && entry.digit !== 'n');
   renderProps();
   drawSwatches();
   updateStatus(hover);
@@ -1823,44 +1836,66 @@ PALETTE.forEach((p, i) => {
   swatches.push({ cell, ctx: cv.getContext('2d') });
 });
 
-// Same again for the objects, out of the glyph map rather than the sheet.
+// Same again for the objects: one swatch per object the pack has — per code,
+// so a platform's four directions are four — made once the pack is read. A
+// swatch fixes the glyph and the third character; the digit too, unless the
+// object's digit is its id, which the strip below then picks.
 const SWATCH = 40;
 const objPaletteEl = document.getElementById('objPalette');
 const objSwatches = [];
-OBJECTS.forEach((o, i) => {
-  const cell = document.createElement('div');
-  cell.className = 'tile';
-  const cv = document.createElement('canvas');
-  cv.width = SWATCH; cv.height = SWATCH;
-  const tag = document.createElement('span');
-  tag.className = 'tag';
-  tag.textContent = o.glyph;
-  cell.append(cv, tag);
-  cell.addEventListener('click', () => {
-    mode = 'object';
-    objIndex = i;
-    tool = 'paint';
-    pick(toolSeg, tool, 'tool');
-    refreshSelection();
+function buildObjPalette() {
+  objPaletteEl.innerHTML = '';
+  objSwatches.length = 0;
+  const entries = Object.entries(atlas.objects)
+    .flatMap(([name, o]) => codesOf(o).map(code => ({ name, code })))
+    .filter(e => OBJ_BY_GLYPH.has(e.code[1]))
+    .sort((a, b) => OBJ_BY_GLYPH.get(a.code[1]) - OBJ_BY_GLYPH.get(b.code[1]) || a.code.localeCompare(b.code));
+  entries.forEach(({ name, code }, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'tile';
+    const cv = document.createElement('canvas');
+    cv.width = SWATCH; cv.height = SWATCH;
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = code;
+    cell.append(cv, tag);
+    const swatch = { cell, ctx: cv.getContext('2d'), glyph: code[1], digit: code[0], v: code[2] || '0', name };
+    cell.addEventListener('click', () => {
+      mode = 'object';
+      objEntry = i;
+      objIndex = OBJ_BY_GLYPH.get(swatch.glyph);
+      objVariant = swatch.v;
+      if (swatch.digit !== 'n') objDigit = +swatch.digit;
+      tool = 'paint';
+      pick(toolSeg, tool, 'tool');
+      refreshSelection();
+    });
+    objPaletteEl.appendChild(cell);
+    objSwatches.push(swatch);
   });
-  objPaletteEl.appendChild(cell);
-  objSwatches.push({ cell, ctx: cv.getContext('2d'), glyph: o.glyph });
-});
+  const first = objSwatches[0];
+  if (first) {
+    objEntry = 0;
+    objIndex = OBJ_BY_GLYPH.get(first.glyph);
+    objVariant = first.v;
+    if (first.digit !== 'n') objDigit = +first.digit;
+  }
+}
 
 // An object's art can be many tiles across, so a swatch scales it to fit. It
 // is centred by its frame rather than by its anchor: a door's anchor is the
 // top-left corner it stands in, which would hang it off the swatch. The glow
 // goes on too — for a key or a door that colour is the only thing the info
 // digit changes.
-function drawObjectSwatch(c2, glyph, digit) {
+function drawObjectSwatch(c2, glyph, digit, v) {
   c2.clearRect(0, 0, SWATCH, SWATCH);
-  const name = objSprite(glyph, digit);
+  const name = objSprite(glyph, digit, v);
   const def = atlas.def(name);
   if (!def.frame) return;
   const [fw, fh] = atlas.size(name);
   const scale = Math.min(1, SWATCH / fw, SWATCH / fh);
   const x = def.anchor[0] - fw / 2, y = def.anchor[1] - fh / 2;
-  const frame = objFrame(glyph, digit);
+  const frame = objFrame(glyph, digit, v);
   c2.save();
   c2.translate(SWATCH / 2, SWATCH / 2);
   c2.scale(scale, scale);
@@ -1878,9 +1913,11 @@ function drawSwatches() {
     withCtx(s.ctx, () => sheet.drawCell(PALETTE[i].sheetRow, tintIndex, 0, 0));
   });
   objSwatches.forEach(s => {
-    drawObjectSwatch(s.ctx, s.glyph, objDigit);
-    const part = objPart(s.glyph, objDigit);
-    s.cell.title = `${objDigit}${s.glyph}0 — ${objName(s.glyph, objDigit)}${part ? ' (' + part + ')' : ''}`;
+    // an id object shows the id picked below, so a key wears that colour
+    const d = s.digit === 'n' ? objDigit : +s.digit;
+    drawObjectSwatch(s.ctx, s.glyph, d, s.v);
+    const part = objPart(s.glyph, d, s.v);
+    s.cell.title = `${d}${s.glyph}${s.v} — ${s.name}${part ? ' (' + part + ')' : ''}${s.digit === 'n' ? ' · its digit is its id' : ''}`;
   });
 }
 
@@ -1910,7 +1947,12 @@ buildDigits(tintsEl, sheet.colText.length, i => sheet.colText[i], () => tintInde
   i => { mode = 'tile'; tintIndex = i; });
 // an object's digit is always 0-9, whatever colours the sheet happens to name
 buildDigits(objDigitsEl, 10, i => String(i), () => objDigit,
-  i => { mode = 'object'; objDigit = i; });
+  i => {
+    const entry = objSwatches[objEntry];
+    if (entry && entry.digit !== 'n') return;   // that object's digit is its class's
+    mode = 'object';
+    objDigit = i;
+  });
 
 document.getElementById('resizeBtn').addEventListener('click', () => {
   const nc = Math.max(4, Math.min(400, +colsInput.value || cols));
@@ -2199,7 +2241,7 @@ fetch(EDITOR_LIBRARY)
   .catch(() => { /* the colour picker still works without the library */ });
 
 atlas.loadRoot(EDITOR_OBJECTS)
-  .then(() => { refreshSelection(); render(); })
+  .then(() => { buildObjPalette(); refreshSelection(); render(); })
   .catch(err => {
     levelMsg.textContent = location.protocol === 'file:'
       ? 'Object art loads from the asset pack, which browsers block over file://. Run npm run editor.'

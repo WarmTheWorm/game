@@ -5,7 +5,7 @@
 class Platform extends Entity {
   static editor = {
     label: 'Platform',
-    glyphs: '><^v',
+    code: ['0>', '0<', '0^', '0v'],
     props: {
       speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)' }
     }

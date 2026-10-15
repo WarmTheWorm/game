@@ -53,11 +53,8 @@ function objectProblems(o) {
   const bad = [];
   const C = gameClass(o.cls);
   if (!C) return [`its class "${o.cls}" is not one the game has.`];
-  if (!o.code.length) bad.push('it has no code, so no block places it.');
-  for (const c of o.code) {
-    if (!/^[n0-9].$/.test(c)) bad.push(`"${c}" is not a digit (or n) and a glyph.`);
-    else if (!(C.editor.glyphs || '').includes(c[1])) bad.push(`"${c}" uses ${c[1]}, which isn't one of ${C.name}'s glyphs (${C.editor.glyphs}).`);
-  }
+  const want = C.codes.map(c => c + variantOf(o));
+  if (!variantOf(o) || o.code.join() !== want.join()) bad.push(`its codes should be ${want.join(' ')}.`);
   const sprite = spriteByName(refName(o.props.sprite));
   if (!sprite) bad.push(`its sprite "${o.props.sprite || 'none'}" is not in the pack.`);
   for (const [k, d] of Object.entries(classDefs(o.cls))) {

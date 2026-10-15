@@ -231,3 +231,5 @@ dialog#ask::backdrop{background:#0b0818cc}
 .codechip select{font-family:var(--mono);padding:3px 4px;border:0;background:transparent}
 .item small.warn{color:var(--amber)}
 .probs{color:var(--amber)}
+.bigcode{font-size:15px;padding:3px 8px;color:var(--amber)}
+.codes .hint{flex-basis:100%;margin:4px 0 0}

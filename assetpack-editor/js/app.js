@@ -89,6 +89,7 @@ async function boot(already) {
   // gained since they were saved
   const split = migrateSplit(pack);
   const folded = split ? [] : migrateGlow(pack);
+  const recoded = migrateCodes(pack);
   for (const o of pack.objects) fillProps(o);
   if (!pack.sprites.includes(current)) current = pack.sprites[0] || null;
   if (!pack.objects.includes(currentObj)) currentObj = pack.objects[0] || null;
@@ -102,6 +103,10 @@ async function boot(already) {
   renderBackgrounds();
   renderSounds();
   renderPackTab();
+  if (recoded && !split) {
+    savePack();
+    toast('Codes belong to the classes now — each object keeps its own third character');
+  }
   if (split) {
     savePack();
     toast(`Sprites and objects are apart now — ${pack.sprites.length} sprites, ${pack.objects.length} objects`);

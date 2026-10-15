@@ -7,7 +7,7 @@
 
 let currentObj = null;
 
-const classLabel = C => `${C.editor.label || C.name} — ${C.name} (${C.editor.glyphs})`;
+const classLabel = C => `${C.editor.label || C.name} — ${C.name} (${C.codes.join(' ')})`;
 
 function renderGameObjects() {
   renderGoList();
@@ -25,15 +25,21 @@ function renderGoList() {
 }
 
 // ---------- the form ----------
-const DIGITS = ['n', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-
-function codeChip(C, code, i) {
-  const glyphs = (C && C.editor.glyphs) || code[1] || '?';
-  const digit = DIGITS.map(d => `<option value="${d}" ${d === code[0] ? 'selected' : ''}>${d === 'n' ? (C && C.takesId ? 'n (id)' : 'n (any)') : d}</option>`).join('');
-  const glyph = [...new Set(glyphs + code[1])].map(g => `<option ${g === code[1] ? 'selected' : ''}>${esc(g)}</option>`).join('');
-  return `<span class="codechip">
-    <select data-code="${i}" data-part="0" aria-label="Digit">${digit}</select><select data-code="${i}" data-part="1" aria-label="Glyph">${glyph}</select>
-    <button class="x" data-g="delcode" data-i="${i}" title="Remove this code" aria-label="Remove code">×</button></span>`;
+// The code is not chosen: the class fixes its first two characters and the
+// object is given the first third character its class has free, so this only
+// says what a map block writes and why.
+function codeLine(o, C) {
+  const v = variantOf(o);
+  const siblings = pack.objects.filter(x => x.cls === o.cls);
+  const codes = o.code.map(c => `<code class="bigcode">${esc(c)}</code>`).join(' ');
+  if (!C) return codes;
+  const id = C.takesId
+    ? ` Its first character is the ${C.editor.label.toLowerCase()}'s id — write ${esc(C.codes[0].replace('n', '3') + v)} for number 3.`
+    : '';
+  const which = siblings.length > 1
+    ? ` The last character, ${esc(v)}, is which of the pack's ${siblings.length} ${esc(o.cls)} objects this is.`
+    : ` The last character, ${esc(v)}, tells it apart from any other ${esc(o.cls)} the pack gets.`;
+  return `${codes}<span class="hint">${esc(C.codes.join(' '))} is ${esc(C.name)}'s.${which}${id}</span>`;
 }
 
 // One field per property, by its declared type.
@@ -70,14 +76,6 @@ function propField(o, k, d) {
   return `<label class="ctl">${head}${input}${hint}</label>`;
 }
 
-function codeHint(C) {
-  if (!C) return '';
-  const g = C.editor.glyphs;
-  return C.takesId
-    ? `n takes any digit and the game reads it as the thing's id — ${g}1 and ${g}2 are two of the same object, paired with different things.`
-    : `A digit picks this object among the others on ${g.length > 1 ? 'these glyphs' : g}; n catches any digit no other object claims.`;
-}
-
 function renderGoForm() {
   const o = currentObj;
   const box = $('#goForm');
@@ -99,10 +97,8 @@ function renderGoForm() {
         ${C ? '' : `<option selected>${esc(o.cls)} — not in the game</option>`}
         ${GAME_CLASSES.map(K => `<option value="${K.name}" ${K.name === o.cls ? 'selected' : ''}>${esc(classLabel(K))}</option>`).join('')}
       </select></label>
-      <div class="ctl" style="grid-column:1/-1"><span>Codes — what a map block writes to place it</span>
-        <div class="codes">${o.code.map((c, i) => codeChip(C, c, i)).join('')}
-          <button class="btn sm" data-g="addcode">+ Code</button></div>
-        <span class="hint">${esc(codeHint(C))}</span>
+      <div class="ctl" style="grid-column:1/-1"><span>${o.code.length > 1 ? 'Codes' : 'Code'} — what a map block writes to place it</span>
+        <div class="codes">${codeLine(o, C)}</div>
       </div>
     </div>
     <h3 class="subh">${esc(o.cls)} properties</h3>
@@ -186,18 +182,7 @@ $('#goForm').addEventListener('change', e => {
     markUndo();
     o.cls = e.target.value;
     fillProps(o);                                   // what still applies is kept
-    const glyphs = gameClass(o.cls).editor.glyphs;
-    o.code = o.code.filter(c => glyphs.includes(c[1]));
-    if (!o.code.length) o.code = [freeCode(o.cls, o)];
-    renderGameObjects();
-    savePack();
-    return;
-  }
-  if (e.target.dataset.code !== undefined) {
-    markUndo();
-    const i = +e.target.dataset.code, at = +e.target.dataset.part;
-    const c = o.code[i];
-    o.code[i] = at === 0 ? e.target.value + c[1] : c[0] + e.target.value;
+    setVariant(o, freeVariant(o.cls, o));           // and the new class's code
     renderGameObjects();
     savePack();
   }
@@ -209,17 +194,7 @@ $('#goForm').addEventListener('click', e => {
   const play = e.target.closest('[data-play]');
   if (play) { sound.play(o.props[play.dataset.play]); return; }
   const g = e.target.dataset.g;
-  if (g === 'addcode') {
-    markUndo();
-    o.code.push(freeCode(o.cls, o));
-    renderGameObjects();
-    savePack();
-  } else if (g === 'delcode') {
-    markUndo();
-    o.code.splice(+e.target.dataset.i, 1);
-    renderGameObjects();
-    savePack();
-  } else if (g === 'delete') {
+  if (g === 'delete') {
     markUndo();
     const at = pack.objects.indexOf(o);
     pack.objects.splice(at, 1);
@@ -231,14 +206,15 @@ $('#goForm').addEventListener('click', e => {
 });
 
 // A new object starts from a class, then a name; its sprite is the one of the
-// same name if there is one, and its code the first its class has free.
+// same name if there is one, and its code its class's, with the first third
+// character the class has free.
 $('#goAdd').onclick = async () => {
   if (!GAME_CLASSES.length) { toast('The game offers no classes', true); return; }
   const labels = GAME_CLASSES.map(classLabel);
   const got = await ask('New object', [
     { key: 'cls', label: 'Class — what it does in the game', type: 'select', options: labels, value: labels[0] },
     { key: 'name', label: 'Name', value: '' },
-    { type: 'note', label: 'Its properties come from the class; set them once it is made.' }
+    { type: 'note', label: 'Its code comes from the class, and its properties too; set them once it is made.' }
   ], 'Make it');
   if (!got) return;
   const C = GAME_CLASSES[labels.indexOf(got.cls)];

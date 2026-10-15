@@ -7,7 +7,7 @@ class Lantern extends Pickup {
   static bucket = 'lanterns';
   static editor = {
     label: 'Lantern',
-    glyphs: 'N',   // 'T' and 'L' are spoken for, by the tileset and the door
+    code: '0N',   // 'T' and 'L' are spoken for, by the tileset and the door
     props: {
       part: { type: 'part', default: '', label: 'Lamp (part of the sprite)' },
       reach: { type: 'int', default: 0, label: 'How far she sees, in tiles (0 = full light)' },

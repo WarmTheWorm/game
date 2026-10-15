@@ -710,6 +710,7 @@ function makeMapLayer(gRows, gCols) {
     glyphs: Array.from({ length: gRows }, () => Array(gCols).fill('.')),
     data: Array.from({ length: gRows }, () => Array(gCols).fill(0)),
     tint: Array.from({ length: gRows }, () => Array(gCols).fill(0)),
+    variant: Array.from({ length: gRows }, () => Array(gCols).fill('0')),   // an object's third char
     row: Array.from({ length: gRows }, () => Array(gCols).fill(-1)),
     collide: Array.from({ length: gRows }, () => Array(gCols).fill(HIT_NONE))
   };
@@ -738,6 +739,7 @@ function parseBlockMap(text, sheet) {
         layer.glyphs[r][c] = glyph === ' ' ? '.' : glyph;
         layer.data[r][c] = asDigit(idCh);
         layer.tint[r][c] = isBlank(rawCol) ? 0 : sheet.tintIndex(rawCol);
+        layer.variant[r][c] = variantOf(rawCol);
         const sheetRow = sheet.row(idCh, glyph);
         layer.row[r][c] = sheetRow;
         layer.collide[r][c] = sheet.collideAt(sheetRow);
@@ -751,6 +753,7 @@ function parseBlockMap(text, sheet) {
         if (layer.glyphs[r][c] !== main.glyphs[r][c]) continue;
         if (layer.data[r][c] !== main.data[r][c]) continue;
         if (layer.tint[r][c] !== main.tint[r][c]) continue;
+        if (layer.variant[r][c] !== main.variant[r][c]) continue;
         layer.glyphs[r][c] = '.';
         layer.data[r][c] = 0;
         layer.tint[r][c] = 0;
@@ -796,13 +799,14 @@ function loadCustomLevel(text, opts = {}) {
   const platformSpots = [];
   let startPos = null;
 
-  // A block's two characters name an object through the objects' codes, and
-  // the object names its class. Entities spawn into the one world whichever
-  // layer their block sits in, carrying that block's own digit — and the layer
-  // itself, which is all that decides when they are drawn.
-  const spawnEntity = (ch, d, r, c, layer, onMain) => {
+  // A block's three characters name an object through the objects' codes —
+  // digit and glyph its class's, the third the object's own — and the object
+  // names its class. Entities spawn into the one world whichever layer their
+  // block sits in, carrying that block's own digit — and the layer itself,
+  // which is all that decides when they are drawn.
+  const spawnEntity = (ch, d, v, r, c, layer, onMain) => {
     if (ch === 'P') { startPos = { x: c * TILE + TILE / 2, y: r * TILE }; return; }
-    const name = atlas.objectAt(ch, d);
+    const name = atlas.objectAt(ch, d, v);
     const Cls = name && classOf(name);
     if (!Cls) return;
     // a door is the one thing that only counts in the solid layer
@@ -822,7 +826,7 @@ function loadCustomLevel(text, opts = {}) {
         const ch = layer.glyphs[r][c];
         const d = layer.data[r][c];
         if (TERRAIN.has(ch)) continue;              // drawn from the layer, inert
-        spawnEntity(ch, d, r, c, li, layer === map.main);
+        spawnEntity(ch, d, layer.variant[r][c], r, c, li, layer === map.main);
       }
       // only the main layer is solid, and only its terrain glyphs are
       const mid = map.main.glyphs[r][c];
@@ -893,7 +897,7 @@ function loadCustomLevel(text, opts = {}) {
 }
 
 // What a level has her holding before she has done anything. Each entry of
-// "pick" is a block written the way the map writes it — "1N0" is the small
+// "pick" is a block written the way the map writes it — "0N2" is the small
 // lantern, "0C0" a coin — and is taken without ever being placed, so a level
 // can open in a state the player would otherwise have to walk into. Anything
 // that isn't a pickup is ignored. Lighting is just the usual case: no entry
@@ -905,7 +909,7 @@ function applyPicks() {
     if (typeof block !== 'string' || block.length < 2) continue;
     const data = asDigit(block[0]);
     const glyph = block[1];
-    const name = atlas.objectAt(glyph, data);
+    const name = atlas.objectAt(glyph, data, block[2]);
     const Cls = name && classOf(name);
     if (!Cls || !(Cls.prototype instanceof Pickup)) continue;
     Cls.spawn(0, 0, data, name, 0).take();

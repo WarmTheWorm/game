@@ -5,8 +5,8 @@
 // is a class listed in classes.js, not another branch in the loader, the
 // update loop and the draw loop.
 //
-// Each class declares what it reads in a static `editor` block: the glyphs
-// its codes may use and its properties, typed and with defaults. The asset
+// Each class declares what it reads in a static `editor` block: the 2-char
+// code that places it and its properties, typed and with defaults. The asset
 // editor builds an object's form from it, and the game falls back on the
 // defaults for anything an object leaves out. Declarations add up down the
 // class chain, so an Enemy's stomp settings are every enemy's.
@@ -26,8 +26,16 @@ class Entity {
   // editors read it too, to draw a thing where the game will put it.
   static cellAnchor = [0.5, 0.5];
 
-  // A class whose code takes any digit reads that digit as the thing's own id.
-  static takesId = false;
+  // The two characters a map block starts with to place one of these: a digit
+  // and a glyph, fixed by the class — `editor.code`, one or a list. A digit of
+  // n is any digit, which the class reads as the thing's own id: a key's
+  // colour, a sign's message. The third character picks which object of the
+  // class, so a pack can have several: 0C0 a coin, 0C1 another.
+  static get codes() {
+    const c = (Object.hasOwn(this, 'editor') && this.editor.code) || [];
+    return Array.isArray(c) ? c : [c];
+  }
+  static get takesId() { return this.codes.some(c => c[0] === 'n'); }
 
   // Every property this class reads, its bases' first, the sprite before all.
   static propDefs() {

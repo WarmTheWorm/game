@@ -23,15 +23,20 @@ const refName = v => {
   return cut < 0 ? s : s.slice(cut + 2);
 };
 
-// An object's codes as a list. "1C" is digit 1 of glyph C; "nK" is any digit,
-// which the class then reads as the thing's own id.
+// An object's codes as a list. A code is the three characters a map block
+// writes: its class's digit and glyph, then the object's own variant — "0C1" is
+// the second coin. A digit of n is any digit, which the class reads as the
+// thing's own id.
 const codesOf = def => !def || !def.code ? [] : Array.isArray(def.code) ? def.code : [def.code];
+
+// A block's third character, with the blanks a map pads with read as 0.
+const variantOf = ch => (ch === undefined || ch === '.' || ch === ' ') ? '0' : ch;
 
 class ObjectAtlas {
   constructor() {
     this.defs = {};                // sprite name -> its art
     this.objects = {};             // object name -> { class, code, props }
-    this.codes = new Map();        // glyph -> { any, byDigit: [] } object names
+    this.codes = new Map();        // glyph -> [{ digit, variant, name }]
     this.sheet = new Image();
     this.root = null;
     // Seconds of elapsed play, so sprites animate at their own frame rate
@@ -83,10 +88,8 @@ class ObjectAtlas {
       for (const code of codesOf(def)) {
         const glyph = code[1];
         if (!glyph) continue;
-        if (!this.codes.has(glyph)) this.codes.set(glyph, { any: null, byDigit: [] });
-        const slot = this.codes.get(glyph);
-        if (code[0] === 'n') slot.any = slot.any || name;
-        else slot.byDigit[+code[0]] = slot.byDigit[+code[0]] || name;
+        if (!this.codes.has(glyph)) this.codes.set(glyph, []);
+        this.codes.get(glyph).push({ digit: code[0], variant: variantOf(code[2]), name });
       }
     }
   }
@@ -94,12 +97,18 @@ class ObjectAtlas {
   // ---- objects ----
   object(name) { return this.objects[refName(name)] || null; }
 
-  // The object a block names: its exact digit, else the glyph's any-digit
-  // object, else the glyph's first — so "5E" is still an enemy.
-  objectAt(glyph, digit = 0) {
-    const slot = this.codes.get(glyph);
-    if (!slot) return null;
-    return slot.byDigit[digit] || slot.any || slot.byDigit.find(Boolean) || null;
+  // The object a block names. The digit picks the class among those on the
+  // glyph (its own, or any for an id class), the third character the object
+  // among that class's; a block that matches nothing exactly still places
+  // something of its glyph, the variant 0 first — so "5E" is still an enemy.
+  objectAt(glyph, digit = 0, variant = '0') {
+    const all = this.codes.get(glyph);
+    if (!all) return null;
+    const v = variantOf(variant);
+    const ofDigit = all.filter(e => e.digit === 'n' || +e.digit === digit);
+    const pool = ofDigit.length ? ofDigit : all;
+    const hit = pool.find(e => e.variant === v) || pool.find(e => e.variant === '0') || pool[0];
+    return hit.name;
   }
 
   // The sprite an object wears.

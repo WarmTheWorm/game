@@ -4,7 +4,7 @@
 class Moth extends Enemy {
   static editor = {
     label: 'Moth',
-    glyphs: 'E',
+    code: '1E',
     props: {
       speed: { type: 'float', default: 0.9, label: 'Flying speed, px a frame' },
       range: { type: 'float', default: 3, label: 'How far it strays each way, in tiles' },

@@ -867,15 +867,20 @@ const refName = v => {
   return cut < 0 ? s : s.slice(cut + 2);
 };
 
-// An object's codes as a list. "1C" is digit 1 of glyph C; "nK" is any digit,
-// which the class then reads as the thing's own id.
+// An object's codes as a list. A code is the three characters a map block
+// writes: its class's digit and glyph, then the object's own variant — "0C1" is
+// the second coin. A digit of n is any digit, which the class reads as the
+// thing's own id.
 const codesOf = def => !def || !def.code ? [] : Array.isArray(def.code) ? def.code : [def.code];
+
+// A block's third character, with the blanks a map pads with read as 0.
+const variantOf = ch => (ch === undefined || ch === '.' || ch === ' ') ? '0' : ch;
 
 class ObjectAtlas {
   constructor() {
     this.defs = {};                // sprite name -> its art
     this.objects = {};             // object name -> { class, code, props }
-    this.codes = new Map();        // glyph -> { any, byDigit: [] } object names
+    this.codes = new Map();        // glyph -> [{ digit, variant, name }]
     this.sheet = new Image();
     this.root = null;
     // Seconds of elapsed play, so sprites animate at their own frame rate
@@ -927,10 +932,8 @@ class ObjectAtlas {
       for (const code of codesOf(def)) {
         const glyph = code[1];
         if (!glyph) continue;
-        if (!this.codes.has(glyph)) this.codes.set(glyph, { any: null, byDigit: [] });
-        const slot = this.codes.get(glyph);
-        if (code[0] === 'n') slot.any = slot.any || name;
-        else slot.byDigit[+code[0]] = slot.byDigit[+code[0]] || name;
+        if (!this.codes.has(glyph)) this.codes.set(glyph, []);
+        this.codes.get(glyph).push({ digit: code[0], variant: variantOf(code[2]), name });
       }
     }
   }
@@ -938,12 +941,18 @@ class ObjectAtlas {
   // ---- objects ----
   object(name) { return this.objects[refName(name)] || null; }
 
-  // The object a block names: its exact digit, else the glyph's any-digit
-  // object, else the glyph's first — so "5E" is still an enemy.
-  objectAt(glyph, digit = 0) {
-    const slot = this.codes.get(glyph);
-    if (!slot) return null;
-    return slot.byDigit[digit] || slot.any || slot.byDigit.find(Boolean) || null;
+  // The object a block names. The digit picks the class among those on the
+  // glyph (its own, or any for an id class), the third character the object
+  // among that class's; a block that matches nothing exactly still places
+  // something of its glyph, the variant 0 first — so "5E" is still an enemy.
+  objectAt(glyph, digit = 0, variant = '0') {
+    const all = this.codes.get(glyph);
+    if (!all) return null;
+    const v = variantOf(variant);
+    const ofDigit = all.filter(e => e.digit === 'n' || +e.digit === digit);
+    const pool = ofDigit.length ? ofDigit : all;
+    const hit = pool.find(e => e.variant === v) || pool.find(e => e.variant === '0') || pool[0];
+    return hit.name;
   }
 
   // The sprite an object wears.
@@ -1797,6 +1806,7 @@ function makeMapLayer(gRows, gCols) {
     glyphs: Array.from({ length: gRows }, () => Array(gCols).fill('.')),
     data: Array.from({ length: gRows }, () => Array(gCols).fill(0)),
     tint: Array.from({ length: gRows }, () => Array(gCols).fill(0)),
+    variant: Array.from({ length: gRows }, () => Array(gCols).fill('0')),   // an object's third char
     row: Array.from({ length: gRows }, () => Array(gCols).fill(-1)),
     collide: Array.from({ length: gRows }, () => Array(gCols).fill(HIT_NONE))
   };
@@ -1825,6 +1835,7 @@ function parseBlockMap(text, sheet) {
         layer.glyphs[r][c] = glyph === ' ' ? '.' : glyph;
         layer.data[r][c] = asDigit(idCh);
         layer.tint[r][c] = isBlank(rawCol) ? 0 : sheet.tintIndex(rawCol);
+        layer.variant[r][c] = variantOf(rawCol);
         const sheetRow = sheet.row(idCh, glyph);
         layer.row[r][c] = sheetRow;
         layer.collide[r][c] = sheet.collideAt(sheetRow);
@@ -1838,6 +1849,7 @@ function parseBlockMap(text, sheet) {
         if (layer.glyphs[r][c] !== main.glyphs[r][c]) continue;
         if (layer.data[r][c] !== main.data[r][c]) continue;
         if (layer.tint[r][c] !== main.tint[r][c]) continue;
+        if (layer.variant[r][c] !== main.variant[r][c]) continue;
         layer.glyphs[r][c] = '.';
         layer.data[r][c] = 0;
         layer.tint[r][c] = 0;
@@ -1883,13 +1895,14 @@ function loadCustomLevel(text, opts = {}) {
   const platformSpots = [];
   let startPos = null;
 
-  // A block's two characters name an object through the objects' codes, and
-  // the object names its class. Entities spawn into the one world whichever
-  // layer their block sits in, carrying that block's own digit — and the layer
-  // itself, which is all that decides when they are drawn.
-  const spawnEntity = (ch, d, r, c, layer, onMain) => {
+  // A block's three characters name an object through the objects' codes —
+  // digit and glyph its class's, the third the object's own — and the object
+  // names its class. Entities spawn into the one world whichever layer their
+  // block sits in, carrying that block's own digit — and the layer itself,
+  // which is all that decides when they are drawn.
+  const spawnEntity = (ch, d, v, r, c, layer, onMain) => {
     if (ch === 'P') { startPos = { x: c * TILE + TILE / 2, y: r * TILE }; return; }
-    const name = atlas.objectAt(ch, d);
+    const name = atlas.objectAt(ch, d, v);
     const Cls = name && classOf(name);
     if (!Cls) return;
     // a door is the one thing that only counts in the solid layer
@@ -1909,7 +1922,7 @@ function loadCustomLevel(text, opts = {}) {
         const ch = layer.glyphs[r][c];
         const d = layer.data[r][c];
         if (TERRAIN.has(ch)) continue;              // drawn from the layer, inert
-        spawnEntity(ch, d, r, c, li, layer === map.main);
+        spawnEntity(ch, d, layer.variant[r][c], r, c, li, layer === map.main);
       }
       // only the main layer is solid, and only its terrain glyphs are
       const mid = map.main.glyphs[r][c];
@@ -1980,7 +1993,7 @@ function loadCustomLevel(text, opts = {}) {
 }
 
 // What a level has her holding before she has done anything. Each entry of
-// "pick" is a block written the way the map writes it — "1N0" is the small
+// "pick" is a block written the way the map writes it — "0N2" is the small
 // lantern, "0C0" a coin — and is taken without ever being placed, so a level
 // can open in a state the player would otherwise have to walk into. Anything
 // that isn't a pickup is ignored. Lighting is just the usual case: no entry
@@ -1992,7 +2005,7 @@ function applyPicks() {
     if (typeof block !== 'string' || block.length < 2) continue;
     const data = asDigit(block[0]);
     const glyph = block[1];
-    const name = atlas.objectAt(glyph, data);
+    const name = atlas.objectAt(glyph, data, block[2]);
     const Cls = name && classOf(name);
     if (!Cls || !(Cls.prototype instanceof Pickup)) continue;
     Cls.spawn(0, 0, data, name, 0).take();
@@ -3544,8 +3557,8 @@ requestAnimationFrame(loop);
 // is a class listed in classes.js, not another branch in the loader, the
 // update loop and the draw loop.
 //
-// Each class declares what it reads in a static `editor` block: the glyphs
-// its codes may use and its properties, typed and with defaults. The asset
+// Each class declares what it reads in a static `editor` block: the 2-char
+// code that places it and its properties, typed and with defaults. The asset
 // editor builds an object's form from it, and the game falls back on the
 // defaults for anything an object leaves out. Declarations add up down the
 // class chain, so an Enemy's stomp settings are every enemy's.
@@ -3565,8 +3578,16 @@ class Entity {
   // editors read it too, to draw a thing where the game will put it.
   static cellAnchor = [0.5, 0.5];
 
-  // A class whose code takes any digit reads that digit as the thing's own id.
-  static takesId = false;
+  // The two characters a map block starts with to place one of these: a digit
+  // and a glyph, fixed by the class — `editor.code`, one or a list. A digit of
+  // n is any digit, which the class reads as the thing's own id: a key's
+  // colour, a sign's message. The third character picks which object of the
+  // class, so a pack can have several: 0C0 a coin, 0C1 another.
+  static get codes() {
+    const c = (Object.hasOwn(this, 'editor') && this.editor.code) || [];
+    return Array.isArray(c) ? c : [c];
+  }
+  static get takesId() { return this.codes.some(c => c[0] === 'n'); }
 
   // Every property this class reads, its bases' first, the sprite before all.
   static propDefs() {
@@ -3697,7 +3718,7 @@ class Enemy extends Entity {
 class Beetle extends Enemy {
   static editor = {
     label: 'Beetle',
-    glyphs: 'E',
+    code: '0E',
     props: {
       speed: { type: 'float', default: 1.1, label: 'Walking speed, px a frame' }
     }
@@ -3766,7 +3787,7 @@ class Beetle extends Enemy {
 class Moth extends Enemy {
   static editor = {
     label: 'Moth',
-    glyphs: 'E',
+    code: '1E',
     props: {
       speed: { type: 'float', default: 0.9, label: 'Flying speed, px a frame' },
       range: { type: 'float', default: 3, label: 'How far it strays each way, in tiles' },
@@ -3809,7 +3830,7 @@ class Moth extends Enemy {
 class Frog extends Enemy {
   static editor = {
     label: 'Frog',
-    glyphs: 'E',
+    code: '2E',
     props: {
       hopUp: { type: 'float', default: 8.5, label: 'Hop strength, up' },
       hopForward: { type: 'float', default: 2.2, label: 'Hop strength, forward' },
@@ -3923,7 +3944,7 @@ class Coin extends Pickup {
   static bucket = 'coins';
   static editor = {
     label: 'Coin',
-    glyphs: 'C',
+    code: '0C',
     props: {
       score: { type: 'int', default: 1, label: 'Score' },
       pickSound: { type: 'sound', default: 'sound::coin', label: 'Sound when taken' }
@@ -3947,7 +3968,7 @@ class Gem extends Pickup {
   static bucket = 'gems';
   static editor = {
     label: 'Gem',
-    glyphs: 'G',
+    code: '0G',
     props: {
       score: { type: 'int', default: 5, label: 'Score' },
       pickSound: { type: 'sound', default: 'sound::gem', label: 'Sound when taken' }
@@ -3974,7 +3995,7 @@ class Shield extends Pickup {
   static bucket = 'shieldPickups';
   static editor = {
     label: 'Shield',
-    glyphs: 'S',
+    code: '0S',
     props: {
       worn: { type: 'part', default: 'worn', optional: true, label: 'Part worn on her (without one, a plain ring)' },
       pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken' }
@@ -4008,7 +4029,7 @@ class Lantern extends Pickup {
   static bucket = 'lanterns';
   static editor = {
     label: 'Lantern',
-    glyphs: 'N',   // 'T' and 'L' are spoken for, by the tileset and the door
+    code: '0N',   // 'T' and 'L' are spoken for, by the tileset and the door
     props: {
       part: { type: 'part', default: '', label: 'Lamp (part of the sprite)' },
       reach: { type: 'int', default: 0, label: 'How far she sees, in tiles (0 = full light)' },
@@ -4035,13 +4056,12 @@ class Key extends Pickup {
   static bucket = 'keyPickups';
   static editor = {
     label: 'Key',
-    glyphs: 'K',
+    code: 'nK',   // its digit is its id
     props: {
       pickSound: { type: 'sound', default: 'sound::key', label: 'Sound when taken' }
     }
   };
 
-  static takesId = true;
   take() {
     keysHeld.push(this.id || 0);
     playSound(this.props.pickSound);
@@ -4058,7 +4078,7 @@ class Key extends Pickup {
 class Platform extends Entity {
   static editor = {
     label: 'Platform',
-    glyphs: '><^v',
+    code: ['0>', '0<', '0^', '0v'],
     props: {
       speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)' }
     }
@@ -4179,7 +4199,7 @@ class RockSpawner extends Entity {
   static bucket = 'rockSpawners';
   static editor = {
     label: 'Falling rock',
-    glyphs: 'R',
+    code: '0R',
     props: {
       interval: { type: 'int', default: 140, label: 'Frames between drops' },
       gravity: { type: 'float', default: 0.55, label: 'Gravity' },
@@ -4224,7 +4244,7 @@ class Plant extends Entity {
   static bucket = 'plants';
   static editor = {
     label: 'Plant',
-    glyphs: 'V',
+    code: '0V',
     props: {
       reach: { type: 'int', default: 100, label: 'How high it lunges, px' },
       trigger: { type: 'int', default: 40, label: 'How near overhead sets it off, px' },
@@ -4312,9 +4332,8 @@ class Plant extends Entity {
 // take any digit, which is that id.
 class Portal extends Entity {
   static bucket = 'portals';
-  static editor = { label: 'Portal', glyphs: 'O', props: {} };
+  static editor = { label: 'Portal', code: 'nO', props: {} };
 
-  static takesId = true;
 }
 
 </script>
@@ -4324,7 +4343,7 @@ class Checkpoint extends Entity {
   static bucket = 'checkpoints';
   static editor = {
     label: 'Checkpoint',
-    glyphs: '!',
+    code: '0!',
     props: {
       off: { type: 'part', default: 'off', label: 'Part before she reaches it' },
       on: { type: 'part', default: 'on', label: 'Part once reached' },
@@ -4351,9 +4370,8 @@ class Checkpoint extends Entity {
 // The level's finish. Its id picks which of the level's exits it leads to.
 class Flag extends Entity {
   static bucket = 'finishPoints';
-  static editor = { label: 'Flag', glyphs: 'F', props: {} };
+  static editor = { label: 'Flag', code: 'nF', props: {} };
 
-  static takesId = true;
 }
 
 </script>
@@ -4366,10 +4384,9 @@ class Door extends Entity {
   static bucket = 'lockedDoorSpots';
   static mainLayerOnly = true;   // only the solid layer has cells to stamp
   static cellAnchor = [0, 0];     // it is its whole cell
-  static takesId = true;
   static editor = {
     label: 'Door',
-    glyphs: 'L',
+    code: 'nL',   // its digit is its id
     props: {
       openSound: { type: 'sound', default: 'sound::unlock', label: 'Sound when opened' }
     }
@@ -4397,9 +4414,8 @@ class Door extends Entity {
 // '1M0' and '2M0' are three different notes on the same post.
 class Sign extends Entity {
   static bucket = 'signs';
-  static editor = { label: 'Sign', glyphs: 'M', props: {} };
+  static editor = { label: 'Sign', code: 'nM', props: {} };
 
-  static takesId = true;
 
   constructor(name, x, y) { super(name, x, y); this.reading = false; }
   reset() { this.reading = false; }
@@ -4421,7 +4437,7 @@ class Sign extends Entity {
 // not how much room it takes. Nothing reads its size, so nothing minds.
 class Decoration extends Entity {
   static bucket = 'decorations';
-  static editor = { label: 'Decoration', glyphs: 'W', props: {} };
+  static editor = { label: 'Decoration', code: '0W', props: {} };
 
   // Never collides, so it has no ring to show in the collision view.
   debugShape() { return null; }
@@ -4432,7 +4448,7 @@ class Decoration extends Entity {
 <script>
 // ---------- The classes a pack's objects can be ----------
 // Every class the game offers to objects.json — and the list the asset editor
-// shows when a new object is made, each with the glyphs and properties its
+// shows when a new object is made, each with the code and properties its
 // `editor` block declares. A new kind of thing is a class file, its script tag
 // in index.html (and the asset editor's), and a name here.
 const GAME_CLASSES = [
