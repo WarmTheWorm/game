@@ -253,3 +253,6 @@ dialog#ask::backdrop{background:#0b0818cc}
 .linkcode{appearance:none;border:1px solid var(--line);background:var(--panel2);color:var(--fg);border-radius:4px;padding:1px 6px;
   font-family:var(--mono);font-size:12px;cursor:pointer;margin:0 4px 4px 0}
 .linkcode:hover,.linkcode:focus-visible{border-color:var(--amber);color:var(--amber)}
+/* the name gives way, so a part card's buttons always fit */
+.part .row{flex-wrap:nowrap}
+.part .pname{flex:1 1 0;min-width:0;width:0}

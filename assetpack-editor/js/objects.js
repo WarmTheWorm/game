@@ -165,7 +165,8 @@ function renderObjectFrames() {
         <button class="swatch" data-act="color" title="Change colour" aria-label="Change colour"></button>
         <input class="pname" data-k="name" value="${esc(p.name)}" aria-label="Part name">
         <button class="glowtog ${p.glow ? 'on' : ''}" data-act="glow" title="${p.glow ? 'This is the glow — click to make it an ordinary part' : 'Use this part as the glow'}" aria-label="Glow part" aria-pressed="${!!p.glow}">✦</button>
-        <button class="x" data-act="delpart" title="Delete part" aria-label="Delete part">×</button>
+        ${!framesOfPart(o, p.id).length && o.parts.length > 1
+          ? '<button class="x" data-act="delpart" title="Delete this empty part" aria-label="Delete part">×</button>' : ''}
       </div>
       <div class="meta"><span class="mono">${framesOfPart(o, p.id).length} fr</span></div>
     </div>`).join('') + '<button class="btn sm" id="partAdd">+ Part</button>';
@@ -272,13 +273,8 @@ async function setGlows(o, on) {
     renderObjectFrames();
     toast('Draw or drag frames into "glow"');
   } else if (!on && g) {
-    if (framesOfPart(o, g.id).length) await deletePart(o, g);
-    else {
-      markUndo();
-      o.parts = o.parts.filter(x => x !== g);
-      normalizeObject(o);
-      renderObjectFrames();
-    }
+    // the same rule as any part: an empty glow goes, one with frames stays
+    deletePart(o, g);
   }
   renderProps();
   savePack();
@@ -287,31 +283,19 @@ async function setGlows(o, on) {
 // A part with frames asks what becomes of them: they go with it, or into
 // another part. Quietly handing them to the first part, as this once did,
 // put frames into an animation nobody had asked for.
-async function deletePart(o, p) {
-  if (o.parts.length === 1) { toast('An object needs at least one part — rename this one instead', true); return; }
-  const frames = framesOfPart(o, p.id);
-  let into = null;
-  if (frames.length) {
-    const drop = `Delete them too (${frames.length} frame${frames.length > 1 ? 's' : ''})`;
-    const others = o.parts.filter(x => x !== p);
-    const got = await ask(`Delete the part "${p.name}"?`, [
-      { key: 'to', label: 'Its frames', type: 'select', value: drop, options: [drop, ...others.map(x => `Move them into "${x.name}"`)] }
-    ], 'Delete part');
-    if (!got) return;
-    into = others.find(x => got.to === `Move them into "${x.name}"`) || null;
-  }
+// Only an empty part can go, so deleting one never takes frames with it: to
+// get rid of a part with frames, delete them or drag them to another part
+// first, and its × appears. A sprite keeps at least one part.
+function deletePart(o, p) {
+  if (o.parts.length === 1) { toast('A sprite needs at least one part — rename this one instead', true); return false; }
+  if (framesOfPart(o, p.id).length) { toast(`"${p.name}" still has frames — delete them or drag them to another part first`, true); return false; }
   markUndo();
-  if (into) frames.forEach(f => { f.partId = into.id; });
-  else {
-    o.frames = o.frames.filter(f => f.partId !== p.id);
-    frames.forEach(f => { dropFrameCanvas(f.id); selFrames.delete(f.id); });
-  }
   o.parts = o.parts.filter(x => x !== p);
   normalizeObject(o);
   renderObjectFrames();
-  renderObjectList();          // its frame count
   savePack();
-  toast(into ? `Part deleted — its frames are in "${into.name}"` : 'Part deleted — Ctrl+Z brings it back');
+  toast('Part deleted — Ctrl+Z brings it back');
+  return true;
 }
 
 $('#objParts').addEventListener('input', e => {
