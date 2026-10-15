@@ -1,0 +1,2173 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warm the Worm — Level Editor</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #15101f; color: #e8e4f0;
+    font-family: -apple-system, system-ui, sans-serif;
+    overflow: hidden;
+  }
+  #app { display: flex; width: 100%; height: 100%; }
+
+  /* ---- side panel ---- */
+  #panel {
+    width: 272px; flex: none; height: 100%; overflow-y: auto;
+    background: #1d1630; border-right: 1px solid #332a4d; padding: 12px;
+  }
+  #panel h1 { font-size: 15px; margin: 0 0 2px; }
+  #panel .sub { font-size: 11px; color: #9a8fb5; margin: 0 0 14px; }
+  .group { margin-bottom: 16px; }
+  .group > label { display: block; font-size: 11px; letter-spacing: .06em;
+    text-transform: uppercase; color: #9a8fb5; margin-bottom: 6px; }
+  .group > label.fold {
+    display: flex; align-items: center; gap: 6px;
+    cursor: pointer; user-select: none;
+  }
+  .group > label.fold:hover { color: #d7cdf0; }
+  .group > label.fold::before {
+    content: '▾'; font-size: 9px; color: #6a5a9c;
+    transition: transform .12s ease;
+  }
+  .group.shut > label.fold::before { transform: rotate(-90deg); }
+  .group.shut > label.fold { margin-bottom: 0; }
+  .group.shut { margin-bottom: 8px; }
+  .group.shut > .groupBody { display: none; }
+  .row { display: flex; gap: 6px; }
+  button {
+    font: inherit; font-size: 13px; color: #e8e4f0; background: #2b2244;
+    border: 1px solid #3d3160; border-radius: 6px; padding: 7px 10px; cursor: pointer;
+  }
+  button:hover { background: #352a54; }
+  button.on { background: #6a4bc4; border-color: #8d6ee8; }
+  button.wide { width: 100%; }
+  .seg { display: flex; gap: 0; }
+  .seg button { flex: 1; border-radius: 0; border-right-width: 0; }
+  .seg button:first-child { border-radius: 6px 0 0 6px; }
+  .seg button:last-child { border-radius: 0 6px 6px 0; border-right-width: 1px; }
+  .hint { font-size: 11px; color: #7d7296; margin-top: 5px; line-height: 1.45; }
+
+  #palette, #objPalette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  #palette .tile, #objPalette .tile {
+    position: relative; padding: 2px; background: #241c3b;
+    border: 1px solid #3d3160; border-radius: 5px; cursor: pointer; line-height: 0;
+  }
+  #palette .tile.on, #objPalette .tile.on { border-color: #b79bff; background: #3b2f63; }
+  #palette canvas, #objPalette canvas { width: 100%; height: auto; image-rendering: pixelated; }
+  #palette .tag, #objPalette .tag {
+    position: absolute; left: 2px; bottom: 1px; line-height: 1;
+    font-size: 9px; color: #fff; text-shadow: 0 0 3px #000, 0 0 2px #000;
+  }
+
+  #tints, #objDigits { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+  #tints button, #objDigits button { padding: 0; height: 22px; font-size: 11px; border-radius: 4px; }
+
+  #bgList { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
+  #bgList .tile {
+    padding: 2px; background: #241c3b; border: 1px solid #3d3160;
+    border-radius: 5px; cursor: pointer; overflow: hidden;
+  }
+  #bgList .tile:hover { border-color: #6a5a9c; }
+  #bgList .tile.on { border-color: #b79bff; background: #3b2f63; }
+  #bgList canvas { display: block; width: 100%; height: auto; border-radius: 3px; image-rendering: pixelated; }
+  #bgList span {
+    display: block; font-size: 10px; color: #9a8fb5; text-align: center;
+    padding: 3px 0 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #bgList .tile.on span { color: #e8e4f0; }
+  input[type=color] {
+    width: 100%; height: 31px; padding: 2px; cursor: pointer;
+    background: #241c3b; border: 1px solid #3d3160; border-radius: 6px;
+  }
+
+  input[type=number] {
+    font: inherit; font-size: 13px; width: 100%; color: #e8e4f0;
+    background: #241c3b; border: 1px solid #3d3160; border-radius: 6px; padding: 6px 8px;
+  }
+  input[type=text], select {
+    font: inherit; font-size: 13px; width: 100%; color: #e8e4f0;
+    background: #241c3b; border: 1px solid #3d3160; border-radius: 6px; padding: 6px 8px;
+  }
+  input:focus, select:focus { outline: none; border-color: #b79bff; }
+  textarea {
+    font: inherit; font-size: 12px; width: 100%; resize: vertical; color: #e8e4f0;
+    background: #241c3b; border: 1px solid #3d3160; border-radius: 6px; padding: 6px 8px;
+  }
+  textarea:focus { outline: none; border-color: #b79bff; }
+  #propList { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+  .propRow {
+    display: flex; gap: 6px; align-items: baseline; cursor: pointer;
+    font-size: 11px; color: #9a8fb5; padding: 3px 6px;
+    background: #241c3b; border: 1px solid #3d3160; border-radius: 5px;
+  }
+  .propRow:hover { border-color: #b79bff; }
+  .propRow.on { border-color: #b79bff; background: #3b2f63; }
+  .propRow b { flex: none; color: #d7cdf0; }
+  .propRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .propField + .propField { margin-top: 10px; }
+  .propField > span { display: block; font-size: 10px; color: #7d7296; margin-bottom: 3px; }
+  .field { flex: 1; }
+  .field span { display: block; font-size: 10px; color: #7d7296; margin-bottom: 3px; }
+
+  /* ---- canvas area ---- */
+  #main { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #topbar {
+    flex: none; height: 46px; display: flex; align-items: center; gap: 8px;
+    padding: 0 12px; background: #1d1630; border-bottom: 1px solid #332a4d;
+    white-space: nowrap; overflow-x: auto;
+  }
+  #topbar .spacer { flex: 1; min-width: 12px; }
+  #topbar .seg { flex: none; width: 168px; }
+  #topbar button { flex: none; }
+  button.go { background: #2e7d4f; border-color: #3fa868; }
+  button.go:hover { background: #368e5a; }
+  #levelMsg { font-size: 11px; color: #7d7296; overflow: hidden; text-overflow: ellipsis; }
+  #scroller { flex: 1; overflow: auto; background: #0d0a16; }
+  #board { display: block; cursor: crosshair; }
+
+  /* Properties ride over the board rather than down the side, so they sit
+     beside the thing being edited and vanish with it. */
+  #propGroup {
+    position: absolute; top: 58px; right: 14px; width: 264px; z-index: 5;
+    max-width: calc(100% - 28px);
+    max-height: calc(100% - 104px); overflow-y: auto;
+    padding: 10px 12px; background: rgba(29, 22, 48, 0.97);
+    border: 1px solid #4a3c73; border-radius: 8px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  }
+  #propGroup > label {
+    display: block; font-size: 11px; letter-spacing: .06em;
+    text-transform: uppercase; color: #b79bff; margin-bottom: 8px;
+  }
+  #status {
+    flex: none; height: 30px; display: flex; align-items: center; gap: 18px;
+    padding: 0 12px; font-size: 12px; color: #9a8fb5;
+    background: #1d1630; border-top: 1px solid #332a4d;
+    white-space: nowrap; overflow-x: auto;
+  }
+  #status span { flex: none; }
+  #status b { color: #d7cdf0; font-weight: 600; }
+
+  /* ---- confirm panel ---- */
+  #askOverlay {
+    position: fixed; inset: 0; z-index: 20; display: flex;
+    align-items: center; justify-content: center;
+    background: rgba(13, 10, 22, 0.72);
+  }
+  #askCard {
+    width: 348px; max-width: calc(100% - 32px);
+    padding: 16px 18px; background: #1d1630;
+    border: 1px solid #4a3c73; border-radius: 10px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  }
+  #askCard > label {
+    display: block; font-size: 11px; letter-spacing: .06em;
+    text-transform: uppercase; color: #b79bff; margin-bottom: 8px;
+  }
+  #askText { font-size: 13px; line-height: 1.5; color: #d7cdf0; white-space: pre-line; }
+  button.danger { background: #8e3146; border-color: #c2546c; }
+  button.danger:hover { background: #a3374f; }
+
+  /* ---- test overlay ---- */
+  #testOverlay {
+    position: fixed; inset: 0; background: #0d0a16; display: flex; flex-direction: column; z-index: 10;
+  }
+  #testBar {
+    flex: none; height: 44px; display: flex; align-items: center; gap: 12px;
+    padding: 0 12px; background: #1d1630; border-bottom: 1px solid #332a4d;
+  }
+  #testMsg { font-size: 12px; color: #9a8fb5; }
+  #testFrame { flex: 1; width: 100%; border: 0; background: #1a1024; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="panel">
+    <h1>🧱 Level Editor</h1>
+    <p class="sub">Warm the Worm — terrain</p>
+
+    <div class="group">
+      <label>Pack</label>
+      <select id="packSelect"></select>
+      <div class="row" style="margin-top:6px">
+        <button id="addPackBtn" class="wide">+ Pack</button>
+        <button id="dupPackBtn" class="wide">Duplicate</button>
+        <button id="delPackBtn" class="wide">Delete</button>
+      </div>
+      <input type="text" id="packNameInput" placeholder="Pack name" maxlength="40" style="margin-top:6px">
+      <button id="downloadBtn" class="go wide" style="margin-top:6px">⬇ Download pack</button>
+      <div class="hint">Only the pack open here is tested and downloaded. The rest wait in this browser.</div>
+    </div>
+
+    <div class="group">
+      <label>Level</label>
+      <select id="levelSelect"></select>
+      <div class="row" style="margin-top:6px">
+        <button id="addLevelBtn" class="wide">+ Level</button>
+        <button id="dupLevelBtn" class="wide">Duplicate</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="clearBtn" class="wide">Clear</button>
+        <button id="delLevelBtn" class="wide">Delete</button>
+      </div>
+      <input type="text" id="nameInput" placeholder="Level name" maxlength="40" style="margin-top:6px">
+      <div class="hint">The first level in the list is where the pack starts. Where each flag leads is set on the flag. <b>Clear</b> empties this level, <b>Delete</b> takes it out of the pack; both ask first.</div>
+    </div>
+
+    <div class="group">
+      <label>Layer</label>
+      <div class="seg" id="layerSeg">
+        <button data-layer="0">Back</button>
+        <button data-layer="1" class="on">Mid</button>
+        <button data-layer="2">Front</button>
+      </div>
+      <div class="hint">Keys <b>1 2 3</b>. The board shows all three as the game will. Only Mid collides.</div>
+    </div>
+
+    <div class="group">
+      <label>Tool</label>
+      <div class="seg" id="toolSeg">
+        <button data-tool="paint" class="on">Paint</button>
+        <button data-tool="erase">Erase</button>
+        <button data-tool="start">Start</button>
+      </div>
+      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette.</div>
+    </div>
+
+    <div class="group">
+      <label>Tile</label>
+      <div id="palette"></div>
+      <div class="field" style="margin-top:8px"><span>Colour</span><div id="tints"></div></div>
+      <div class="hint">The block’s third character — which colour column the tile comes from.</div>
+    </div>
+
+    <div class="group">
+      <label>Object</label>
+      <div id="objPalette"></div>
+      <div class="field" style="margin-top:8px"><span>Variant / id</span><div id="objDigits"></div></div>
+      <div class="hint" id="objHint">Spawns from the layer it is drawn on. A door only counts on Mid. The block’s first character picks the variant, or the id that pairs a key with its door.</div>
+    </div>
+
+    <div class="group">
+      <label>Background</label>
+      <div id="bgList"></div>
+      <div class="row" style="margin-top:7px">
+        <div class="field"><span>Colour</span><input type="color" id="bgColor" value="#000000"></div>
+        <div class="field"><span>Distance</span><input type="number" id="bgScroll" min="0" max="1" step="0.05" value="0.3"></div>
+      </div>
+      <div class="hint">Per level, behind everything. Picking a sprite takes its colour and distance too. <b>Distance</b> is how much of the camera it travels with: 0 pins it to the window, 1 to the world.</div>
+    </div>
+
+    <div class="group">
+      <label>Sound</label>
+      <div class="field"><span>Music</span><select id="musicSelect"></select></div>
+      <div class="row" style="margin-top:6px">
+        <button id="musicPlayBtn" class="wide">▶ Listen</button>
+        <button id="musicStopBtn" class="wide">■ Stop</button>
+      </div>
+      <div class="field" style="margin-top:10px"><span>Effects</span><select id="soundSelect"></select></div>
+      <div class="hint">Both are per level and swap as she walks on. An effects set only says what it changes, so the rest of the game still sounds like itself.</div>
+    </div>
+
+    <div class="group">
+      <label>Map</label>
+      <div class="row">
+        <div class="field"><span>Columns</span><input type="number" id="colsInput" min="4" max="400" value="40"></div>
+        <div class="field"><span>Rows</span><input type="number" id="rowsInput" min="4" max="60" value="20"></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="resizeBtn" class="wide">Resize</button>
+      </div>
+      <div class="hint">Ctrl+Z undoes. Work is kept in this browser.</div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="topbar">
+      <button id="testBtn" class="go">▶ Test level</button>
+      <button id="copyBtn">Copy JSON</button>
+      <button id="pasteBtn">Load</button>
+      <span id="levelMsg"></span>
+      <span class="spacer"></span>
+      <button id="dimBtn">Dim the other layers</button>
+      <div class="seg" id="zoomSeg">
+        <button data-zoom="0.5">50%</button>
+        <button data-zoom="1" class="on">100%</button>
+        <button data-zoom="2">200%</button>
+      </div>
+    </div>
+    <div id="scroller"><canvas id="board"></canvas></div>
+    <div id="status">
+      <span>Cell <b id="statCell">—</b></span>
+      <span>Layer <b id="statLayer">Mid</b></span>
+      <span>Painting <b id="statTile">—</b></span>
+      <span>Start <b id="statStart">not set</b></span>
+      <span>Flags <b id="statEnd">0</b></span>
+    </div>
+    <div id="propGroup" class="hidden">
+      <label id="propLabel">Properties</label>
+      <div id="propBody"></div>
+      <div class="hint" id="propHint"></div>
+    </div>
+  </div>
+</div>
+
+<div id="askOverlay" class="hidden">
+  <div id="askCard">
+    <label id="askTitle"></label>
+    <div id="askText"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="askNo" class="wide">Cancel</button>
+      <button id="askYes" class="wide danger"></button>
+    </div>
+  </div>
+</div>
+
+<div id="testOverlay" class="hidden">
+  <div id="testBar">
+    <button id="stopTestBtn">← Back to editor</button>
+    <span id="testMsg"></span>
+  </div>
+  <iframe id="testFrame" src="about:blank"></iframe>
+</div>
+
+<!-- The sheet, the block format and the game that plays the result are all
+     the real ones: tileset.js and atlas.js are loaded as-is, and Test hands
+     the map text to a live copy of the game running in the frame below. -->
+<script src="../src/js/tileset.js"></script>
+<script src="../src/js/atlas.js"></script>
+<script>
+// ---------- what tileset.js expects of its host ----------
+// Tileset sizes itself in tiles and blits through a module-global `ctx`, which
+// in the game is the one canvas. Here there are two — the board and each
+// palette swatch — so drawing goes through withCtx() to point it at the right
+// one for the duration of a call.
+const TILE = 32;
+let ctx = null;
+
+function withCtx(target, fn) {
+  const was = ctx;
+  ctx = target;
+  try { fn(); } finally { ctx = was; }
+}
+
+// ---------- the asset pack ----------
+// Everything the editor draws with or offers lives in one asset pack under
+// assetpacks/, named by ?assets= and picked by `npm run editor -- <name>`.
+// A pack stands on its own: the sheet, the objects, the backgrounds and the
+// sound sets are all in there, and nothing outside it is read.
+const EDITOR_DIR = (() => {
+  const asked = new URLSearchParams(location.search).get('assets') || '/assetpacks/garden/';
+  return asked.endsWith('/') ? asked : asked + '/';
+})();
+const EDITOR_LIBRARY = EDITOR_DIR + 'assetpack.json';
+const EDITOR_TILES = EDITOR_DIR + 'tiles/tiles.png';
+const EDITOR_OBJECTS = EDITOR_DIR + 'objects/objects.json';
+const GAME_PAGE = '/src/index.html';   // the engine as it stands, for Test
+let gameFile = '/dist/game.html';      // the built page a pack ships as its index
+
+// ---------- the sheet ----------
+// Only the texture is the editor's own; every row, size and collision rule is
+// the game's default, which is what loadCustomLevel() picks when a pasted
+// level names no tileset — so what is drawn here is what will be played.
+const sheet = new Tileset({ texture: EDITOR_TILES });
+
+// One palette entry per row of the sheet. A row whose id is blank matches any
+// info digit, so '0' is written out for it; the rest name their own row.
+const PALETTE = [];
+for (let i = 0; i < DEFAULT_ROW_1.length; i++) {
+  const glyph = DEFAULT_ROW_1[i];
+  if (glyph === ' ') continue;
+  const id = DEFAULT_ROW_0[i] === undefined ? ' ' : DEFAULT_ROW_0[i];
+  PALETTE.push({
+    sheetRow: i,
+    id: isBlank(id) ? '0' : id,
+    glyph,
+    label: (isBlank(id) ? '' : id) + glyph,
+    hit: DEFAULT_ROW_C[i] === undefined ? HIT_NONE : DEFAULT_ROW_C[i]
+  });
+}
+
+const HIT_TEXT = { ' ': 'no collision', 'S': 'solid', '^': 'top half only' };
+const hitText = h => HIT_TEXT[h] || (isRampHit(h) ? 'ramp ' + h : h);
+
+// ---------- the objects ----------
+// One entry per glyph the game spawns from, read out of the very map it uses.
+// 'P' is not in there at all — her start is not an object, and a level has
+// exactly one.
+const OBJECTS = Object.keys(DEFAULT_GLYPH_OBJECTS)
+  .filter(g => g !== 'P')
+  .map(glyph => ({ glyph }));
+const OBJ_BY_GLYPH = new Map(OBJECTS.map((o, i) => [o.glyph, i]));
+
+// The info digit is the variant for a glyph that covers several objects and a
+// pairing id for the rest, so the name is the only honest label.
+const objName = (glyph, digit) => atlas.objectFor(glyph, digit) || glyph;
+
+// A glyph may name a part of its object ('lantern:biglight'), in which case
+// the preview shows that part's first frame rather than the sheet's.
+const objFrame = (glyph, digit) => {
+  const span = atlas.partSpan(objName(glyph, digit), atlas.partFor(glyph, digit));
+  return span ? span[0] : 0;
+};
+
+// Where in its cell each object actually lands, as a fraction of the cell.
+// Most sit in the middle, which is what `Entity.spawn` does; the ones here
+// override that, so this mirrors their own `static spawn`. Keyed by object
+// name rather than glyph, because 'E' lands differently per variant.
+const CELL_ANCHOR = {
+  door: [0, 0],                              // stamps its own cell, pivot at the corner
+  beetle: [0.5, 0], frog: [0.5, 0],          // Enemy.spawn: standing on the cell's top edge
+  rock: [0.5, 0], rock2: [0.5, 0],           // the ledge a rock drops from
+  plant: [0.5, 1]                            // rooted in the floor below it
+};
+const cellAnchor = name => CELL_ANCHOR[name] || [0.5, 0.5];
+
+// ---------- the level being drawn ----------
+// Three layers of cells, each holding either a tile ({pi, tint}) or an object
+// ({oi, id}), plus the two single things a level can only have one of.
+const LAYER_LABELS = ['Back', 'Mid', 'Front'];
+const STORE_KEY = 'warmWormEditorLevel';
+
+let cols = 40, rows = 20;
+let layers = [];
+let start = null;        // {r, c}
+let levelName = '';      // `name` alone would shadow window.name
+
+let activeLayer = 1;     // Mid: the only layer that collides
+let tool = 'paint';
+let mode = 'tile';       // which palette the paint tool is drawing from
+let tileIndex = 0;
+let tintIndex = 0;
+let objIndex = 0;
+let objDigit = 0;
+let zoom = 1;
+let dimOthers = false;   // off, so the board reads as the finished level
+
+// What each sign says, by the info digit its block carries. Sparse while it is
+// being written; `levelMessages()` packs it for the game.
+let messages = [];
+
+// Where each flag leads, by the same digit: an index into the pack, or null
+// for a flag that ends the run. The game reads a level's `exit` list the same
+// way, so 0F0 takes the first entry and 1F0 the second.
+let exits = [];
+
+// ---------- the editor's resource library ----------
+// The kinds an author picks from, each a folder beside editor.json with its
+// own entry in it. A pack is given a copy of whatever it uses, so the
+// downloaded folder stands on its own too.
+let bgDir = new URL(EDITOR_DIR + 'backgrounds/', location.href).href;
+let bgLibrary = [];      // [{ file, name, color, scroll }]
+let soundDir = new URL(EDITOR_DIR + 'sounds/', location.href).href;
+let soundLibrary = [];   // [{ file, name }]
+let soundDefault = 'default.json';
+let soundSets = new Map();   // the parsed manifests, by filename
+// Tracks are ids in the default sound manifest rather than a list of their
+// own, so nothing outside that file names an audio path.
+let musicLibrary = [];   // [id, ...]
+
+// What sits behind the level: a colour, optionally with one of those sprites
+// tiled over it. The same three fields the game reads off a level file.
+const DEFAULT_BG = { color: '#000000', texture: null, scroll: 0.3 };
+let levelBg = { ...DEFAULT_BG };
+let levelMusic = null;   // the id of a track, or null for the game's default
+let levelSounds = null;  // a filename from the library, or null for the game's own set
+
+const bgImages = new Map();
+function bgImage(file) {
+  if (!file) return null;
+  let img = bgImages.get(file);
+  if (!img) {
+    img = new Image();
+    img.addEventListener('load', () => { renderBgList(); render(); });
+    img.src = bgDir + file;
+    bgImages.set(file, img);
+  }
+  return img;
+}
+
+// Fills a target with the level's backdrop, colour first and the sprite tiled
+// over it. `scroll` is a camera effect, so it has nothing to say here.
+function paintBackdrop(target, w, h) {
+  target.fillStyle = levelBg.color;
+  target.fillRect(0, 0, w, h);
+  const img = bgImage(levelBg.texture);
+  if (!img || !img.complete || !img.naturalWidth) return;
+  target.fillStyle = target.createPattern(img, 'repeat');
+  target.fillRect(0, 0, w, h);
+}
+
+// The game indexes straight into this, so it has to be dense up to the last
+// one that says anything.
+function levelMessages() {
+  let last = -1;
+  messages.forEach((m, i) => { if (m) last = i; });
+  return Array.from({ length: last + 1 }, (_, i) => messages[i] || '');
+}
+
+function blankLayer() {
+  return Array.from({ length: rows }, () => Array(cols).fill(null));
+}
+function blankLevel() {
+  layers = [blankLayer(), blankLayer(), blankLayer()];
+  start = null;
+  messages = [];
+  exits = [];
+  levelBg = { ...DEFAULT_BG };
+  levelMusic = null;
+  levelSounds = null;
+  levelName = '';
+}
+
+// ---------- the packs ----------
+// One level is live in the globals above; the rest of its pack wait their turn
+// as the same serialised shape, so switching between them is `snapshot` and
+// `applyState` rather than a second way of holding a level. Whole packs nest
+// the same way: `packs[]` holds them all and the open one is unpacked into
+// `packName`/`levels`/`current`, so everything downstream — Test, the problem
+// list, the download — only ever sees the one pack.
+let packs = [];          // [{ name, levels, current }]
+let packIndex = 0;
+let packName = '';
+let levels = [];
+let current = 0;
+
+function stashLevel() {
+  levels[current] = JSON.parse(snapshot());
+}
+
+function stashPack() {
+  stashLevel();
+  packs[packIndex] = { name: packName, levels, current };
+}
+
+// Only the state, so boot can run its own first paint afterwards.
+function applyPack(pack) {
+  packName = pack.name || '';
+  levels = pack.levels;
+  current = Math.min(pack.current || 0, levels.length - 1);
+  packNameInput.value = packName;
+  applyState(levels[current]);
+}
+
+function openPack(i) {
+  if (i === packIndex || !packs[i]) return;
+  stashPack();
+  packIndex = i;
+  applyPack(packs[i]);
+  resize(cols, rows, true);
+  refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
+}
+
+function blankPack() {
+  const was = { cols, rows, layers, start, messages, exits, levelBg, levelMusic, levelSounds, levelName };
+  blankLevel();
+  const only = JSON.parse(snapshot());
+  ({ cols, rows, layers, start, messages, exits, levelBg, levelMusic, levelSounds, levelName } = was);
+  return { name: '', levels: [only], current: 0 };
+}
+
+function openLevel(i) {
+  if (i === current || !levels[i]) return;
+  stashLevel();
+  current = i;
+  applyState(levels[i]);
+  resize(cols, rows, true);
+  refreshLevels();
+  renderProps();
+  render();
+  updateStatus(null);
+  save();
+}
+
+// A downloaded pack is laid out with the levels together and each kind of
+// resource in a folder of its own. Every path a file names is resolved
+// against that file, so where a thing sits decides how it has to be written —
+// which is why a level reaches back out with '../' and the pack file doesn't.
+const PACK_LEVELS = 'levels/';
+const PACK_TILES = 'tiles/';
+const PACK_OBJECTS = 'objects/';
+const PACK_BACKGROUNDS = 'backgrounds/';
+const PACK_SOUNDS = 'sounds/';
+const OUT_OF_LEVELS = '../';
+const PACK_ROOTS_MARKER = '<!-- pack roots -->';
+const PACK_DEFAULT_TRACK = 'theme';   // sound.js DEFAULT_TRACK: what a level with no music of its own gets
+
+// A level's own title if it has one, else where it sits in the pack. The one
+// being edited is named by the live field rather than by its last stash.
+const levelTitle = (s, i) => s.levelName || `Level ${i + 1}`;
+const titleAt = i => (i === current ? (levelName || `Level ${i + 1}`) : levelTitle(levels[i], i));
+
+// Levels are named after their titles so a pack folder reads like its
+// contents; two of the same name are told apart by position.
+function levelFile(i) {
+  const slug = (levels[i].levelName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const taken = levels.findIndex((s, j) => j < i && (s.levelName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-') === slug);
+  return (slug && taken < 0 ? slug : `level-${i + 1}`) + '.json';
+}
+
+// ---------- undo ----------
+// A snapshot per stroke rather than per cell, so one drag undoes in one go.
+const undoStack = [];
+const UNDO_LIMIT = 60;
+
+function snapshot() {
+  return JSON.stringify({ cols, rows, layers, start, messages, exits, bg: levelBg, music: levelMusic, sounds: levelSounds, levelName });
+}
+function pushUndo() {
+  undoStack.push(snapshot());
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+}
+function undo() {
+  const prev = undoStack.pop();
+  if (!prev) return;
+  applyState(JSON.parse(prev));
+  resize(cols, rows, true);
+  render();
+  refreshLevels();        // the name may have changed with the rest of it
+  save();
+}
+function applyState(s) {
+  cols = s.cols; rows = s.rows; layers = s.layers; start = s.start;
+  messages = s.messages || [];
+  exits = s.exits || [];
+  levelBg = { ...DEFAULT_BG, ...(s.bg || {}) };
+  levelMusic = s.music || null;
+  levelSounds = s.sounds || null;
+  levelName = s.levelName || '';
+  colsInput.value = cols;
+  rowsInput.value = rows;
+  nameInput.value = levelName;
+  refreshBg();
+  refreshMusic();
+  refreshSounds();
+  propsKey = null;        // the values behind the controls have all changed
+  renderProps();
+}
+
+// ---------- block-map text ----------
+// The format loadCustomLevel() reads: three lines per map row — back, main,
+// front — of [id][glyph][colour] blocks. Her start is not an object, so it is
+// stamped into the main line over whatever is under it.
+function blockAt(li, r, c) {
+  if (li === 1 && start && start.r === r && start.c === c) return '0P0';
+  const cell = layers[li][r][c];
+  if (!cell) return '...';
+  if (cell.pi !== undefined) {
+    const p = PALETTE[cell.pi];
+    return p.id + p.glyph + sheet.tintName(cell.tint);
+  }
+  return cell.id + OBJECTS[cell.oi].glyph + '0';
+}
+
+function toBlockMap() {
+  const lines = [];
+  for (let r = 0; r < rows; r++) {
+    for (let li = 0; li < 3; li++) {
+      let line = '';
+      for (let c = 0; c < cols; c++) line += blockAt(li, r, c);
+      lines.push(line);
+    }
+  }
+  return lines.join('\n');
+}
+
+// A whole level file, the shape loadBuiltinLevels() reads off disk: the map as
+// one string per line, and whatever else the editor knows. The tileset and
+// object blocks are left out on purpose — inside a pack a level takes the
+// pack's, and on its own it takes the defaults, which is what was drawn here.
+function levelJson(i) {
+  const src = levels[i];
+  const level = { name: levelTitle(src, i) };
+  const exit = exitPaths(src);
+  if (exit.length) level.exit = exit;
+  level.background = bgSpec(src);
+  if (src.music) level.music = src.music;
+  if (src.sounds) level.sounds = OUT_OF_LEVELS + PACK_SOUNDS + src.sounds;
+  let last = -1;
+  (src.messages || []).forEach((m, k) => { if (m) last = k; });
+  if (last >= 0) level.messages = Array.from({ length: last + 1 }, (_, k) => src.messages[k] || '');
+  level.map = mapLines(src);
+  return level;
+}
+
+// A backdrop with no sprite is nothing but a colour, and the game reads a bare
+// string as exactly that.
+function bgSpec(src) {
+  const bg = { ...DEFAULT_BG, ...(src.bg || {}) };
+  if (!bg.texture) return bg.color;
+  return { color: bg.color, texture: OUT_OF_LEVELS + PACK_BACKGROUNDS + bg.texture, scroll: bg.scroll };
+}
+
+// Only a sprite the editor can actually fetch survives being read back, since
+// a pack can only carry what the library holds.
+function readBgSpec(spec) {
+  if (typeof spec === 'string') return { ...DEFAULT_BG, color: spec, texture: null };
+  const file = typeof spec.texture === 'string' ? spec.texture.split('/').pop() : null;
+  return {
+    color: spec.color || DEFAULT_BG.color,
+    texture: bgLibrary.some(e => e.file === file) ? file : null,
+    scroll: spec.scroll === undefined ? DEFAULT_BG.scroll : +spec.scroll
+  };
+}
+
+// The game walks a level's `exit` list in order and refuses an entry that
+// names nothing, so the list has to be solid up to the last flag that leads
+// anywhere. `packProblems()` is what tells her when it isn't.
+function exitPaths(src) {
+  const want = src.exits || [];
+  let last = -1;
+  want.forEach((t, d) => { if (t !== null && t !== undefined && levels[t]) last = d; });
+  const out = [];
+  for (let d = 0; d <= last; d++) {
+    const t = want[d];
+    if (t === null || t === undefined || !levels[t]) return [];   // a hole; reported elsewhere
+    out.push(levelFile(t));
+  }
+  return out;
+}
+
+// Everything that would stop the pack loading, named by level so it can be
+// put right.
+function packProblems() {
+  const found = [];
+  levels.forEach((src, i) => {
+    const want = src.exits || [];
+    let last = -1;
+    want.forEach((t, d) => { if (t !== null && t !== undefined && levels[t]) last = d; });
+    for (let d = 0; d < last; d++) {
+      const t = want[d];
+      if (t === null || t === undefined || !levels[t]) {
+        found.push(`${titleAt(i)}: flag ${d} leads nowhere, but flag ${last} does — give ${d} a target.`);
+        break;
+      }
+    }
+    if (!src.start) found.push(`${titleAt(i)}: no start placed.`);
+  });
+  return found;
+}
+
+// The block text for any stored level, not just the live one.
+function mapLines(s) {
+  const was = { cols, rows, layers, start };
+  cols = s.cols; rows = s.rows; layers = s.layers; start = s.start;
+  const text = toBlockMap();
+  ({ cols, rows, layers, start } = was);
+  return text.split('\n');
+}
+
+function toLevelJson() {
+  stashLevel();
+  return JSON.stringify(levelJson(current), null, 2);
+}
+
+// What a pack needs to stand on its own, beside the art fetched at download
+// time: itself, and a file per level.
+function packJson() {
+  return JSON.stringify({
+    name: packName || 'Level Pack',
+    first: PACK_LEVELS + levelFile(0),
+    tileset: {
+      texture: PACK_TILES + 'tiles.png',
+      size: sheet.size,
+      row_0: DEFAULT_ROW_0,
+      row_1: DEFAULT_ROW_1,
+      row_C: DEFAULT_ROW_C,
+      col_0: DEFAULT_COL_0
+    },
+    objects: { manifest: PACK_OBJECTS + 'objects.json', glyphs: DEFAULT_GLYPH_OBJECTS },
+    sounds: PACK_SOUNDS + soundDefault
+  }, null, 2);
+}
+
+// Takes a level file or the bare block text, since the game's own debug export
+// hands back the latter.
+function fromText(text) {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{')) return fromBlockMap(text);
+  let data;
+  try { data = JSON.parse(trimmed); } catch (err) { return 'That is not valid JSON: ' + err.message; }
+  if (!Array.isArray(data.map) || !data.map.length) return 'That level file has no map.';
+  const error = fromBlockMap(data.map.join('\n'));
+  if (error) return error;
+  if (typeof data.name === 'string') levelName = data.name;
+  if (Array.isArray(data.messages)) messages = data.messages.slice();
+  if (data.background) { levelBg = readBgSpec(data.background); refreshBg(); }
+  levelMusic = knownTrack(data.music);
+  refreshMusic();
+  levelSounds = readLibrarySpec(data.sounds, soundLibrary);
+  refreshSounds();
+  return null;
+}
+
+// Only a file the editor can actually fetch survives being read back, since a
+// pack can only carry what the library holds.
+function readLibrarySpec(spec, library) {
+  if (typeof spec !== 'string') return null;
+  const file = spec.split('/').pop();
+  return library.some(e => e.file === file) ? file : null;
+}
+
+// Reading text back in is the same walk inverted. Anything the sheet has no
+// row for is dropped rather than guessed at.
+function fromBlockMap(text) {
+  const raw = text.replace(/\r/g, '').split('\n');
+  while (raw.length && raw[0].trim() === '') raw.shift();
+  while (raw.length && raw[raw.length - 1].trim() === '') raw.pop();
+  if (!raw.length) return 'That text is empty.';
+  while (raw.length % 3) raw.push('');
+
+  const newRows = raw.length / 3;
+  const newCols = Math.ceil(Math.max(...raw.map(l => l.length)) / 3);
+  if (newRows > 60 || newCols > 400) return 'That level is too large (max 60 rows, 400 columns).';
+
+  const byName = new Map();
+  PALETTE.forEach((p, i) => {
+    byName.set(p.id + p.glyph, i);
+    if (!byName.has(p.glyph)) byName.set(p.glyph, i);
+  });
+
+  rows = newRows; cols = newCols;
+  const keptMessages = messages;      // the block text has no room for these
+  const keptBg = levelBg;
+  const keptMusic = levelMusic;
+  const keptSounds = levelSounds;
+  blankLevel();
+  messages = keptMessages;
+  levelBg = keptBg;
+  levelMusic = keptMusic;
+  levelSounds = keptSounds;
+  for (let r = 0; r < rows; r++) {
+    for (let li = 0; li < 3; li++) {
+      const line = raw[r * 3 + li] || '';
+      for (let c = 0; c < cols; c++) {
+        const id = line[c * 3], glyph = line[c * 3 + 1], tintCh = line[c * 3 + 2];
+        if (!glyph || isBlank(glyph)) continue;
+        if (glyph === 'P') { start = { r, c }; continue; }
+        const digit = (id >= '0' && id <= '9') ? +id : 0;
+        if (OBJ_BY_GLYPH.has(glyph)) {
+          layers[li][r][c] = { oi: OBJ_BY_GLYPH.get(glyph), id: digit };
+          continue;
+        }
+        const idCh = isBlank(id) ? '0' : id;
+        const pi = byName.has(idCh + glyph) ? byName.get(idCh + glyph) : byName.get(glyph);
+        if (pi === undefined) continue;          // not a tile this sheet draws
+        layers[li][r][c] = { pi, tint: isBlank(tintCh) ? 0 : sheet.tintIndex(tintCh) };
+      }
+    }
+  }
+  return null;
+}
+
+// ---------- drawing the board ----------
+const board = document.getElementById('board');
+const boardCtx = board.getContext('2d');
+const scroller = document.getElementById('scroller');
+let hover = null;
+
+function resize(nc, nr, keep) {
+  const old = keep ? null : layers;
+  const oldCols = cols, oldRows = rows;
+  cols = nc; rows = nr;
+  if (old) {
+    layers = [0, 1, 2].map(li => Array.from({ length: rows }, (_, r) =>
+      Array.from({ length: cols }, (_, c) =>
+        (r < oldRows && c < oldCols) ? old[li][r][c] : null)));
+    if (start && (start.r >= rows || start.c >= cols)) start = null;
+  }
+  board.width = cols * TILE * zoom;
+  board.height = rows * TILE * zoom;
+}
+
+function render() {
+  boardCtx.setTransform(1, 0, 0, 1, 0, 0);
+  boardCtx.clearRect(0, 0, board.width, board.height);
+  boardCtx.imageSmoothingEnabled = false;
+  boardCtx.setTransform(zoom, 0, 0, zoom, 0, 0);
+  paintBackdrop(boardCtx, cols * TILE, rows * TILE);
+
+  // Layer by layer, and tiles before the objects standing on them: the same
+  // order loop() draws in, so the board is the finished level rather than a
+  // diagram of it. Dimming is opt-in for when the active layer has got lost.
+  withCtx(boardCtx, () => {
+    for (let li = 0; li < 3; li++) {
+      boardCtx.globalAlpha = (dimOthers && li !== activeLayer) ? 0.3 : 1;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = layers[li][r][c];
+          if (cell && cell.pi !== undefined) sheet.drawCell(PALETTE[cell.pi].sheetRow, cell.tint, c * TILE, r * TILE);
+        }
+      }
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = layers[li][r][c];
+          if (cell && cell.oi !== undefined) drawObjectCell(cell, c, r);
+        }
+      }
+    }
+  });
+  boardCtx.globalAlpha = 1;
+
+  boardCtx.lineWidth = 1 / zoom;
+  boardCtx.strokeStyle = 'rgba(255,255,255,0.07)';
+  boardCtx.beginPath();
+  for (let c = 0; c <= cols; c++) { boardCtx.moveTo(c * TILE, 0); boardCtx.lineTo(c * TILE, rows * TILE); }
+  for (let r = 0; r <= rows; r++) { boardCtx.moveTo(0, r * TILE); boardCtx.lineTo(cols * TILE, r * TILE); }
+  boardCtx.stroke();
+
+  if (start) marker(start, '#4ad07a', 'P');
+
+  if (hover) {
+    boardCtx.strokeStyle = '#b79bff';
+    boardCtx.lineWidth = 2 / zoom;
+    boardCtx.strokeRect(hover.c * TILE + 1, hover.r * TILE + 1, TILE - 2, TILE - 2);
+  }
+}
+
+// An object is drawn where it will actually land in its cell, and wearing its
+// pairing colour, so a key and the door it opens can be told apart on sight.
+// The editor has no clock, so it shows the first frame of whatever part the
+// glyph named.
+function drawObjectCell(cell, c, r) {
+  const glyph = OBJECTS[cell.oi].glyph;
+  const name = objName(glyph, cell.id);
+  if (!atlas.def(name).frame) { objPlaceholder(c, r, cell.id + glyph); return; }
+  const [ax, ay] = cellAnchor(name);
+  const [x, y] = atlas.place(name, (c + ax) * TILE, (r + ay) * TILE);
+  const frame = objFrame(glyph, cell.id);
+  // tiles want nearest-neighbour, but object art is packed finer than it is
+  // shown and has to be resampled down
+  boardCtx.imageSmoothingEnabled = true;
+  atlas.draw(name, x, y, frame);
+  atlas.drawMask(name, cell.id, x, y, frame);
+  boardCtx.imageSmoothingEnabled = false;
+}
+
+// Until the manifest lands — or if it never does — a block still has to show
+// that something is there.
+function objPlaceholder(c, r, label) {
+  const x = c * TILE, y = r * TILE;
+  boardCtx.fillStyle = 'rgba(183,155,255,0.18)';
+  boardCtx.fillRect(x + 3, y + 3, TILE - 6, TILE - 6);
+  boardCtx.fillStyle = '#d7cdf0';
+  boardCtx.font = 'bold 12px system-ui, sans-serif';
+  boardCtx.textAlign = 'center';
+  boardCtx.textBaseline = 'middle';
+  boardCtx.fillText(label, x + TILE / 2, y + TILE / 2);
+}
+
+function marker(at, colour, letter) {
+  const x = at.c * TILE, y = at.r * TILE;
+  boardCtx.fillStyle = colour + '33';
+  boardCtx.fillRect(x, y, TILE, TILE);
+  boardCtx.strokeStyle = colour;
+  boardCtx.lineWidth = 2 / zoom;
+  boardCtx.strokeRect(x + 1, y + 1, TILE - 2, TILE - 2);
+  boardCtx.fillStyle = colour;
+  boardCtx.font = 'bold 16px system-ui, sans-serif';
+  boardCtx.textAlign = 'center';
+  boardCtx.textBaseline = 'middle';
+  boardCtx.fillText(letter, x + TILE / 2, y + TILE / 2 + 1);
+}
+
+// ---------- editing ----------
+function cellAt(ev) {
+  const box = board.getBoundingClientRect();
+  const c = Math.floor((ev.clientX - box.left) / (TILE * zoom));
+  const r = Math.floor((ev.clientY - box.top) / (TILE * zoom));
+  return (r >= 0 && r < rows && c >= 0 && c < cols) ? { r, c } : null;
+}
+
+// One thing at a time: a cell holds one block, and her start can only be in
+// one place, so putting it down moves it rather than adding another.
+function apply(at, how) {
+  const { r, c } = at;
+  if (how === 'erase') {
+    layers[activeLayer][r][c] = null;
+    if (start && start.r === r && start.c === c) start = null;
+    return;
+  }
+  if (how === 'start') { start = { r, c }; return; }
+  layers[activeLayer][r][c] = mode === 'tile'
+    ? { pi: tileIndex, tint: tintIndex }
+    : { oi: objIndex, id: objDigit };
+}
+
+let stroke = null;        // {how, last} while a drag is live
+
+board.addEventListener('contextmenu', e => e.preventDefault());
+
+board.addEventListener('pointerdown', e => {
+  const at = cellAt(e);
+  if (!at) return;
+  board.setPointerCapture(e.pointerId);
+  pushUndo();
+  // Her start is placed once per click; the others paint while dragging.
+  const how = e.button === 2 ? 'erase' : tool;
+  stroke = { how, drag: how === 'paint' || how === 'erase' };
+  apply(at, how);
+  // Putting down something a level can say more about opens that straight away.
+  if (how === 'paint' && propsFor().length) renderProps(true);
+  render();
+  updateStatus(at);
+});
+
+board.addEventListener('pointermove', e => {
+  const at = cellAt(e);
+  hover = at;
+  if (stroke && stroke.drag && at) apply(at, stroke.how);
+  render();
+  updateStatus(at);
+});
+
+const endStroke = () => { if (stroke) { stroke = null; save(); } };
+board.addEventListener('pointerup', endStroke);
+board.addEventListener('pointercancel', endStroke);
+board.addEventListener('pointerleave', () => { hover = null; render(); updateStatus(null); });
+
+// ---------- panel ----------
+const statCell = document.getElementById('statCell');
+const statLayer = document.getElementById('statLayer');
+const statTile = document.getElementById('statTile');
+const statStart = document.getElementById('statStart');
+const statEnd = document.getElementById('statEnd');
+const levelMsg = document.getElementById('levelMsg');
+const colsInput = document.getElementById('colsInput');
+const rowsInput = document.getElementById('rowsInput');
+const nameInput = document.getElementById('nameInput');
+const packNameInput = document.getElementById('packNameInput');
+const packSelect = document.getElementById('packSelect');
+const levelSelect = document.getElementById('levelSelect');
+
+nameInput.addEventListener('input', () => { levelName = nameInput.value; refreshLevels(); save(); });
+packNameInput.addEventListener('input', () => { packName = packNameInput.value; refreshPacks(); save(); });
+
+// ---------- the background panel ----------
+const bgList = document.getElementById('bgList');
+const bgColor = document.getElementById('bgColor');
+const bgScroll = document.getElementById('bgScroll');
+
+// Each swatch is the library entry as it would actually look: its own colour
+// with its own sprite tiled over it. 'None' wears the level's colour, so it
+// doubles as a preview of the plain backdrop.
+function renderBgList() {
+  bgList.innerHTML = '';
+  const entries = [{ file: null, name: 'None' }].concat(bgLibrary);
+  for (const entry of entries) {
+    const tile = document.createElement('div');
+    tile.className = 'tile' + (entry.file === levelBg.texture ? ' on' : '');
+    tile.title = entry.name;
+
+    const swatch = document.createElement('canvas');
+    swatch.width = 120; swatch.height = 60;
+    const sctx = swatch.getContext('2d');
+    sctx.imageSmoothingEnabled = false;
+    sctx.fillStyle = entry.file ? (entry.color || levelBg.color) : levelBg.color;
+    sctx.fillRect(0, 0, swatch.width, swatch.height);
+    const img = bgImage(entry.file);
+    if (img && img.complete && img.naturalWidth) {
+      sctx.fillStyle = sctx.createPattern(img, 'repeat');
+      sctx.fillRect(0, 0, swatch.width, swatch.height);
+    }
+
+    const label = document.createElement('span');
+    label.textContent = entry.name;
+    tile.append(swatch, label);
+    tile.addEventListener('click', () => pickBackground(entry));
+    bgList.appendChild(tile);
+  }
+}
+
+// A swatch is a preset, not just a sprite: it brings the colour and distance
+// it was drawn for. Clicking the one already chosen leaves those alone, so a
+// colour picked by hand survives.
+function pickBackground(entry) {
+  if (entry.file === levelBg.texture) return;
+  pushUndo();
+  levelBg.texture = entry.file;
+  if (entry.file) {
+    if (entry.color) levelBg.color = entry.color;
+    if (entry.scroll !== undefined) levelBg.scroll = +entry.scroll;
+  }
+  refreshBg(); render(); save();
+}
+
+function refreshBg() {
+  bgColor.value = levelBg.color;
+  bgScroll.value = levelBg.scroll;
+  renderBgList();
+}
+
+bgColor.addEventListener('input', () => { levelBg.color = bgColor.value; renderBgList(); render(); });
+bgColor.addEventListener('change', () => { levelBg.color = bgColor.value; save(); });
+bgScroll.addEventListener('input', () => {
+  const v = parseFloat(bgScroll.value);
+  levelBg.scroll = isNaN(v) ? DEFAULT_BG.scroll : Math.max(0, Math.min(1, v));
+  save();
+});
+
+// ---------- the music panel ----------
+const musicSelect = document.getElementById('musicSelect');
+const preview = new Audio();
+preview.loop = true;
+preview.volume = 0.5;
+
+// A track used to be named by filename rather than by id. Anything stored that
+// way is mapped back to the id that plays it and anything unrecognised is
+// dropped, so old work neither breaks the download nor sits in the panel
+// looking like nothing is chosen.
+function knownTrack(value) {
+  if (!value || !musicLibrary.length) return value;   // nothing to check against yet
+  if (musicLibrary.includes(value)) return value;
+  const set = soundSets.get(soundDefault);
+  const hit = Object.entries((set && set.sounds) || {})
+    .find(([, def]) => def && def.loop && def.src && def.src.split('/').pop() === value);
+  return hit ? hit[0] : null;
+}
+
+function refreshMusic() {
+  musicSelect.innerHTML = '';
+  const ids = [''].concat(musicLibrary);
+  for (const id of ids) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id || 'None — the game’s own theme';
+    musicSelect.appendChild(opt);
+  }
+  levelMusic = knownTrack(levelMusic);
+  musicSelect.value = levelMusic || '';
+  if (!preview.paused) playPreview();     // a running preview follows the level
+}
+
+musicSelect.addEventListener('change', () => {
+  pushUndo();
+  levelMusic = musicSelect.value || null;
+  refreshMusic();
+  save();
+});
+
+// Where a sound id's file actually is, resolved against the manifest that
+// named it — the same sum the game does.
+function soundSrc(id, setFile) {
+  const set = soundSets.get(setFile || soundDefault) || soundSets.get(soundDefault);
+  const def = set && set.sounds ? set.sounds[id] : null;
+  return def && def.src ? new URL(def.src, soundDir + (setFile || soundDefault)).href : null;
+}
+
+function playPreview() {
+  const href = soundSrc(levelMusic);
+  if (!href) { preview.pause(); return; }
+  if (preview.src !== href) preview.src = href;
+  preview.play().catch(err => { levelMsg.textContent = 'Could not play that track: ' + err.message; });
+}
+
+document.getElementById('musicPlayBtn').addEventListener('click', () => {
+  if (!levelMusic) { levelMsg.textContent = 'This level uses the game’s own theme — pick a track to hear it.'; return; }
+  levelMsg.textContent = '';
+  playPreview();
+});
+document.getElementById('musicStopBtn').addEventListener('click', () => preview.pause());
+
+// ---------- the effects panel ----------
+const soundSelect = document.getElementById('soundSelect');
+
+function refreshSounds() {
+  soundSelect.innerHTML = '';
+  const entries = [{ file: '', name: 'None — the game’s own set' }].concat(soundLibrary);
+  for (const entry of entries) {
+    const opt = document.createElement('option');
+    opt.value = entry.file;
+    opt.textContent = entry.name;
+    soundSelect.appendChild(opt);
+  }
+  soundSelect.value = levelSounds || '';
+}
+
+soundSelect.addEventListener('change', () => {
+  pushUndo();
+  levelSounds = soundSelect.value || null;
+  save();
+});
+
+// ---------- the pack panel ----------
+function refreshPacks() {
+  packSelect.innerHTML = '';
+  packs.forEach((p, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    const name = (i === packIndex ? packName : p.name) || `Pack ${i + 1}`;
+    const count = (i === packIndex ? levels : p.levels).length;
+    opt.textContent = `${name}  (${count} ${count === 1 ? 'level' : 'levels'})`;
+    packSelect.appendChild(opt);
+  });
+  packSelect.value = packIndex;
+}
+
+function refreshLevels() {
+  packNameInput.value = packName;
+  levelSelect.innerHTML = '';
+  levels.forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${i + 1}. ${titleAt(i)}${i === 0 ? '  (first)' : ''}`;
+    levelSelect.appendChild(opt);
+  });
+  levelSelect.value = current;
+}
+
+levelSelect.addEventListener('change', () => openLevel(+levelSelect.value));
+packSelect.addEventListener('change', () => openPack(+packSelect.value));
+
+document.getElementById('addPackBtn').addEventListener('click', () => {
+  stashPack();
+  packs.push(blankPack());
+  packIndex = packs.length - 1;
+  applyPack(packs[packIndex]);
+  resize(cols, rows, true);
+  levelMsg.textContent = '';
+  refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
+});
+
+document.getElementById('dupPackBtn').addEventListener('click', () => {
+  stashPack();
+  const copy = JSON.parse(JSON.stringify(packs[packIndex]));
+  copy.name = (copy.name || `Pack ${packIndex + 1}`) + ' copy';
+  packs.splice(packIndex + 1, 0, copy);
+  packIndex += 1;
+  applyPack(packs[packIndex]);
+  resize(cols, rows, true);
+  levelMsg.textContent = '';
+  refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
+});
+
+document.getElementById('delPackBtn').addEventListener('click', async () => {
+  if (packs.length < 2) { levelMsg.textContent = 'There is only one pack.'; return; }
+  stashPack();
+  const gone = packIndex;
+  const count = packs[gone].levels.length;
+  const ok = await ask('Delete pack',
+    `“${packName || `Pack ${gone + 1}`}” and ${count === 1 ? 'the level' : `all ${count} levels`} in it will go. This cannot be undone.`,
+    'Delete it');
+  if (!ok) return;
+  packs.splice(gone, 1);
+  packIndex = Math.min(gone, packs.length - 1);
+  applyPack(packs[packIndex]);
+  resize(cols, rows, true);
+  levelMsg.textContent = '';
+  refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
+});
+
+// ---------- asking first ----------
+// Drawn here rather than left to the browser, so a destructive click is
+// answered in the same place everything else about the level is. The message
+// is set as text: a level's name is whatever its author typed.
+const askOverlay = document.getElementById('askOverlay');
+const askTitle = document.getElementById('askTitle');
+const askText = document.getElementById('askText');
+const askYes = document.getElementById('askYes');
+const askNo = document.getElementById('askNo');
+let askResolve = null;
+
+function ask(title, message, confirmLabel) {
+  askTitle.textContent = title;
+  askText.textContent = message;
+  askYes.textContent = confirmLabel;
+  askOverlay.classList.remove('hidden');
+  askNo.focus();            // the safe one, so a stray Enter or Space cancels
+  return new Promise(resolve => { askResolve = resolve; });
+}
+
+function closeAsk(answer) {
+  if (!askResolve) return;
+  askOverlay.classList.add('hidden');
+  const resolve = askResolve;
+  askResolve = null;
+  resolve(answer);
+}
+
+askYes.addEventListener('click', () => closeAsk(true));
+askNo.addEventListener('click', () => closeAsk(false));
+askOverlay.addEventListener('mousedown', e => { if (e.target === askOverlay) closeAsk(false); });
+
+document.getElementById('addLevelBtn').addEventListener('click', () => {
+  stashLevel();
+  blankLevel();
+  levels.push(JSON.parse(snapshot()));
+  current = levels.length - 1;
+  applyState(levels[current]);
+  resize(cols, rows, true);
+  refreshLevels(); render(); updateStatus(null); save();
+});
+
+document.getElementById('dupLevelBtn').addEventListener('click', () => {
+  stashLevel();
+  const copy = JSON.parse(JSON.stringify(levels[current]));
+  copy.levelName = (copy.levelName || `Level ${current + 1}`) + ' copy';
+  levels.splice(current + 1, 0, copy);
+  current += 1;
+  applyState(levels[current]);
+  resize(cols, rows, true);
+  refreshLevels(); render(); updateStatus(null); save();
+});
+
+// Emptying a level and removing it are both a lot of work to lose by a
+// mis-click, so both say what is about to go and name the level it belongs to.
+document.getElementById('clearBtn').addEventListener('click', async () => {
+  const ok = await ask('Clear level',
+    `Every block on “${titleAt(current)}” goes, along with its name, background and sound.\n\nThe level stays in the pack, and Ctrl+Z undoes it.`,
+    'Clear it');
+  if (!ok) return;
+  pushUndo();
+  blankLevel();
+  nameInput.value = '';
+  propsKey = null;
+  refreshBg(); refreshMusic(); refreshSounds();
+  levelMsg.textContent = '';
+  render(); renderProps(); refreshLevels(); updateStatus(null); save();
+});
+
+// Removing a level leaves the flags pointing at it with nowhere to go, which
+// is the same as a flag that ends the run; the rest shuffle down.
+document.getElementById('delLevelBtn').addEventListener('click', async () => {
+  if (levels.length < 2) { levelMsg.textContent = 'A pack needs at least one level.'; return; }
+  const gone = current;
+  const leadsHere = levels.filter((s, i) => i !== gone && (s.exits || []).some(t => t === gone)).length;
+  const warning = leadsHere
+    ? `\n\n${leadsHere} ${leadsHere === 1 ? 'level has a flag' : 'levels have flags'} leading to it. ${leadsHere === 1 ? 'It' : 'They'} will end the run instead.`
+    : '';
+  const ok = await ask('Delete level',
+    `“${titleAt(gone)}” will be taken out of the pack. This cannot be undone.${warning}`,
+    'Delete it');
+  if (!ok) return;
+  levels.splice(gone, 1);
+  for (const s of levels) {
+    s.exits = (s.exits || []).map(t => (t === gone ? null : (t > gone ? t - 1 : t)));
+  }
+  current = Math.min(gone, levels.length - 1);
+  applyState(levels[current]);
+  resize(cols, rows, true);
+  levelMsg.textContent = '';
+  refreshLevels(); render(); updateStatus(null); save();
+});
+
+// ---------- writing a zip ----------
+// Stored, not deflated: the whole point is a folder a browser can unpack, and
+// a few hundred KB of PNG compresses to nothing anyway.
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function zipBlob(files) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  const head = n => { const b = new Uint8Array(n); return { b, v: new DataView(b.buffer) }; };
+
+  for (const f of files) {
+    const nameBytes = enc.encode(f.name);
+    const data = typeof f.data === 'string' ? enc.encode(f.data) : f.data;
+    const crc = crc32(data);
+
+    const local = head(30);
+    local.v.setUint32(0, 0x04034b50, true);
+    local.v.setUint16(4, 20, true);
+    local.v.setUint16(8, 0, true);          // stored
+    local.v.setUint32(14, crc, true);
+    local.v.setUint32(18, data.length, true);
+    local.v.setUint32(22, data.length, true);
+    local.v.setUint16(26, nameBytes.length, true);
+    chunks.push(local.b, nameBytes, data);
+
+    const dir = head(46);
+    dir.v.setUint32(0, 0x02014b50, true);
+    dir.v.setUint16(4, 20, true);
+    dir.v.setUint16(6, 20, true);
+    dir.v.setUint16(10, 0, true);
+    dir.v.setUint32(16, crc, true);
+    dir.v.setUint32(20, data.length, true);
+    dir.v.setUint32(24, data.length, true);
+    dir.v.setUint16(28, nameBytes.length, true);
+    dir.v.setUint32(42, offset, true);
+    central.push(dir.b, nameBytes);
+
+    offset += local.b.length + nameBytes.length + data.length;
+  }
+
+  const dirSize = central.reduce((n, c) => n + c.length, 0);
+  const tail = head(22);
+  tail.v.setUint32(0, 0x06054b50, true);
+  tail.v.setUint16(8, files.length, true);
+  tail.v.setUint16(10, files.length, true);
+  tail.v.setUint32(12, dirSize, true);
+  tail.v.setUint32(16, offset, true);
+  return new Blob([...chunks, ...central, tail.b], { type: 'application/zip' });
+}
+
+// Everything a pack has to carry a copy of: the sheet and object manifest it
+// was drawn with, its backgrounds, its sound manifests and every file those
+// name, and the game itself — so the unzipped folder is something that can
+// just be opened.
+async function packAssets() {
+  // fetch() resolves on a 404, so without this a missing file is packed as the
+  // error page and the download looks like it worked
+  const fetchOk = async url => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${new URL(url, location.href).pathname}: HTTP ${res.status}`);
+    return res;
+  };
+  const grab = async url => new Uint8Array(await (await fetchOk(url)).arrayBuffer());
+  const manifestUrl = new URL(EDITOR_OBJECTS, location.href).href;
+  const manifest = await (await fetchOk(manifestUrl)).json();
+  const files = [
+    { name: PACK_TILES + 'tiles.png', data: await grab(sheet.img.src) },
+    { name: PACK_OBJECTS + 'objects.json', data: JSON.stringify(manifest, null, 2) },
+    { name: PACK_OBJECTS + 'objects.png', data: await grab(new URL(manifest.texture, manifestUrl).href) }
+  ];
+  for (const file of new Set(levels.map(s => s.bg && s.bg.texture).filter(Boolean))) {
+    files.push({ name: PACK_BACKGROUNDS + file, data: await grab(bgDir + file) });
+  }
+  files.push(...await packSoundFiles(grab));
+  files.push(...await packGame(fetchOk));
+  return files;
+}
+
+// A pack's sound manifests are written here rather than copied, so they hold
+// only the tracks its levels actually name — the rest would be megabytes
+// nobody plays. Every `src` left standing is then copied in at the path it
+// points to, which is why a pack lays sounds/, music/ and clips/ out exactly
+// as the editor's own folder does.
+async function packSoundFiles(grab) {
+  // the fallback track goes in whether or not a level names it, or a pack
+  // whose levels all take the game's own music would play none at all
+  const tracks = new Set([PACK_DEFAULT_TRACK, ...levels.map(s => s.music).filter(Boolean)]);
+  const wanted = new Set([soundDefault, ...levels.map(s => s.sounds).filter(Boolean)]);
+  const base = await soundSet(soundDefault);
+  const files = [];
+  const media = new Map();     // where it goes in the pack -> where to fetch it
+
+  for (const file of wanted) {
+    const set = await soundSet(file);
+    const defs = {};
+    for (const [id, def] of Object.entries(set.sounds || {})) {
+      if (!def || !def.loop) defs[id] = def;
+    }
+    // every set carries the tracks the pack names, so an id lands on the
+    // pack's own file whichever set a level chose
+    for (const id of tracks) {
+      const def = (set.sounds && set.sounds[id]) || (base.sounds && base.sounds[id]);
+      if (!def) throw new Error(`no sound called "${id}" to use as music`);
+      defs[id] = def;
+    }
+    for (const def of Object.values(defs)) {
+      if (!def || !def.src) continue;
+      const inPack = new URL(def.src, 'file:///' + PACK_SOUNDS + file).pathname.slice(1);
+      media.set(inPack, new URL(def.src, soundDir + file).href);
+    }
+    files.push({ name: PACK_SOUNDS + file, data: JSON.stringify({ ...set, sounds: defs }, null, 2) });
+  }
+
+  for (const [inPack, href] of media) files.push({ name: inPack, data: await grab(href) });
+  return files;
+}
+
+// Fetched on demand rather than trusted to be in hand: a download must not
+// quietly ship without its audio because the library was still loading.
+async function soundSet(file) {
+  if (soundSets.has(file)) return soundSets.get(file);
+  const res = await fetch(soundDir + file);
+  if (!res.ok) throw new Error(`${file}: HTTP ${res.status}`);
+  const data = await res.json();
+  soundSets.set(file, data);
+  return data;
+}
+
+// The whole game folded into one page by tools/bundle.mjs, so a pack ships
+// index.html and nothing else of the engine. The marker that file leaves is
+// where the pack says its own folder is the root.
+async function packGame(fetchOk) {
+  const page = await (await fetchOk(gameFile)).text();
+  if (!page.includes(PACK_ROOTS_MARKER)) {
+    throw new Error(`${gameFile} has no "${PACK_ROOTS_MARKER}" line — re-run npm run build`);
+  }
+  const roots = '<script>\n' +
+    `  window.PACK_URL = 'levelpack.json';\n` +
+    `  window.OBJECTS_URL = '${PACK_OBJECTS}objects.json';\n` +
+    `  window.SOUNDS_URL = '${PACK_SOUNDS + soundDefault}';\n` +
+    `  window.TILES_URL = '${PACK_TILES}tiles.png';\n` +
+    '<\/script>';
+  return [{ name: 'index.html', data: page.replace(PACK_ROOTS_MARKER, roots) }];
+}
+
+document.getElementById('downloadBtn').addEventListener('click', async () => {
+  stashLevel();
+  const problems = packProblems();
+  if (problems.length) { levelMsg.textContent = problems[0]; return; }
+  levelMsg.textContent = 'Gathering the pack…';
+  try {
+    const files = [{ name: 'levelpack.json', data: packJson() }];
+    levels.forEach((s, i) => files.push({ name: PACK_LEVELS + levelFile(i), data: JSON.stringify(levelJson(i), null, 2) }));
+    files.push(...await packAssets());
+
+    const url = URL.createObjectURL(zipBlob(files));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (packName || 'level-pack').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // the browser reads the blob after the click returns, so it cannot be let
+    // go of yet
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    const audio = files.filter(f => /^sounds\/(music|clips)\//.test(f.name)).map(f => f.name.split('/').pop());
+    levelMsg.textContent = `Downloaded ${files.length} files — unzip it anywhere and open index.html.`
+      + (audio.length ? ` Audio: ${audio.join(', ')}.` : ' No audio files needed.');
+  } catch (err) {
+    levelMsg.textContent = 'Could not build the pack: ' + err.message;
+  }
+});
+
+const propGroup = document.getElementById('propGroup');
+const propLabel = document.getElementById('propLabel');
+const propBody = document.getElementById('propBody');
+const propHint = document.getElementById('propHint');
+
+// ---------- object properties ----------
+// What a level can say about a kind of object beyond which block it sits in.
+// The panel builds itself from these, so giving a kind a property is an entry
+// here rather than a pane of its own — and a kind with none shows nothing.
+//
+// `get`/`set` take the block's info digit, because that is what a level uses
+// to tell two of the same object apart. `byDigit` adds the list of digits
+// already carrying a value, which doubles as a way to jump between them.
+const OBJECT_PROPS = {
+  M: [{
+    key: 'message',
+    label: 'Message',
+    kind: 'text',
+    rows: 3,
+    placeholder: 'What the signpost says…',
+    hint: 'A sign picks its words by its info digit, so 0M0 and 1M0 are two notes on the same post.',
+    byDigit: true,
+    get: d => messages[d] || '',
+    set: (d, v) => { messages[d] = v; }
+  }],
+  F: [{
+    key: 'exit',
+    label: 'Leads to',
+    kind: 'select',
+    hint: 'A level may hold several flags, numbered by their info digit: 0F0 takes the first exit, 1F0 the second. A flag with nowhere to go ends the run.',
+    byDigit: true,
+    options: () => [{ value: '', label: '— nothing, the run ends' }]
+      .concat(levels.map((s, i) => ({ value: String(i), label: `${i + 1}. ${titleAt(i)}` }))),
+    get: d => {
+      const t = exits[d];
+      return (t === null || t === undefined || !levels[t]) ? '' : String(t);
+    },
+    set: (d, v) => { exits[d] = v === '' ? null : +v; },
+    summary: d => {
+      const t = exits[d];
+      return (t === null || t === undefined || !levels[t]) ? '' : titleAt(t);
+    }
+  }]
+};
+
+const propsFor = () => (mode === 'object' ? OBJECT_PROPS[OBJECTS[objIndex].glyph] || [] : []);
+
+// The controls are rebuilt only when the object or its digit changes; typing
+// into one must not pull the ground out from under the caret.
+let propsKey = null;
+
+function renderProps(focus) {
+  const props = propsFor();
+  propGroup.classList.toggle('hidden', props.length === 0);
+  if (!props.length) { propsKey = null; propBody.innerHTML = ''; propHint.textContent = ''; return; }
+
+  const glyph = OBJECTS[objIndex].glyph;
+  const key = glyph + ':' + objDigit;
+  propLabel.textContent = `${objName(glyph, objDigit)} · ${objDigit}${glyph}0`;
+  propHint.textContent = props.map(p => p.hint).filter(Boolean).join(' ');
+  if (key !== propsKey) {
+    propsKey = key;
+    propBody.innerHTML = '';
+    for (const p of props) propBody.appendChild(propField(p));
+  }
+  for (const p of props) refreshPropList(p);
+  if (focus) {
+    const first = propBody.querySelector('textarea, input');
+    if (first) { first.focus(); first.select(); }
+  }
+}
+
+function propField(p) {
+  const wrap = document.createElement('div');
+  wrap.className = 'propField';
+  const name = document.createElement('span');
+  name.textContent = p.label;
+  let input;
+  if (p.kind === 'select') {
+    input = document.createElement('select');
+    for (const o of p.options()) {
+      const opt = document.createElement('option');
+      opt.value = o.value;
+      opt.textContent = o.label;
+      input.appendChild(opt);
+    }
+  } else if (p.kind === 'text') {
+    input = Object.assign(document.createElement('textarea'), { rows: p.rows || 3, placeholder: p.placeholder || '' });
+  } else {
+    input = Object.assign(document.createElement('input'), { type: 'number', min: p.min ?? 0, max: p.max ?? 999, step: p.step ?? 1 });
+  }
+  input.value = p.get(objDigit);
+  input.addEventListener(p.kind === 'select' ? 'change' : 'input', () => {
+    p.set(objDigit, p.kind === 'number' ? +input.value : input.value);
+    refreshPropList(p);
+    save();
+    render();
+  });
+  wrap.append(name, input);
+  if (p.byDigit) {
+    const list = document.createElement('div');
+    list.id = 'propList';
+    list.dataset.key = p.key;
+    wrap.appendChild(list);
+  }
+  return wrap;
+}
+
+// Which other digits of this property already say something, so a level's
+// several signs are one click apart.
+function refreshPropList(p) {
+  if (!p.byDigit) return;
+  const list = propBody.querySelector(`[data-key="${p.key}"]`);
+  if (!list) return;
+  list.innerHTML = '';
+  for (let d = 0; d < 10; d++) {
+    const value = p.summary ? p.summary(d) : p.get(d);
+    if (!value) continue;
+    const row = document.createElement('div');
+    row.className = 'propRow' + (d === objDigit ? ' on' : '');
+    row.innerHTML = '<b></b><span></span>';
+    row.firstChild.textContent = d;
+    row.lastChild.textContent = value;
+    row.addEventListener('click', () => {
+      objDigit = d;
+      refreshSelection();
+      renderProps(true);
+    });
+    list.appendChild(row);
+  }
+}
+
+function selectionText() {
+  if (mode === 'tile') {
+    const p = PALETTE[tileIndex];
+    return `${p.label} · ${sheet.tintName(tintIndex)} · ${hitText(p.hit)}`;
+  }
+  const glyph = OBJECTS[objIndex].glyph;
+  const part = atlas.partFor(glyph, objDigit);
+  return `${objDigit}${glyph}0 · ${objName(glyph, objDigit)}${part ? ' · ' + part : ''}`;
+}
+
+function updateStatus(at) {
+  statCell.textContent = at ? `${at.c}, ${at.r}` : '—';
+  statLayer.textContent = LAYER_LABELS[activeLayer];
+  statTile.textContent = selectionText();
+  statStart.textContent = start ? `${start.c}, ${start.r}` : 'not set';
+  statEnd.textContent = flagDigits().map(d => d + 'F').join(' ') || 'none';
+}
+
+// Which flag numbers this level actually holds, so the status line says what
+// the exits have to cover.
+function flagDigits() {
+  const fi = OBJ_BY_GLYPH.get('F');
+  const seen = new Set();
+  for (const layer of layers) {
+    for (const row of layer) {
+      for (const cell of row) if (cell && cell.oi === fi) seen.add(cell.id);
+    }
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+// Both palettes show one selection between them, so there is never a question
+// of which one a click will paint.
+function refreshSelection() {
+  swatches.forEach((s, j) => s.cell.classList.toggle('on', mode === 'tile' && j === tileIndex));
+  objSwatches.forEach((s, j) => s.cell.classList.toggle('on', mode === 'object' && j === objIndex));
+  pick(tintsEl, tintIndex, 'tint');
+  pick(objDigitsEl, objDigit, 'tint');
+  renderProps();
+  drawSwatches();
+  updateStatus(hover);
+}
+
+function pick(seg, value, attr) {
+  seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset[attr] === String(value)));
+}
+
+const layerSeg = document.getElementById('layerSeg');
+layerSeg.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  activeLayer = +b.dataset.layer;
+  pick(layerSeg, activeLayer, 'layer');
+  render(); updateStatus(hover);
+});
+
+// An escape hatch for when the layer being worked on has got lost in the
+// finished picture; off by default, so what is on screen is what will play.
+const dimBtn = document.getElementById('dimBtn');
+dimBtn.addEventListener('click', () => {
+  dimOthers = !dimOthers;
+  dimBtn.classList.toggle('on', dimOthers);
+  dimBtn.textContent = dimOthers ? 'Showing this layer only' : 'Dim the other layers';
+  render();
+});
+
+const toolSeg = document.getElementById('toolSeg');
+toolSeg.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  tool = b.dataset.tool;
+  pick(toolSeg, tool, 'tool');
+});
+
+const zoomSeg = document.getElementById('zoomSeg');zoomSeg.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  zoom = +b.dataset.zoom;
+  pick(zoomSeg, zoom, 'zoom');
+  resize(cols, rows, true);
+  render();
+});
+
+// The palette draws itself from the sheet, so a new tile row shows up here
+// without the editor being told about it.
+const paletteEl = document.getElementById('palette');
+const swatches = [];
+PALETTE.forEach((p, i) => {
+  const cell = document.createElement('div');
+  cell.className = 'tile';
+  cell.title = `${p.label} — ${hitText(p.hit)}`;
+  const cv = document.createElement('canvas');
+  cv.width = TILE; cv.height = TILE;
+  const tag = document.createElement('span');
+  tag.className = 'tag';
+  tag.textContent = p.label;
+  cell.append(cv, tag);
+  cell.addEventListener('click', () => {
+    mode = 'tile';
+    tileIndex = i;
+    tool = 'paint';
+    pick(toolSeg, tool, 'tool');
+    refreshSelection();
+  });
+  paletteEl.appendChild(cell);
+  swatches.push({ cell, ctx: cv.getContext('2d') });
+});
+
+// Same again for the objects, out of the glyph map rather than the sheet.
+const SWATCH = 40;
+const objPaletteEl = document.getElementById('objPalette');
+const objSwatches = [];
+OBJECTS.forEach((o, i) => {
+  const cell = document.createElement('div');
+  cell.className = 'tile';
+  const cv = document.createElement('canvas');
+  cv.width = SWATCH; cv.height = SWATCH;
+  const tag = document.createElement('span');
+  tag.className = 'tag';
+  tag.textContent = o.glyph;
+  cell.append(cv, tag);
+  cell.addEventListener('click', () => {
+    mode = 'object';
+    objIndex = i;
+    tool = 'paint';
+    pick(toolSeg, tool, 'tool');
+    refreshSelection();
+  });
+  objPaletteEl.appendChild(cell);
+  objSwatches.push({ cell, ctx: cv.getContext('2d'), glyph: o.glyph });
+});
+
+// An object's art can be many tiles across, so a swatch scales it to fit. It
+// is centred by its frame rather than by its anchor: a door's anchor is the
+// top-left corner it stands in, which would hang it off the swatch. The glow
+// goes on too — for a key or a door that colour is the only thing the info
+// digit changes.
+function drawObjectSwatch(c2, glyph, digit) {
+  c2.clearRect(0, 0, SWATCH, SWATCH);
+  const name = objName(glyph, digit);
+  const def = atlas.def(name);
+  if (!def.frame) return;
+  const [fw, fh] = atlas.size(name);
+  const scale = Math.min(1, SWATCH / fw, SWATCH / fh);
+  const x = def.anchor[0] - fw / 2, y = def.anchor[1] - fh / 2;
+  const frame = objFrame(glyph, digit);
+  c2.save();
+  c2.translate(SWATCH / 2, SWATCH / 2);
+  c2.scale(scale, scale);
+  withCtx(c2, () => {
+    atlas.draw(name, x, y, frame);
+    atlas.drawMask(name, digit, x, y, frame);
+  });
+  c2.restore();
+}
+
+function drawSwatches() {
+  swatches.forEach((s, i) => {
+    s.ctx.clearRect(0, 0, TILE, TILE);
+    s.ctx.imageSmoothingEnabled = false;
+    withCtx(s.ctx, () => sheet.drawCell(PALETTE[i].sheetRow, tintIndex, 0, 0));
+  });
+  objSwatches.forEach(s => {
+    drawObjectSwatch(s.ctx, s.glyph, objDigit);
+    const part = atlas.partFor(s.glyph, objDigit);
+    s.cell.title = `${objDigit}${s.glyph}0 — ${objName(s.glyph, objDigit)}${part ? ' (' + part + ')' : ''}`;
+  });
+}
+
+// One strip per palette: a tile's third character is its colour, an object's
+// first is the variant or pairing id. Picking one is picking what to paint, so
+// it selects that palette too.
+function buildDigits(el, count, text, chosen, onPick) {
+  for (let i = 0; i < count; i++) {
+    const b = document.createElement('button');
+    b.textContent = text(i);
+    b.dataset.tint = i;
+    b.classList.toggle('on', i === chosen());
+    b.addEventListener('click', () => {
+      onPick(i);
+      tool = 'paint';
+      pick(toolSeg, tool, 'tool');
+      refreshSelection();
+      render();
+    });
+    el.appendChild(b);
+  }
+}
+
+const tintsEl = document.getElementById('tints');
+const objDigitsEl = document.getElementById('objDigits');
+buildDigits(tintsEl, sheet.colText.length, i => sheet.colText[i], () => tintIndex,
+  i => { mode = 'tile'; tintIndex = i; });
+// an object's digit is always 0-9, whatever colours the sheet happens to name
+buildDigits(objDigitsEl, 10, i => String(i), () => objDigit,
+  i => { mode = 'object'; objDigit = i; });
+
+document.getElementById('resizeBtn').addEventListener('click', () => {
+  const nc = Math.max(4, Math.min(400, +colsInput.value || cols));
+  const nr = Math.max(4, Math.min(60, +rowsInput.value || rows));
+  pushUndo();
+  resize(nc, nr, false);
+  colsInput.value = cols; rowsInput.value = rows;
+  render(); updateStatus(null); save();
+});
+
+document.addEventListener('keydown', e => {
+  if (askResolve) {
+    if (e.key === 'Escape') { e.preventDefault(); closeAsk(false); }
+    if (e.key === 'Enter') { e.preventDefault(); closeAsk(true); }
+    return;                 // no painting or undoing behind the panel
+  }
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+  const layerKey = { '1': 0, '2': 1, '3': 2 }[e.key];
+  if (layerKey !== undefined) {
+    activeLayer = layerKey;
+    pick(layerSeg, activeLayer, 'layer');
+    render(); updateStatus(hover);
+    return;
+  }
+  const toolKey = { p: 'paint', e: 'erase', s: 'start' }[e.key.toLowerCase()];
+  if (toolKey) {
+    tool = toolKey;
+    pick(toolSeg, tool, 'tool');
+  }
+});
+
+// ---------- keeping the work ----------
+function save() {
+  try {
+    stashPack();
+    localStorage.setItem(STORE_KEY, JSON.stringify({ packs, packIndex }));
+  } catch (err) { /* private mode, etc. */ }
+}
+function load() {
+  try {
+    const s = localStorage.getItem(STORE_KEY);
+    if (!s) return false;
+    const data = JSON.parse(s);
+    if (Array.isArray(data.packs) && data.packs.length) {
+      packs = data.packs.filter(p => p && Array.isArray(p.levels) && p.levels.length);
+      packIndex = Math.min(data.packIndex || 0, packs.length - 1);
+    } else if (Array.isArray(data.levels) && data.levels.length) {
+      // what the editor saved before it held more than one pack
+      packs = [{ name: data.packName || '', levels: data.levels, current: data.current || 0 }];
+      packIndex = 0;
+    } else {
+      return false;
+    }
+    if (!packs.length) return false;
+    applyPack(packs[packIndex]);
+    return true;
+  } catch (err) { return false; }
+}
+
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  const text = toLevelJson();
+  try {
+    await navigator.clipboard.writeText(text);
+    levelMsg.textContent = 'Level JSON copied — drop it in a pack’s levels/ folder.';
+  } catch (err) {
+    window.prompt('Copy the level:', text);
+  }
+});
+
+document.getElementById('pasteBtn').addEventListener('click', () => {
+  const text = window.prompt('Paste a level file, or bare map text:');
+  if (text === null) return;
+  pushUndo();
+  const error = fromText(text);
+  if (error) { levelMsg.textContent = error; return; }
+  resize(cols, rows, true);
+  colsInput.value = cols; rowsInput.value = rows;
+  nameInput.value = levelName;
+  levelMsg.textContent = 'Loaded.';
+  propsKey = null;
+  render(); renderProps(); refreshLevels(); updateStatus(null); save();
+});
+
+// ---------- test ----------
+// The real game, in a frame, handed the whole pack rather than one level: the
+// frame's own campaign list is replaced with the editor's, so a flag walks on
+// to the level it points at exactly as it would off disk.
+const testOverlay = document.getElementById('testOverlay');
+const testFrame = document.getElementById('testFrame');
+const testMsg = document.getElementById('testMsg');
+let testFrom = 0;        // the level Test was pressed on, to come back to
+
+// What `loadLevelByIndex` wants of a campaign entry. `exits` is by flag digit
+// and holds indices into this same list, which is what makes a flag carry on.
+// `manifest` and `background` are left for the frame to fill: they are its own
+// lexical globals and cannot be read from out here.
+function campaignEntries() {
+  const pack = { name: packName || 'Level Pack' };
+  return levels.map((src, i) => {
+    const exits = [];
+    const want = src.exits || [];
+    let last = -1;
+    want.forEach((t, d) => { if (t !== null && t !== undefined && levels[t]) last = d; });
+    for (let d = 0; d <= last; d++) exits[d] = want[d];
+    let lastMsg = -1;
+    (src.messages || []).forEach((m, k) => { if (m) lastMsg = k; });
+    return {
+      map: mapLines(src).join('\n'),
+      name: titleAt(i),
+      messages: Array.from({ length: lastMsg + 1 }, (_, k) => src.messages[k] || ''),
+      pick: [],
+      pack,
+      tileset: {},                 // the defaults, which is what the board drew with
+      background: bgForPlay(src),
+      music: src.music || null,
+      manifestUrl: null,
+      soundsUrl: src.sounds ? soundDir + src.sounds : null,
+      sounds: null,
+      glyphs: undefined,
+      exits,
+      returns: []
+    };
+  });
+}
+
+// Off disk the frame resolves a level's background itself; these never touch
+// disk, so hand it the shape `parseBackground` would have made, texture and
+// all already an absolute URL.
+function bgForPlay(src) {
+  const bg = { ...DEFAULT_BG, ...(src.bg || {}) };
+  return {
+    color: bg.color,
+    texture: bg.texture ? bgDir + bg.texture : null,
+    scroll: bg.scroll
+  };
+}
+
+document.getElementById('testBtn').addEventListener('click', () => {
+  if (!start) { levelMsg.textContent = 'Place a start (tool S) before testing.'; return; }
+  stashLevel();
+  preview.pause();            // the frame is about to play the real thing
+  testFrom = current;        // play walks the pack; the editor comes back here
+  levelMsg.textContent = '';
+  testOverlay.classList.remove('hidden');
+  testMsg.textContent = 'Loading the game…';
+  // the live engine, on this editor's own asset pack — not the built page
+  testFrame.src = `${GAME_PAGE}?assets=${encodeURIComponent(EDITOR_DIR)}`;
+});
+
+testFrame.addEventListener('load', () => {
+  if (testOverlay.classList.contains('hidden')) return;
+  const w = testFrame.contentWindow;
+  // The game disables Play until its objects and levels are off disk; that is
+  // the same thing a custom level needs, so wait for it.
+  const ready = w.document.getElementById('playBtn');
+  let waited = 0;
+  const tick = () => {
+    if (testOverlay.classList.contains('hidden')) return;
+    if (ready.disabled) {
+      waited += 100;
+      if (waited > 20000) { testMsg.textContent = 'The game did not finish loading.'; return; }
+      setTimeout(tick, 100);
+      return;
+    }
+    try {
+      w.__editorPack = { levels: campaignEntries(), start: testFrom };
+      // The game's own globals are top-level `const`/`let`, which live in the
+      // frame's lexical scope rather than on its window, so they can only be
+      // reached through an indirect eval. Progress is blanked while we are in
+      // here: a trial run must not write over her stars or achievements.
+      w.eval(`
+        BUILTIN_LEVELS = window.__editorPack.levels.map(l => Object.assign({}, l, {
+          manifest: atlas.root
+        }));
+        fitLevelStars(BUILTIN_LEVELS.length);
+        saveLevelStars = () => {};
+        unlockAchievement = () => {};
+        submitScoreToLeaderboard = () => {};
+        setHighScore = () => {};
+      `);
+      const start = w.__editorPack.start;
+      // The frame fetches the level's sheets and sound set the same way it
+      // would off disk; walking on to another level already waits for its own.
+      w.eval('loadLevelResources(BUILTIN_LEVELS[window.__editorPack.start])').then(() => {
+        const result = w.loadLevelByIndex(start, true);
+        if (!result.ok) { testMsg.textContent = result.error; return; }
+        try { w.eval('sound.resume(); sound.startMusic();'); } catch (err) { /* no audio, no matter */ }
+        w.startGame();
+        testMsg.textContent = levels.length > 1
+          ? `Playing "${titleAt(testFrom)}" — flags carry on through the pack. Click the frame if the keys do nothing.`
+          : 'Playing your level — click the frame first if the keys do nothing.';
+        testFrame.focus();
+      }).catch(err => {
+        testMsg.textContent = 'Could not start the level: ' + err.message;
+      });
+    } catch (err) {
+      testMsg.textContent = 'Could not start the level: ' + err.message;
+    }
+  };
+  tick();
+});
+
+document.getElementById('stopTestBtn').addEventListener('click', () => {
+  testOverlay.classList.add('hidden');
+  testFrame.src = 'about:blank';
+  // however far play wandered through the pack, editing picks up where it left off
+  if (levels[testFrom] && testFrom !== current) {
+    openLevel(testFrom);
+  } else {
+    levelSelect.value = current;
+  }
+});
+
+// ---------- boot ----------
+// The sheet and the object atlas are images like any other, so the first full
+// paint waits for them. The editor is usable before they land — blocks show as
+// labelled placeholders until the art arrives.
+if (!load()) {
+  packs = [blankPack()];
+  packIndex = 0;
+  applyPack(packs[0]);
+}
+resize(cols, rows, true);
+refreshPacks();
+refreshLevels();
+refreshBg();
+refreshMusic();
+refreshSounds();
+render();
+refreshSelection();
+textureReady(sheet.img).then(() => { refreshSelection(); render(); });
+
+// Each panel group folds away, so a long panel can be cut back to the parts in
+// use. Done here rather than in the markup: the groups stay plain blocks, and
+// the key is read once so a label that renames itself keeps its setting.
+const PANEL_KEY = 'warmWormEditorPanel';
+let panelShut = {};
+try { panelShut = JSON.parse(localStorage.getItem(PANEL_KEY)) || {}; } catch (err) { /* ignore */ }
+
+document.querySelectorAll('#panel .group').forEach((group, i) => {
+  const label = group.querySelector(':scope > label');
+  if (!label) return;
+  const key = label.textContent.trim() || String(i);
+  const body = document.createElement('div');
+  body.className = 'groupBody';
+  while (label.nextSibling) body.appendChild(label.nextSibling);
+  group.appendChild(body);
+  label.classList.add('fold');
+  group.classList.toggle('shut', !!panelShut[key]);
+  label.addEventListener('click', () => {
+    group.classList.toggle('shut');
+    panelShut[key] = group.classList.contains('shut');
+    try { localStorage.setItem(PANEL_KEY, JSON.stringify(panelShut)); } catch (err) { /* ignore */ }
+  });
+});
+
+// The asset pack's library. Paths inside it are relative to the manifest, so
+// the whole folder can be moved as one.
+fetch(EDITOR_LIBRARY)
+  .then(r => r.json())
+  .then(async data => {
+    const base = new URL(EDITOR_LIBRARY, location.href);
+    const art = data.backgrounds || {};
+    bgDir = new URL(art.dir || 'backgrounds/', base).href;
+    bgLibrary = Array.isArray(art.items) ? art.items : [];
+    const sets = data.sounds || {};
+    soundDir = new URL(sets.dir || 'sounds/', base).href;
+    soundDefault = sets.default || 'default.json';
+    soundLibrary = Array.isArray(sets.items) ? sets.items : [];
+    // the manifests themselves, since the pack is written from them and the
+    // list of tracks is read out of them
+    await Promise.all([soundDefault, ...soundLibrary.map(e => e.file)].map(async file => {
+      try { soundSets.set(file, await (await fetch(soundDir + file)).json()); } catch (err) { /* skipped */ }
+    }));
+    const root = soundSets.get(soundDefault) || { sounds: {} };
+    musicLibrary = Object.entries(root.sounds || {}).filter(([, d]) => d && d.loop).map(([id]) => id);
+    // levels stashed before tracks were ids still name a file
+    levels.forEach(s => { if (s.music) s.music = knownTrack(s.music); });
+    refreshBg();
+    refreshMusic();
+    refreshSounds();
+    render();
+    save();
+  })
+  .catch(() => { /* the colour picker still works without the library */ });
+
+atlas.loadRoot(EDITOR_OBJECTS)
+  .then(() => { refreshSelection(); render(); })
+  .catch(err => {
+    levelMsg.textContent = location.protocol === 'file:'
+      ? 'Object art loads from the asset pack, which browsers block over file://. Run npm run editor.'
+      : 'Object art unavailable: ' + err.message;
+  });
+</script>
+</body>
+</html>

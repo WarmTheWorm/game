@@ -1,0 +1,55 @@
+{
+  "_comment": "An asset pack: everything the level editor draws with, in one folder. Made with the asset pack creator.",
+  "tileset": {
+    "texture": "tiles/tiles.png"
+  },
+  "objects": {
+    "manifest": "objects/objects.json"
+  },
+  "backgrounds": {
+    "dir": "backgrounds/",
+    "items": [
+      {
+        "file": "clouds.png",
+        "name": "Clouds",
+        "color": "#6bb8e8",
+        "scroll": 0.25
+      },
+      {
+        "file": "stars.png",
+        "name": "Stars",
+        "color": "#140c1c",
+        "scroll": 0.15
+      },
+      {
+        "file": "bricks.png",
+        "name": "Bricks",
+        "color": "#3a2b45",
+        "scroll": 0.8
+      },
+      {
+        "file": "leaves.png",
+        "name": "Leaves",
+        "color": "#1f3a24",
+        "scroll": 0.45
+      },
+      {
+        "file": "cave.png",
+        "name": "Cave",
+        "color": "#241a2e",
+        "scroll": 0.6
+      },
+      {
+        "file": "rain.png",
+        "name": "Rain",
+        "color": "#2a3346",
+        "scroll": 0.9
+      }
+    ]
+  },
+  "sounds": {
+    "dir": "sounds/",
+    "default": "default.json",
+    "items": []
+  }
+}

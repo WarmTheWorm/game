@@ -1,0 +1,26 @@
+{
+  "_comment": "The level editor's resource library. The folder stands on its own: the sheet, the object manifest, the sound library and game.html beside this file are built from the game's own by _sync.ps1, and the editor reads nothing outside assets/editor/. A pack downloaded from the editor is given a copy of whatever it uses.",
+  "game": "game.html",
+  "tileset": { "texture": "tiles/tiles.png" },
+  "objects": { "manifest": "objects/objects.json" },
+  "backgrounds": {
+    "dir": "backgrounds/",
+    "items": [
+      { "file": "clouds.png", "name": "Clouds", "color": "#6bb8e8", "scroll": 0.25 },
+      { "file": "stars.png", "name": "Stars", "color": "#140c1c", "scroll": 0.15 },
+      { "file": "bricks.png", "name": "Bricks", "color": "#3a2b45", "scroll": 0.8 },
+      { "file": "leaves.png", "name": "Leaves", "color": "#1f3a24", "scroll": 0.45 },
+      { "file": "cave.png", "name": "Cave", "color": "#241a2e", "scroll": 0.6 },
+      { "file": "rain.png", "name": "Rain", "color": "#2a3346", "scroll": 0.9 }
+    ]
+  },
+  "sounds": {
+    "dir": "sounds/",
+    "default": "default.json",
+    "items": [
+      { "file": "soft.json", "name": "Soft" },
+      { "file": "retro.json", "name": "Retro" },
+      { "file": "clips.json", "name": "Recorded" }
+    ]
+  }
+}

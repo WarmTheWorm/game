@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Asset Pack Creator — Warm the Worm</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="top">
+  <h1 class="logo">Asset<span>Pack</span></h1>
+  <label class="namebox"><span>name</span><input id="packName" value="My Pack" aria-label="Pack name"></label>
+  <span class="grow"></span>
+  <button class="btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>↶</button>
+  <button class="btn" id="redoBtn" title="Redo (Ctrl+Y)" disabled>↷</button>
+  <button class="btn" id="importBtn">Import a pack…</button>
+  <button class="btn" id="resetBtn">Start over</button>
+  <button class="btn" id="levelBtn" title="Open the level editor on this pack as it stands now">Open in level editor ↗</button>
+  <button class="btn primary" id="exportBtn">⬇ Download .zip</button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab on" data-tab="objects">Objects</button>
+  <button class="tab" data-tab="tiles">Tiles</button>
+  <button class="tab" data-tab="backgrounds">Backgrounds</button>
+  <button class="tab" data-tab="sounds">Sounds</button>
+  <button class="tab" data-tab="pack">Pack</button>
+</nav>
+
+<!-- ---------------- objects ---------------- -->
+<main class="page on" data-page="objects">
+  <aside class="rail">
+    <div class="panel">
+      <div class="ph"><h2>Objects</h2><button class="btn sm" id="objAdd">+ New</button></div>
+      <div class="list" id="objList"></div>
+    </div>
+  </aside>
+
+  <section class="work" id="objWork">
+    <div class="panel">
+      <div class="ph">
+        <h2>Frames</h2>
+        <span class="grow"></span>
+        <button class="btn sm" id="frAdd">+ Images</button>
+        <button class="btn sm" id="frStrip">Slice a strip…</button>
+        <button class="btn sm" id="frDraw">✎ Draw</button>
+      </div>
+      <div class="pb">
+        <div class="parts" id="objParts"></div>
+        <div class="lanes" id="objLanes"></div>
+        <p class="hint">A part is a named run of frames — the game picks one with <code>object:part</code>. Drag frames between parts, double-click one to paint it.</p>
+        <p class="hint" id="partNames" hidden></p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h2>Properties</h2><span class="grow"></span><span class="mono" id="objCalc"></span></div>
+      <div class="pb insp" id="objProps"></div>
+    </div>
+  </section>
+
+  <aside class="side">
+    <div class="panel">
+      <div class="ph"><h2>Preview &amp; shape</h2><span class="grow"></span><span class="mono" id="pvRead"></span></div>
+      <div class="pb">
+        <div class="stage shape-stage" id="objStage"><canvas id="objPv" tabindex="0" aria-label="Pivot and collision editor"></canvas></div>
+        <div class="row gap">
+          <button class="btn sm" id="pvPlay">Pause</button>
+          <label class="toggle"><input type="checkbox" id="pvGrid" checked> Tile grid</label>
+          <label class="toggle" id="pvGlowWrap" hidden><input type="checkbox" id="pvGlow" checked> Glow</label>
+          <button class="pairdot" id="pvPair" hidden title="Pairing colour — what it glows in beside a key or door of that number"></button>
+          <span class="grow"></span>
+          <div class="seg zoomseg" id="pvZoom" title="Zoom">
+            <button data-z="-1" aria-label="Zoom out">−</button><button data-z="0" aria-label="Fit">Fit</button><button data-z="1" aria-label="Zoom in">+</button>
+          </div>
+        </div>
+        <div id="objShape" class="shape"></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<!-- ---------------- tiles ---------------- -->
+<main class="page" data-page="tiles">
+  <section class="work wide">
+    <div class="panel">
+      <div class="ph"><h2>Terrain sheet</h2><span class="grow"></span>
+        <button class="btn sm" id="tilesNew">✎ New sheet…</button>
+        <button class="btn sm" id="tilesLoad">Load tiles.png…</button></div>
+      <div class="pb">
+        <p class="hint">The sheet is a labelled grid: one header cell of gutter down the left and across the top, then a row per tile type and a column per tint. A map block names a tile with its two characters plus a colour, so row <code>1#</code> column <code>1</code> is the cell <code>1#1</code> draws.</p>
+        <div class="sheetwrap" id="tilesWrap"><canvas id="tilesCv"></canvas></div>
+        <div class="row gap"><p class="mono" id="tilesDims">No sheet loaded</p><span class="grow"></span><span class="mono" id="tilesHover"></span></div>
+        <p class="hint">Click a tile to paint it.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Labels</h2></div>
+      <div class="pb insp" id="tilesProps"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ---------------- backgrounds ---------------- -->
+<main class="page" data-page="backgrounds">
+  <section class="work wide">
+    <div class="panel">
+      <div class="ph"><h2>Backgrounds</h2><span class="grow"></span>
+        <button class="btn sm" id="bgDraw">✎ Draw</button>
+        <button class="btn sm" id="bgAdd">+ Images…</button></div>
+      <div class="pb">
+        <p class="hint">Tiling sprites a level can sit in front of. Transparent art works best — the level's own colour shows through, so one sheet suits several moods.</p>
+        <div class="bglist" id="bgList"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ---------------- sounds ---------------- -->
+<main class="page" data-page="sounds">
+  <aside class="rail">
+    <div class="panel">
+      <div class="ph"><h2>Sounds</h2><span class="grow"></span><button class="btn sm" id="sndAdd">+ New</button></div>
+      <div class="list" id="sndList"></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Add</h2></div>
+      <div class="pb col gap">
+        <button class="btn sm" id="sndMusic">+ Music track…</button>
+        <button class="btn sm" id="sndPreset">+ From a preset…</button>
+      </div>
+    </div>
+  </aside>
+
+  <section class="work" id="sndWork">
+    <div class="panel">
+      <div class="ph"><h2 id="sndTitle">Nothing selected</h2><span class="grow"></span>
+        <button class="btn sm" id="sndPlay">▶ Play</button>
+        <button class="btn sm" id="sndCopy" title="Copy this sound as JSON (Ctrl+C)">Copy</button>
+        <button class="btn sm" id="sndPaste" title="Replace its layers from JSON (Ctrl+V)">Paste</button>
+        <button class="btn sm danger" id="sndDel">Delete sound</button></div>
+      <div class="pb">
+        <canvas id="sndScope"></canvas>
+        <div class="tl">
+          <canvas id="sndTl"></canvas>
+          <p class="tlhint" id="sndTlHint"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph">
+        <div class="chips" id="sndChips"></div>
+        <span class="grow"></span>
+        <button class="btn sm ghost" id="layOsc">+ Oscillator</button>
+        <button class="btn sm ghost" id="layNoise">+ Noise</button>
+      </div>
+      <div class="pb">
+        <div class="insp" id="sndLayer"></div>
+        <div class="inspfoot">
+          <button class="btn sm" id="laySolo">Play layer only</button>
+          <button class="btn sm" id="layDup">Duplicate layer</button>
+          <button class="btn sm danger" id="layDel" title="Delete">Delete layer</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h2>The whole sound</h2></div>
+      <div class="pb"><div class="insp" id="sndProps"></div></div>
+    </div>
+  </section>
+</main>
+
+<!-- ---------------- pack ---------------- -->
+<main class="page" data-page="pack">
+  <section class="work wide">
+    <div class="panel">
+      <div class="ph"><h2>What's in the pack</h2></div>
+      <div class="pb"><div id="packSummary"></div></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Files it will write</h2></div>
+      <div class="pb"><pre class="code" id="packTree"></pre>
+        <p class="hint">Unzip this into <code>assetpacks/</code> beside the others, then open the level editor with <code>npm run editor -- &lt;name&gt;</code>.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ---------------- paint ---------------- -->
+<dialog id="paint">
+  <div class="pt-head">
+    <strong id="ptWhere"></strong><span class="mono" id="ptIdx"></span>
+    <span class="hint" id="ptMsg" aria-live="polite"></span>
+    <span class="grow"></span>
+    <button class="btn sm" id="ptPrev">‹</button><button class="btn sm" id="ptNext">›</button>
+    <button class="btn sm" id="ptNew">+ Frame</button>
+    <button class="btn sm" id="ptCopy">Duplicate</button>
+    <button class="btn sm danger" id="ptDel">🗑 Delete frame</button>
+    <button class="btn sm primary" id="ptDone">Done</button>
+  </div>
+  <div class="pt-body">
+    <div class="pt-tools">
+      <div class="tools" id="ptTools"></div>
+      <div class="pal" id="ptPal"></div>
+      <div class="row gap"><input type="color" id="ptColor" value="#7fd96a"><span class="mono" id="ptHex"></span>
+        <button class="btn sm" id="ptTransp" title="Draw fully transparent pixels">∅</button></div>
+      <label class="ctl"><div class="row"><span>Opacity</span><output id="ptAlphaV"></output></div>
+        <input type="range" id="ptAlpha" min="0" max="100" value="100"></label>
+      <div class="row gap" id="ptSize">
+        <button class="btn sm on" data-s="1">1px</button><button class="btn sm" data-s="2">2px</button><button class="btn sm" data-s="3">3px</button>
+      </div>
+      <div class="row gap"><button class="btn sm" id="opUndo">↶</button><button class="btn sm" id="opRedo">↷</button>
+        <button class="btn sm" id="opFh">⇆</button><button class="btn sm" id="opFv">⇅</button>
+        <button class="btn sm" id="opClear">Clear</button></div>
+      <div class="row gap"><button class="btn sm" id="opCopy" title="Copy every pixel of this frame (Ctrl+C)">Copy</button>
+        <button class="btn sm" id="opPaste" title="Replace this frame with the copied pixels (Ctrl+V)" disabled>Paste</button></div>
+      <div class="row gap">
+        <button class="btn sm" data-shift="-1,0">←</button><button class="btn sm" data-shift="1,0">→</button>
+        <button class="btn sm" data-shift="0,-1">↑</button><button class="btn sm" data-shift="0,1">↓</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="ptMirror"> Mirror</label>
+      <label class="toggle"><input type="checkbox" id="ptGrid" checked> Grid</label>
+      <label class="toggle"><input type="checkbox" id="onOn" checked> Onion skin</label>
+      <label class="ctl"><span>Previous frames</span>
+        <select id="onPrev"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+      <label class="toggle"><input type="checkbox" id="onNext"> Next frame too</label>
+      <label class="ctl"><div class="row"><span>Onion opacity</span></div>
+        <input type="range" id="onOp" min="10" max="80" value="40"></label>
+    </div>
+    <div class="pt-stage" id="ptStage"><canvas id="pc"></canvas></div>
+    <div class="pt-aside">
+      <canvas id="pmini"></canvas>
+      <div class="row gap"><button class="btn sm" id="ptZin">+</button><button class="btn sm" id="ptZout">−</button><button class="btn sm" id="ptZfit">Fit</button></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="bgview">
+  <div class="pt-head">
+    <h3 id="bvName"></h3><span class="mono" id="bvSize"></span><span class="grow"></span>
+    <button class="btn sm" id="bvClose">Close</button>
+  </div>
+  <div class="bv-stage" id="bvStage"></div>
+</dialog>
+
+<div id="toast" hidden></div>
+
+<dialog id="ask">
+  <form method="dialog" class="askform">
+    <h3 id="askTitle"></h3>
+    <div id="askBody" class="col gap"></div>
+    <div class="row gap" style="justify-content:flex-end">
+      <button class="btn" value="">Cancel</button>
+      <button class="btn primary" value="ok" id="askOk">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- the engine's own board plays the previews, so what is heard here is what
+     the game will make of these defs; it wants a music element to exist -->
+<audio id="bgMusic" loop preload="auto"></audio>
+
+<script src="js/util.js"></script>
+<script src="js/zip.js"></script>
+<script src="js/db.js"></script>
+<script src="js/pack.js"></script>
+<script src="js/atlas.js"></script>
+<script src="js/paint.js"></script>
+<script src="js/objects.js"></script>
+<script src="js/shape.js"></script>
+<script src="js/tiles.js"></script>
+<script src="js/backgrounds.js"></script>
+<script src="../src/js/sound.js"></script>
+<script src="js/sounds.js"></script>
+<script src="js/import.js"></script>
+<script src="js/export.js"></script>
+<script src="js/history.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

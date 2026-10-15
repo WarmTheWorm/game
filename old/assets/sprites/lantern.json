@@ -1,0 +1,8 @@
+{
+  "frames": 9,
+  "fps": 6,
+  "tiles": 1.25,
+  "pivot": [0.5, 0.5],
+  "parts": { "biglight": [6, 8], "fulllight": [0, 2], "smalllight": [3, 5] },
+  "collision": { "shape": "circle", "r": 11 }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "Enemy Test",
+  "first": "lantern.json",
+  "tileset": {
+    "texture": "tiles.png",
+    "size": 64,
+    "row_0": "01234567890123      ",
+    "row_1": "##########////TU*o$~",
+    "row_C": "SSSSSSSSSS0123 ^    ",
+    "row_D": "DDDDDDDDDDDDDDDDDDDD",
+    "col_0": "0123456789"
+  },
+  "objects": {
+    "manifest": "objects.json",
+    "glyphs": {
+      "E": ["beetle", "moth", "frog"],
+      "C": ["coin", "coin2"],
+      "G": "gem",
+      "K": "key",
+      "S": "shield",
+      "N": ["lantern:fulllight", "lantern:biglight", "lantern:smalllight"],
+      "O": "portal",
+      "!": "checkpoint",
+      "V": "plant",
+      "R": ["rock", "rock2"],
+      "L": "door",
+      "F": "flag",
+      "M": "sign",
+      "W": "cloud",
+      ">": "platform",
+      "<": "platform",
+      "^": "platform",
+      "v": "platform"
+    }
+  }
+}

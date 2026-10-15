@@ -1,0 +1,25 @@
+{
+  "name": "warm-the-worm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A tile-based platformer: a plain-script engine, a level editor, and the asset and level packs they feed on.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node tools/bundle.mjs && node tools/pack.mjs",
+    "game": "node tools/serve.mjs game",
+    "editor": "node tools/serve.mjs editor",
+    "creator": "node tools/serve.mjs creator",
+    "start": "node tools/serve.mjs editor",
+    "gen:sprites": "pwsh -NoProfile -File tools/gen/sprites.ps1",
+    "gen:objects": "pwsh -NoProfile -File tools/gen/pack-objects.ps1",
+    "gen:tiles": "pwsh -NoProfile -File tools/gen/tiles.ps1",
+    "gen:backgrounds": "pwsh -NoProfile -File tools/gen/backgrounds.ps1",
+    "gen:clips": "pwsh -NoProfile -File tools/gen/clips.ps1",
+    "gen:music": "pwsh -NoProfile -File tools/gen/music.ps1",
+    "gen:sound-sets": "pwsh -NoProfile -File tools/gen/sound-sets.ps1",
+    "gen:art": "npm run gen:sprites && npm run gen:objects && npm run gen:tiles"
+  }
+}
