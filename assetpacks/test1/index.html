@@ -3205,15 +3205,61 @@ function bodyShade(t) {
   return first + Math.min(last - first, Math.floor(t * (last - first + 1)));
 }
 
+// Every body segment's art, scaled once to the size it is drawn at and to the
+// screen's own pixels and packed side by side into one image, so a frame
+// draws each 1:1 at a whole pixel. It is kept as an Image rather than the
+// canvas it is painted on: measured in Chrome, drawing from a canvas (or an
+// ImageBitmap) costs twice what the scaled original did, from an Image a
+// third less. Rebuilt when her shape, the sheet or the screen scale changes;
+// null — so she is drawn the old way — until the sheet has loaded and the
+// image decoded.
+let segmentAtlas = null;    // { img, ready, key, sheet, arts: [{ sx, sw, sh, w, h, ax, ay }] by segment }
+function ensureSegmentAtlas(last) {
+  const sheet = atlas.sheet, d = atlas.def(WORM.sprite);
+  if (!d.frame || !sheet || !sheet.complete || !sheet.naturalWidth) return null;
+  const key = [WORM.sprite, PIXEL_X, last, R, TAIL_SCALE, sheet.src].join('|');
+  if (segmentAtlas && segmentAtlas.key === key && segmentAtlas.sheet === sheet) return segmentAtlas.ready ? segmentAtlas : null;
+  const f = d.frame, arts = [];
+  let x = 0, hMax = 1;
+  for (let i = 1; i < last; i++) {
+    const k = segments[i].r / R, s = (d.scale || 1) * k * PIXEL_X;
+    const sw = Math.max(1, Math.round(f.w * s)), sh = Math.max(1, Math.round(f.h * s));
+    arts[i] = { frame: bodyShade(i / last), sx: x, sw, sh, w: sw / PIXEL_X, h: sh / PIXEL_X, ax: d.anchor[0] * k, ay: d.anchor[1] * k };
+    x += sw + 1;
+    hMax = Math.max(hMax, sh);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, x);
+  canvas.height = hMax;
+  const g = canvas.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  for (const a of arts) if (a) g.drawImage(sheet, f.x + (a.frame % d.frames) * f.w, f.y, f.w, f.h, a.sx, 0, a.sw, a.sh);
+  const img = new Image();
+  const built = { img, ready: false, key, sheet, arts };
+  img.onload = () => { built.ready = true; };
+  img.src = canvas.toDataURL();
+  segmentAtlas = built;
+  return null;
+}
+
 // Her parts are drawn at the head's radius, so each segment scales to its own.
 function drawWorm() {
   const parts = atlas.def(WORM.sprite).parts;
   if (!parts) return; // the loop runs before the manifest lands
   const last = segments.length - 1;
+  const packed = ensureSegmentAtlas(last);
+  const snap = v => Math.round(v * PIXEL_X) / PIXEL_X;   // the camera already sits on a whole pixel
   for (let i = last; i >= 1; i--) {
     const p = segments[i];
     const vis = p.vis ?? 1;
     if (vis <= 0) continue;
+    // a whole body segment, the usual case, from its pre-scaled art; the tail
+    // turns and a fading segment changes size, so those are drawn as before
+    const a = vis === 1 && packed ? packed.arts[i] : null;
+    if (a) {
+      ctx.drawImage(packed.img, a.sx, 0, a.sw, a.sh, snap(p.x - a.ax), snap(p.y - a.ay), a.w, a.h);
+      continue;
+    }
     ctx.save();
     ctx.globalAlpha = vis;
     ctx.translate(p.x, p.y);
