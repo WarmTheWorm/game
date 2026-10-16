@@ -1186,6 +1186,17 @@ function perfFrame(now) {
   perf.since = now;
 }
 
+// The lines under the timings: what was drawn, and the heap.
+function countLines(s) {
+  const c = s.counts;
+  return [
+    `tiles drawn   ${Math.round(c.tiles || 0)}`,
+    `objects       ${Math.round(c.objects || 0)} live, ${Math.round(c.drawn || 0)} drawn`,
+    `images drawn  ${Math.round(c.images || 0)}`,
+    `heap          ${s.heap === null ? 'not told' : s.heap.toFixed(1) + ' MB'}`
+  ];
+}
+
 // The panel, top left under the score, in the canvas's own pixels so it stays
 // crisp and the same size whatever the zoom. A bar is the share of a 60 fps
 // frame's 16.7 ms the stage took.
@@ -1193,45 +1204,48 @@ function drawPerf() {
   if (!perf.on) return;
   const s = perf.shown;
   const dpr = window.devicePixelRatio || 1;
-  const line = 15 * dpr, pad = 8 * dpr, w = 290 * dpr;
+  const line = 15 * dpr, pad = 8 * dpr, gap = line * 0.3;
   const rows = PERF_ROWS.filter(([k]) => !s || s.ms[k] !== undefined);
-  const extra = 4;
-  const h = pad * 2 + line * (rows.length + extra + 1);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  const x0 = 10 * dpr, y0 = 44 * dpr;
-  ctx.fillStyle = 'rgba(10,6,20,0.78)';
-  ctx.fillRect(x0, y0, w, h);
   ctx.font = `${11 * dpr}px ui-monospace, Menlo, Consolas, monospace`;
   ctx.textBaseline = 'top';
+  const x0 = 10 * dpr, y0 = 44 * dpr;
+  // the label column is as wide as its longest label, the bars follow, and
+  // the numbers end flush at the panel's right edge
+  const labelW = Math.max(...PERF_ROWS.map(([, l]) => ctx.measureText(l).width));
+  const bx = x0 + pad + labelW + 10 * dpr, bw = 70 * dpr;
+  const numW = ctx.measureText('000.00 ms').width;
+  const head = s ? `${s.fps.toFixed(0)} fps · ${(s.counts.steps || 0).toFixed(2)} steps a frame` : 'measuring…';
+  const lines = s ? countLines(s) : [];
+  const w = Math.max(bx + bw + 8 * dpr + numW, ...[head, ...lines].map(t => x0 + pad + ctx.measureText(t).width)) - x0 + pad;
+  // header, the stages, a gap, then the counts
+  const h = s ? pad * 2 + line * (1 + rows.length + lines.length) + gap : pad * 2 + line;
+  ctx.fillStyle = 'rgba(10,6,20,0.78)';
+  ctx.fillRect(x0, y0, Math.ceil(w), Math.ceil(h));     // whole pixels, so no soft edge
   let y = y0 + pad;
-  const text = (t, x, color = '#efe9ff') => { ctx.fillStyle = color; ctx.fillText(t, x, y); };
+  const text = (t, x, color = '#efe9ff', align = 'left') => { ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(t, x, y); };
   if (!s) {
-    text('measuring…', x0 + pad);
+    text(head, x0 + pad);
     ctx.restore();
     return;
   }
   const budget = 1000 / 60;
-  text(`${s.fps.toFixed(0)} fps · ${(s.counts.steps || 0).toFixed(2)} steps a frame`, x0 + pad, '#ffb547');
+  text(head, x0 + pad, '#ffb547');
   y += line;
   for (const [k, label] of rows) {
     const v = s.ms[k] || 0;
     const sub = label.startsWith(' ');
-    const bx = x0 + 168 * dpr, bw = 70 * dpr;
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     ctx.fillRect(bx, y + 3 * dpr, bw, 7 * dpr);
     ctx.fillStyle = v > budget ? '#ff6f6f' : v > budget / 2 ? '#ffb547' : '#6ff0c8';
     ctx.fillRect(bx, y + 3 * dpr, Math.min(1, v / budget) * bw, 7 * dpr);
     text(label, x0 + pad, sub ? '#a69cc9' : '#efe9ff');
-    text(`${v.toFixed(2)} ms`.padStart(9), bx + bw + 4 * dpr, sub ? '#a69cc9' : '#efe9ff');
+    text(`${v.toFixed(2)} ms`, x0 + w - pad, sub ? '#a69cc9' : '#efe9ff', 'right');
     y += line;
   }
-  y += line * 0.3;
-  const c = s.counts;
-  text(`tiles drawn   ${Math.round(c.tiles || 0)}`, x0 + pad, '#a69cc9'); y += line;
-  text(`objects       ${Math.round(c.objects || 0)} live, ${Math.round(c.drawn || 0)} drawn`, x0 + pad, '#a69cc9'); y += line;
-  text(`images drawn  ${Math.round(c.images || 0)}`, x0 + pad, '#a69cc9'); y += line;
-  text(`heap          ${s.heap === null ? 'not told' : s.heap.toFixed(1) + ' MB'}`, x0 + pad, '#a69cc9');
+  y += gap;
+  for (const t of lines) { text(t, x0 + pad, '#a69cc9'); y += line; }
   ctx.restore();
 }
 
