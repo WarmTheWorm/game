@@ -209,12 +209,14 @@ $('#goForm').addEventListener('change', e => {
 // A new sprite for this object, named after it — coin3's is sprite::coin3, a
 // second sprite property's coin3Worn — worn at once and opened on the Sprites
 // tab to be drawn. One undo takes the lot back.
-function newSpriteFor(o, k) {
+async function newSpriteFor(o, k) {
   const base = k === 'sprite' ? o.name : o.name + k[0].toUpperCase() + k.slice(1);
   let name = base, n = 2;
   while (spriteByName(name)) name = base + n++;
+  const s = await askNewSprite(name);
+  if (!s) return;
+  name = s.name;
   markUndo();
-  const s = newSprite(name);
   pack.sprites.push(s);
   o.props[k] = 'sprite::' + name;
   current = s;

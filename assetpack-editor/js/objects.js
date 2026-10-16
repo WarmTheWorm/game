@@ -102,11 +102,35 @@ $('#objList').addEventListener('click', e => {
   savePack();
 });
 
-$('#objAdd').onclick = () => {
-  markUndo();
+// A new sprite's name and frame size, asked for once. It is drawn a game pixel
+// to an art pixel to begin with, so one 64 wide stands two tiles wide; Tiles
+// wide on its preview changes that. null if the dialog was let go.
+async function askNewSprite(name) {
+  const got = await ask('New sprite', [
+    { key: 'name', label: 'Name', value: name },
+    { key: 'w', label: 'Width of a frame (pixels)', type: 'number', value: 32 },
+    { key: 'h', label: 'Height of a frame (pixels)', type: 'number', value: 32 },
+    { type: 'note', label: 'It is drawn a game pixel to a pixel at first — a tile is 32 — and Tiles wide changes that after.' }
+  ], 'Make it');
+  if (!got) return null;
+  const w = parseInt(got.w, 10), h = parseInt(got.h, 10);
+  if (!(w >= 1 && w <= 512 && h >= 1 && h <= 512)) { toast('Pick a size from 1 to 512 pixels', true); return null; }
+  const base = String(got.name).trim().replace(/[^A-Za-z0-9_-]+/g, '') || name;
+  let nm = base, n = 2;
+  while (spriteByName(nm)) nm = base + n++;
+  const s = newSprite(nm);
+  s.fw = w;
+  s.fh = h;
+  s.tiles = num(w / TILE, 6);
+  return s;
+}
+
+$('#objAdd').onclick = async () => {
   let n = 1;
   while (spriteByName('sprite' + n)) n++;
-  const o = newSprite('sprite' + n);
+  const o = await askNewSprite('sprite' + n);
+  if (!o) return;
+  markUndo();
   pack.sprites.push(o);
   current = o;
   renderObjects();
