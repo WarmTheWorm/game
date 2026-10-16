@@ -6,7 +6,8 @@
 const PAL = ['#000000', '#1d1b2e', '#3b3a5c', '#6b6f8f', '#a8adc4', '#ffffff', '#5a2a3a', '#b8433c',
              '#ff7a59', '#ffc861', '#fff3a8', '#2e7a3c', '#7fd96a', '#2a5b8a', '#5ec8ff', '#b48cff'];
 const TOOLS = [['pencil', '✎', 'Pencil', 'B'], ['eraser', '⌫', 'Eraser', 'E'], ['fill', '◧', 'Fill', 'G'],
-               ['picker', '◉', 'Picker', 'I'], ['line', '╱', 'Line', 'L'], ['rect', '▭', 'Rect', 'R']];
+               ['picker', '◉', 'Picker', 'I'], ['line', '╱', 'Line', 'L'], ['rect', '▭', 'Rect', 'R'],
+               ['ellipse', '◯', 'Ellipse', 'C']];
 
 const P = {
   obj: null, f: null, work: null, w: null, onSave: null,
@@ -174,11 +175,69 @@ function shape(p, filled) {
   if (P.tool === 'line') { linePx(a.x, a.y, p.x, p.y, dab); return; }
   const x0 = Math.min(a.x, p.x), x1 = Math.max(a.x, p.x);
   const y0 = Math.min(a.y, p.y), y1 = Math.max(a.y, p.y);
+  if (P.tool === 'ellipse') { ellipsePx(x0, y0, x1, y1, filled, dab); return; }
   if (filled) { for (let y = y0; y <= y1; y++) linePx(x0, y, x1, y, dab); }
   else {
     linePx(x0, y0, x1, y0, dab); linePx(x1, y0, x1, y1, dab);
     linePx(x1, y1, x0, y1, dab); linePx(x0, y1, x0, y0, dab);
   }
+}
+
+// The ellipse that fits the box x0..x1, y0..y1: every pixel whose centre is
+// inside it, or for the outline only those with a neighbour outside, so the
+// ring is one pixel thick and closed at any size.
+function ellipsePx(x0, y0, x1, y1, filled, cb) {
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const rx = (x1 - x0) / 2 + 0.5, ry = (y1 - y0) / 2 + 0.5;
+  const inside = (x, y) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (!inside(x, y)) continue;
+      if (filled || !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1)) cb(x, y);
+    }
+  }
+}
+
+// A stroke around the outside of everything drawn: each empty pixel touching
+// the art side on, and open to the frame's edge, takes the colour — so holes
+// the art closes round are left alone. Once per brush size, so 2px is a
+// two-pixel line.
+function outlinePixels() {
+  const W = P.obj.fw, H = P.obj.fh;
+  const a = Math.round(P.alpha * 255);
+  if (!a) { paintMsg('Pick a colour that is not transparent for the outline'); return; }
+  const id = P.w.getImageData(0, 0, W, H), d = id.data;
+  if (!d.some((v, i) => i % 4 === 3 && v)) { paintMsg('Nothing drawn to outline yet'); return; }
+  pushUndo();
+  const [r, g, b] = hexRgb(P.color);
+  for (let pass = 0; pass < P.size; pass++) {
+    const solid = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) solid[i] = d[i * 4 + 3] ? 1 : 0;
+    const at = (x, y) => x >= 0 && y >= 0 && x < W && y < H && solid[y * W + x];
+    // the empty pixels the frame's edge reaches without crossing the art
+    const out = new Uint8Array(W * H), st = [];
+    for (let x = 0; x < W; x++) st.push(x, 0, x, H - 1);
+    for (let y = 0; y < H; y++) st.push(0, y, W - 1, y);
+    while (st.length) {
+      const y = st.pop(), x = st.pop();
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const k = y * W + x;
+      if (out[k] || solid[k]) continue;
+      out[k] = 1;
+      st.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
+    }
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (!out[y * W + x] || !(at(x - 1, y) || at(x + 1, y) || at(x, y - 1) || at(x, y + 1))) continue;
+        const i = (y * W + x) * 4;
+        d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = a;
+      }
+    }
+  }
+  P.w.putImageData(id, 0, 0);
+  commitPaint();
+  drawPaint();
+  paintMsg(`Outlined in ${P.color}${P.size > 1 ? `, ${P.size}px` : ''}`);
 }
 
 function flood(x, y) {
@@ -294,6 +353,7 @@ function pastePixels() {
 }
 
 $('#opCopy').onclick = copyPixels;
+$('#opOutline').onclick = outlinePixels;
 $('#opPaste').onclick = pastePixels;
 $$('[data-shift]').forEach(b => b.onclick = () => {
   const [dx, dy] = b.dataset.shift.split(',').map(Number);
@@ -357,14 +417,14 @@ pc.addEventListener('pointerdown', e => {
   if (P.tool === 'fill') { pushUndo(); if (flood(p.x, p.y)) commitPaint(); else P.undo.pop(); drawPaint(); return; }
   pushUndo();
   P.drawing = true; P.start = p; P.last = p;
-  if (P.tool === 'line' || P.tool === 'rect') { P.snap = snapshot(); shape(p, e.shiftKey); } else dab(p.x, p.y);
+  if (['line', 'rect', 'ellipse'].includes(P.tool)) { P.snap = snapshot(); shape(p, e.shiftKey); } else dab(p.x, p.y);
   drawPaint();
 });
 pc.addEventListener('pointermove', e => {
   const p = toPx(e);
   P.hover = p;
   if (P.drawing) {
-    if (P.tool === 'line' || P.tool === 'rect') shape(p, e.shiftKey);
+    if (['line', 'rect', 'ellipse'].includes(P.tool)) shape(p, e.shiftKey);
     else { linePx(P.last.x, P.last.y, p.x, p.y, dab); P.last = p; }
   }
   drawPaint();
@@ -385,7 +445,7 @@ document.addEventListener('keydown', e => {
     else if (c === 'KeyV') { e.preventDefault(); pastePixels(); }
     return;
   }
-  const tk = { KeyB: 'pencil', KeyE: 'eraser', KeyG: 'fill', KeyI: 'picker', KeyL: 'line', KeyR: 'rect' }[c];
+  const tk = { KeyB: 'pencil', KeyE: 'eraser', KeyG: 'fill', KeyI: 'picker', KeyL: 'line', KeyR: 'rect', KeyC: 'ellipse' }[c];
   if (tk) { setTool(tk); return; }
   if (c === 'KeyM') $('#ptMirror').click();
   else if (c === 'KeyO') $('#onOn').click();
