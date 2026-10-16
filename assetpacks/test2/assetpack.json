@@ -1,7 +1,13 @@
 {
   "_comment": "An asset pack: everything the level editor draws with, in one folder. Made with the asset pack creator.",
   "tileset": {
-    "texture": "tiles/tiles.png"
+    "texture": "tiles/tiles.png",
+    "size": 64,
+    "row_0": "01234567890123      ",
+    "row_1": "##########////TU*o$~",
+    "row_C": "SSSSSSSSSS0123 ^    ",
+    "row_D": "TTTTTTTTTTTTTTTTDDDD",
+    "col_0": "0123456789"
   },
   "objects": {
     "manifest": "objects/objects.json"

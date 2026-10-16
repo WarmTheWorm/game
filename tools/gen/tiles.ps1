@@ -1,10 +1,10 @@
 # Renders every static tile and decoration into one atlas PNG.
 #
-# The sheet is a labelled grid: a header row across the top naming each tint
-# digit, a header column down the left naming each type ('0#'..'9#' then one
-# row per glyph), and the cells themselves starting one cell in from both.
-# A label reads the same way a map block does — data digit, then glyph — so
-# row '3#' column '1' is the cell a block '3#1' draws.
+# The sheet is a bare grid: a row per type ('0#'..'9#' then one row per
+# glyph) and a column per tint digit 0-9, with no labels — what each row is
+# called and collides as lives in the pack's tileset block, set per row on the
+# asset pack creator's Tiles tab. Row '3#' column '1' is the cell a block
+# '3#1' draws.
 # A cell is 80x80 and holds a 32px tile drawn at 2x — 64px — inset by the 4px
 # margin that decor art overhangs into.
 #
@@ -76,7 +76,6 @@ $S = 2                      # supersample factor: a 32px tile is drawn at 64px
 $TILE = 32
 $PAD = 4                    # decor overhang margin, in tile units
 $CELLPX = ($TILE + $PAD * 2) * $S
-$GUTTER = $CELLPX           # width of the label column / height of the label row
 $LIFT = 0.22                # flat tint blended over the recolour
 $TILEPX = $TILE * $S        # 64 — the tile's own pixels inside the cell
 $INSET = $PAD * $S          # 8  — where the tile starts in the cell
@@ -349,7 +348,7 @@ $types = @(
       $g.FillEllipse((B 140 '#ffffff'), ($cx - 10), ($cy - 11), 20, 14) } }
 )
 
-$atlas = New-Object System.Drawing.Bitmap(($GUTTER + $CELLPX * $TINTS.Count), ($GUTTER + $CELLPX * $types.Count), [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$atlas = New-Object System.Drawing.Bitmap(($CELLPX * $TINTS.Count), ($CELLPX * $types.Count), [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $ag = [System.Drawing.Graphics]::FromImage($atlas)
 $ag.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
 
@@ -359,8 +358,8 @@ for ($row = 0; $row -lt $types.Count; $row++) {
   $src.g.Dispose()
   if (-not $types[$row].decor) { Clear-Gutter $src.bmp }
   for ($ti = 0; $ti -lt $TINTS.Count; $ti++) {
-    $x = $GUTTER + $ti * $CELLPX
-    $y = $GUTTER + $row * $CELLPX
+    $x = $ti * $CELLPX
+    $y = $row * $CELLPX
     if ($null -eq $TINTS[$ti]) {
       if ($types[$row].d0) {
         $marked = Copy-Marked $src.bmp $types[$row].d0
@@ -377,27 +376,6 @@ for ($row = 0; $row -lt $types.Count; $row++) {
   }
   $src.bmp.Dispose()
   "  row {0,2}  {1}" -f $row, $types[$row].n
-}
-
-# Header strips: the tint digit across the top, the type's ASCII name down
-# the left, so the sheet reads as its own legend.
-$ag.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
-$ag.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
-$ag.FillRectangle((B 255 '#1b1b22'), 0, 0, $atlas.Width, $GUTTER)
-$ag.FillRectangle((B 255 '#1b1b22'), 0, 0, $GUTTER, $atlas.Height)
-$font = New-Object System.Drawing.Font 'Consolas', 26, ([System.Drawing.FontStyle]::Bold), ([System.Drawing.GraphicsUnit]::Pixel)
-$ink = B 255 '#f2f2f7'
-$fmt = New-Object System.Drawing.StringFormat
-$fmt.Alignment = [System.Drawing.StringAlignment]::Center
-$fmt.LineAlignment = [System.Drawing.StringAlignment]::Center
-
-for ($ti = 0; $ti -lt $TINTS.Count; $ti++) {
-  $box = New-Object System.Drawing.RectangleF ($GUTTER + $ti * $CELLPX), 0, $CELLPX, $GUTTER
-  $ag.DrawString([string]$ti, $font, $ink, $box, $fmt)
-}
-for ($row = 0; $row -lt $types.Count; $row++) {
-  $box = New-Object System.Drawing.RectangleF 0, ($GUTTER + $row * $CELLPX), $GUTTER, $CELLPX
-  $ag.DrawString($types[$row].g, $font, $ink, $box, $fmt)
 }
 
 $ag.Dispose()

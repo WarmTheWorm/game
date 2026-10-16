@@ -714,10 +714,11 @@ const playSound = name => sound.play(name);
 // per level, and it answers everything about terrain art: which row a map
 // block names and what that row collides as.
 //
-// The sheet is a labelled grid (see tools/gen/tiles.ps1): one header
-// cell of gutter down the left and across the top, then a row per type and a
-// column per tint. Every cell carries a CELL_PAD margin, and only the tile
-// inside it is ever blitted.
+// The sheet is a grid (see tools/gen/tiles.ps1): a row per type and a
+// column per tint, 0 to 9. Every cell carries a CELL_PAD margin, and only the
+// tile inside it is ever blitted. A sheet from before carries one more cell
+// of labels down the left and across the top; it is told by its width, one
+// cell more than its columns, and read past.
 //
 //   row_0  "01234567890123      "   first character of the tile's name
 //   row_1  "##########////TU*o$~"   second character — the glyph
@@ -813,8 +814,14 @@ class Tileset {
     this.img = loadTexture(resolveTexture(sheet.texture, location.href) || DEFAULT_TEXTURE);
     this.size = size;
     this.cell = (TILE + CELL_PAD * 2) * scale;
-    this.gutter = this.cell;     // the labels take exactly one cell
+    this.cols = this.colText.length;
     this.inset = CELL_PAD * scale;
+  }
+
+  // An old sheet's label cell, or 0 — known once the image has its size.
+  get gutter() {
+    const w = this.img.naturalWidth;
+    return w && Math.round(w / this.cell) > this.cols ? this.cell : 0;
   }
 
   // Which sheet row a block names, or -1 if this sheet hasn't got one.
@@ -833,7 +840,8 @@ class Tileset {
 
   // Every row is cropped to its own tile; the cell's margin is never blitted.
   drawCell(row, col, x, y) {
-    const cx = this.gutter + col * this.cell, cy = this.gutter + row * this.cell;
+    const g = this.gutter;
+    const cx = g + col * this.cell, cy = g + row * this.cell;
     ctx.drawImage(this.img, cx + this.inset, cy + this.inset, this.size, this.size,
       x, y, TILE, TILE);
   }

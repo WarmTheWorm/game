@@ -107,6 +107,7 @@ async function boot(already) {
   const folded = split ? [] : migrateGlow(pack);
   // both run: an old pack may need its codes made, then brought up to date
   const lamps = migrateLanterns(pack);
+  const tilesCut = await migrateTileSheet(pack);
   const madeCodes = migrateCodes(pack);
   const recoded = recodeObjects(pack) > 0 || madeCodes;
   for (const o of pack.objects) fillProps(o);
@@ -122,6 +123,10 @@ async function boot(already) {
   renderBackgrounds();
   renderSounds();
   renderPackTab();
+  if (tilesCut) {
+    savePack();
+    toast('The terrain sheet has no labels any more — its rows are named below it');
+  }
   if (lamps) {
     savePack();
     toast(`Each lantern wears its own sprite now — ${lamps} cut from the one they shared`);

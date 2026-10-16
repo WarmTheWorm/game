@@ -42,7 +42,10 @@ async function importPack(dir) {
   next.name = base.replace(/\/$/, '').split('/').pop() || 'Imported';
 
   // tiles
-  const sheetPath = (lib.tileset && lib.tileset.texture) || 'tiles/tiles.png';
+  const ts = lib.tileset || {};
+  const sheetPath = ts.texture || 'tiles/tiles.png';
+  if (ts.size > 0) next.tiles.size = +ts.size;
+  for (const k of ['row_0', 'row_1', 'row_C', 'row_D']) if (typeof ts[k] === 'string') next.tiles[k] = ts[k];
   try {
     const bytes = new Uint8Array(await get(sheetPath));
     next.tiles.src = await blobDataUrl(new Blob([bytes], { type: 'image/png' }));

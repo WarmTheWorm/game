@@ -28,7 +28,17 @@ function assetpackJson() {
   const sets = { dir: 'sounds/', default: 'default.json', items: [] };
   const doc = {
     _comment: 'An asset pack: everything the level editor draws with, in one folder. Made with the asset pack creator.',
-    tileset: { texture: 'tiles/tiles.png' },
+    // the rows as the Tiles tab set them, so the level editor and the game
+    // collide each row the way it was chosen there
+    tileset: {
+      texture: 'tiles/tiles.png',
+      size: pack.tiles.size,
+      row_0: pack.tiles.row_0,
+      row_1: pack.tiles.row_1,
+      row_C: pack.tiles.row_C,
+      row_D: pack.tiles.row_D,
+      col_0: TILE_COLUMNS
+    },
     objects: { manifest: 'objects/objects.json' },
     backgrounds: {
       dir: 'backgrounds/',

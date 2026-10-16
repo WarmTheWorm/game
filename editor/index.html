@@ -398,25 +398,46 @@ const GAME_PAGE = '/src/index.html';   // the engine as it stands, for Test
 let gameFile = '/dist/game.html';      // the built page a pack ships as its index
 
 // ---------- the sheet ----------
-// Only the texture is the editor's own; every row, size and collision rule is
-// the game's default, which is what loadCustomLevel() picks when a pasted
-// level names no tileset — so what is drawn here is what will be played.
-const sheet = new Tileset({ texture: EDITOR_TILES });
+// The rows, size and collision rules are the asset pack's, from its
+// assetpack.json once that is read; until then (or with a pack that names
+// none) the game's defaults. The same block is written into every level pack
+// and handed to Test, so what is drawn here is what will be played.
+let sheetSpec = {};
+let sheet = new Tileset({ texture: EDITOR_TILES });
 
 // One palette entry per row of the sheet. A row whose id is blank matches any
 // info digit, so '0' is written out for it; the rest name their own row.
 const PALETTE = [];
-for (let i = 0; i < DEFAULT_ROW_1.length; i++) {
-  const glyph = DEFAULT_ROW_1[i];
-  if (glyph === ' ') continue;
-  const id = DEFAULT_ROW_0[i] === undefined ? ' ' : DEFAULT_ROW_0[i];
-  PALETTE.push({
-    sheetRow: i,
-    id: isBlank(id) ? '0' : id,
-    glyph,
-    label: (isBlank(id) ? '' : id) + glyph,
-    hit: DEFAULT_ROW_C[i] === undefined ? HIT_NONE : DEFAULT_ROW_C[i]
-  });
+function buildPalette() {
+  const row0 = sheetSpec.row_0 || DEFAULT_ROW_0;
+  const row1 = sheetSpec.row_1 || DEFAULT_ROW_1;
+  const rowC = sheetSpec.row_C || DEFAULT_ROW_C;
+  PALETTE.length = 0;
+  for (let i = 0; i < row1.length; i++) {
+    const glyph = row1[i];
+    if (glyph === ' ') continue;
+    const id = row0[i] === undefined ? ' ' : row0[i];
+    PALETTE.push({
+      sheetRow: i,
+      id: isBlank(id) ? '0' : id,
+      glyph,
+      label: (isBlank(id) ? '' : id) + glyph,
+      hit: rowC[i] === undefined ? HIT_NONE : rowC[i]
+    });
+  }
+}
+buildPalette();
+
+// The tileset block as a level pack or Test names it.
+function sheetBlock(texture) {
+  return {
+    texture,
+    size: sheet.size,
+    row_0: sheetSpec.row_0 || DEFAULT_ROW_0,
+    row_1: sheetSpec.row_1 || DEFAULT_ROW_1,
+    row_C: sheetSpec.row_C || DEFAULT_ROW_C,
+    col_0: sheetSpec.col_0 || DEFAULT_COL_0
+  };
 }
 
 const HIT_TEXT = { ' ': 'no collision', 'S': 'solid', '^': 'top half only' };
@@ -817,14 +838,7 @@ function packJson() {
   return JSON.stringify({
     name: packName || 'Level Pack',
     first: PACK_LEVELS + levelFile(0),
-    tileset: {
-      texture: PACK_TILES + 'tiles.png',
-      size: sheet.size,
-      row_0: DEFAULT_ROW_0,
-      row_1: DEFAULT_ROW_1,
-      row_C: DEFAULT_ROW_C,
-      col_0: DEFAULT_COL_0
-    },
+    tileset: sheetBlock(PACK_TILES + 'tiles.png'),
     objects: { manifest: PACK_OBJECTS + 'objects.json' },
     sounds: PACK_SOUNDS + soundDefault
   }, null, 2);
@@ -1826,6 +1840,9 @@ const zoomSeg = document.getElementById('zoomSeg');zoomSeg.addEventListener('cli
 // without the editor being told about it.
 const paletteEl = document.getElementById('palette');
 const swatches = [];
+function buildTileSwatches() {
+paletteEl.replaceChildren();
+swatches.length = 0;
 PALETTE.forEach((p, i) => {
   const cell = document.createElement('div');
   cell.className = 'tile';
@@ -1846,6 +1863,37 @@ PALETTE.forEach((p, i) => {
   paletteEl.appendChild(cell);
   swatches.push({ cell, ctx: cv.getContext('2d') });
 });
+}
+buildTileSwatches();
+
+// The asset pack's own rows, once assetpack.json is read. Tiles already on the
+// board keep their name (id + glyph) if the pack still has it, else their
+// sheet row, so nothing placed moves to another tile.
+function useSheet(spec) {
+  const was = PALETTE.map(p => ({ name: p.id + p.glyph, row: p.sheetRow }));
+  sheetSpec = { row_0: spec.row_0, row_1: spec.row_1, row_C: spec.row_C, col_0: spec.col_0 };
+  sheet = new Tileset({ ...sheetSpec, texture: EDITOR_TILES, size: spec.size });
+  buildPalette();
+  const byName = new Map(), byRow = new Map();
+  PALETTE.forEach((p, i) => { byName.set(p.id + p.glyph, i); byRow.set(p.sheetRow, i); });
+  const remap = pi => {
+    const w = was[pi];
+    if (!w) return pi;
+    const to = byName.has(w.name) ? byName.get(w.name) : byRow.get(w.row);
+    return to === undefined ? 0 : to;
+  };
+  stashPack();
+  const seen = new Set();
+  for (const pk of packs) for (const lv of pk.levels || []) for (const layer of lv.layers || []) for (const line of layer) for (const cell of line) {
+    if (!cell || cell.pi === undefined || seen.has(cell)) continue;
+    seen.add(cell);
+    cell.pi = remap(cell.pi);
+  }
+  tileIndex = Math.min(remap(tileIndex), PALETTE.length - 1);
+  applyPack(packs[packIndex]);
+  buildTileSwatches();
+  textureReady(sheet.img).then(() => { refreshSelection(); render(); });
+}
 
 // Same again for the objects: one swatch per object the pack has — per code,
 // so a platform's four directions are four — made once the pack is read. A
@@ -2078,7 +2126,7 @@ function campaignEntries() {
       messages: Array.from({ length: lastMsg + 1 }, (_, k) => src.messages[k] || ''),
       pick: [],
       pack,
-      tileset: {},                 // the defaults, which is what the board drew with
+      tileset: sheetBlock(EDITOR_TILES),   // what the board drew with
       background: bgForPlay(src),
       music: src.music || null,
       manifestUrl: null,
@@ -2228,6 +2276,7 @@ fetch(EDITOR_LIBRARY)
   .then(r => r.json())
   .then(async data => {
     const base = new URL(EDITOR_LIBRARY, location.href);
+    if (data.tileset && data.tileset.row_1) useSheet(data.tileset);
     const art = data.backgrounds || {};
     bgDir = new URL(art.dir || 'backgrounds/', base).href;
     bgLibrary = Array.isArray(art.items) ? art.items : [];
