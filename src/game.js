@@ -1703,6 +1703,7 @@ function update() {
   if (camScroll.active) { updateCamera(); return; }
 
   // gravity
+  const tPhysics = perfNow();
   warm.vy += GRAVITY;
   if (warm.vy > MAX_FALL) warm.vy = MAX_FALL;
 
@@ -1827,6 +1828,8 @@ function update() {
   // fell off the map
   if (warm.y > mapHeightPx + 150) loseLife();
 
+  perfAdd('physics', tPhysics);
+  const tObjects = perfNow();
   // Order matters: every platform has to have moved before one can carry her,
   // and she has to be where she ends up before anything reads her position.
   platformTimer++;
@@ -1841,6 +1844,8 @@ function update() {
   updateTeleporters();
   checkFinish();
 
+  perfAdd('objects', tObjects);
+  const tBody = perfNow();
   // --- body chain ---
   segments[0].x = warm.x;
   segments[0].y = warm.y;
@@ -1889,6 +1894,7 @@ function update() {
   }
 
   updateCamera();
+  perfAdd('body', tBody);
 }
 
 // ---------- Rendering ----------
@@ -1919,6 +1925,7 @@ function drawTileLayer(meta) {
       if (sheetRow < 0) continue;
       const x0 = snapX(c * TILE), x1 = snapX((c + 1) * TILE);
       tileset.drawCell(sheetRow, meta.tint[r][c], x0, y0, x1 - x0, y1 - y0);
+      if (perf.on) perf.counts.tiles = (perf.counts.tiles || 0) + 1;
     }
   }
 }
@@ -1934,7 +1941,7 @@ function entityGroups() {
 // written beside. No argument means every layer, for the collision view.
 function drawEntities(layer) {
   for (const group of entityGroups()) {
-    for (const e of group) if (layer === undefined || e.layer === layer) e.draw();
+    for (const e of group) if (layer === undefined || e.layer === layer) { e.draw(); if (perf.on) perfCount('drawn'); }
   }
 }
 
@@ -2101,15 +2108,26 @@ function loop(now) {
   if (gameState === 'playing') atlas.clock += delta / 1000;
   stepAccumulator += delta;
 
+  const tFrame = perfNow();
   let steps = 0;
   while (stepAccumulator >= FIXED_STEP_MS && steps < MAX_STEPS_PER_FRAME) {
     if (gameState === 'playing') update();
     stepAccumulator -= FIXED_STEP_MS;
     steps++;
   }
+  perfAdd('update', tFrame);
+  if (perf.on) {
+    perfCount('steps', steps);
+    perfCount('objects', entityGroups().reduce((n, g) => n + g.length, 0));
+  }
 
+  const tDraw = perfNow();
   ctx.setTransform(PIXEL_X, 0, 0, PIXEL_Y, 0, 0);   // game units from here on
+  let t = perfNow();
   drawBackground();
+  perfAdd('background', t);
+  // each stage timed on its own; perfAdd is a no-op while timing is off
+  const timed = (stage, fn) => { const t0 = perfNow(); fn(); perfAdd(stage, t0); };
   ctx.save();
   // the camera on a whole screen pixel, so the art isn't resampled between two
   ctx.translate(-Math.round(cam.x * PIXEL_X) / PIXEL_X, -Math.round(cam.y * PIXEL_Y) / PIXEL_Y);
@@ -2122,16 +2140,22 @@ function loop(now) {
     if (deathAnim) drawDeathAnimation(); else drawWorm();
     drawCollisionDebug();
   } else {
-    if (backMeta) drawTileLayer(backMeta);
-    drawEntities(LAYER_BACK);
-    drawTileLayer(gridMeta);
-    drawEntities(LAYER_MAIN);
-    if (deathAnim) drawDeathAnimation(); else drawWorm();
-    if (frontMeta) drawTileLayer(frontMeta);
-    drawEntities(LAYER_FRONT);
+    if (backMeta) timed('tilesBack', () => drawTileLayer(backMeta));
+    timed('entities', () => drawEntities(LAYER_BACK));
+    timed('tilesMain', () => drawTileLayer(gridMeta));
+    timed('entities', () => drawEntities(LAYER_MAIN));
+    timed('worm', () => { if (deathAnim) drawDeathAnimation(); else drawWorm(); });
+    if (frontMeta) timed('tilesFront', () => drawTileLayer(frontMeta));
+    timed('entities', () => drawEntities(LAYER_FRONT));
   }
   ctx.restore();
+  t = perfNow();
   drawDarkness();
+  perfAdd('dark', t);
+  perfAdd('draw', tDraw);
+  perfAdd('frame', tFrame);
+  perfFrame(now);
+  drawPerf();
   requestAnimationFrame(loop);
 }
 
@@ -2408,6 +2432,7 @@ const musicVolumeSlider = document.getElementById('musicVolumeSlider');
 const effectsVolumeSlider = document.getElementById('effectsVolumeSlider');
 const debugToggleBtn = document.getElementById('debugToggleBtn');
 const debugBtn = document.getElementById('debugBtn');
+const perfBtn = document.getElementById('perfBtn');
 
 function setToggle(btn, on) {
   btn.textContent = on ? 'ON' : 'OFF';
@@ -2420,6 +2445,8 @@ function refreshToggleButtons() {
   setToggle(debugToggleBtn, debugEnabled);
   debugBtn.classList.toggle('hidden', !debugEnabled);
   debugBtn.classList.toggle('on', debugCollisionView);
+  perfBtn.classList.toggle('hidden', !debugEnabled);
+  perfBtn.classList.toggle('on', perf.on);
 }
 refreshToggleButtons();
 musicVolumeSlider.value = Math.round(musicVolume * 100);
@@ -2452,11 +2479,15 @@ effectsVolumeSlider.addEventListener('change', () => {
 debugToggleBtn.addEventListener('click', () => {
   debugEnabled = !debugEnabled;
   try { localStorage.setItem('warmWormDebug', String(debugEnabled)); } catch (e) { /* ignore */ }
-  if (!debugEnabled) debugCollisionView = false; // nothing stays on once it's out of reach
+  if (!debugEnabled) { debugCollisionView = false; setPerf(false); } // nothing stays on once it's out of reach
   refreshToggleButtons();
 });
 debugBtn.addEventListener('click', () => {
   debugCollisionView = !debugCollisionView;
+  refreshToggleButtons();
+});
+perfBtn.addEventListener('click', () => {
+  setPerf(!perf.on);
   refreshToggleButtons();
 });
 

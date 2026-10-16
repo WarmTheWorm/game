@@ -63,14 +63,15 @@
     box-shadow: 0 3px 0 #3e2c78;
   }
   /* Sits beside pause, and only exists while Debug is on in Options. */
-  #debugBtn {
+  #debugBtn, #perfBtn {
     position: absolute; top: 8px; right: 56px; z-index: 5;
     padding: 6px 12px; border-radius: 10px;
     border: none; font-size: 14px; font-weight: bold; color: white;
     background: linear-gradient(145deg, #8a7a92, #5c4f66);
     box-shadow: 0 3px 0 #3a3140;
   }
-  #debugBtn.on {
+  #perfBtn { right: 104px; }
+  #debugBtn.on, #perfBtn.on {
     background: linear-gradient(145deg, #ff8f6b, #d8452b);
     box-shadow: 0 3px 0 #9c2c18;
   }
@@ -441,6 +442,7 @@
     <button class="dbtn" id="jumpBtn">JUMP</button>
     <button id="pauseBtn">⏸</button>
     <button id="debugBtn" class="hidden" title="Collision view">▦</button>
+    <button id="perfBtn" class="hidden" title="Performance: time each part of a frame">⏱</button>
   </div>
 
 <!-- Where this page looks for its content, while it is being worked on: a
@@ -467,6 +469,7 @@
 <script src="js/sound.js"></script>
 <script src="js/tileset.js"></script>
 <script src="js/atlas.js"></script>
+<script src="js/perf.js"></script>
 <script src="game.js"></script>
 <script src="js/entity.js"></script>
 <script src="js/enemy.js"></script>

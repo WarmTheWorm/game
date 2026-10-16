@@ -63,14 +63,15 @@
     box-shadow: 0 3px 0 #3e2c78;
   }
   /* Sits beside pause, and only exists while Debug is on in Options. */
-  #debugBtn {
+  #debugBtn, #perfBtn {
     position: absolute; top: 8px; right: 56px; z-index: 5;
     padding: 6px 12px; border-radius: 10px;
     border: none; font-size: 14px; font-weight: bold; color: white;
     background: linear-gradient(145deg, #8a7a92, #5c4f66);
     box-shadow: 0 3px 0 #3a3140;
   }
-  #debugBtn.on {
+  #perfBtn { right: 104px; }
+  #debugBtn.on, #perfBtn.on {
     background: linear-gradient(145deg, #ff8f6b, #d8452b);
     box-shadow: 0 3px 0 #9c2c18;
   }
@@ -441,6 +442,7 @@
     <button class="dbtn" id="jumpBtn">JUMP</button>
     <button id="pauseBtn">⏸</button>
     <button id="debugBtn" class="hidden" title="Collision view">▦</button>
+    <button id="perfBtn" class="hidden" title="Performance: time each part of a frame">⏱</button>
   </div>
 
 <!-- Where this page looks for its content, while it is being worked on: a
@@ -1099,6 +1101,138 @@ class ObjectAtlas {
 }
 
 const atlas = new ObjectAtlas();
+
+</script>
+<!-- js/perf.js -->
+<script>
+// ---------- Debug: performance ----------
+// With the ⏱ button on (it shows while Debug is on in Options), every stage of
+// a frame is timed and the averages drawn over the level, twice a second:
+// what the fixed-step update spent on her physics, on the objects and on her
+// body, and what drawing spent on the backdrop, each tile layer, the objects,
+// the worm and the lantern dark — with the frame rate, the steps a frame,
+// how many tiles, objects and images were drawn, and the heap where the
+// browser tells. Off, the marks cost one boolean test each.
+const perf = {
+  on: false,
+  acc: {},          // ms summed over the window, by stage
+  counts: {},       // things counted over the window, by kind
+  frames: 0,
+  since: 0,
+  shown: null,      // the last window's averages, as drawn
+  rawDraw: null
+};
+
+const PERF_WINDOW = 500;     // ms each set of averages covers
+
+// What a stage is called on screen, in the order it is listed; the indented
+// ones are part of the line above.
+const PERF_ROWS = [
+  ['update', 'update (all steps)'],
+  ['physics', '  her physics'],
+  ['objects', '  objects'],
+  ['body', '  her body'],
+  ['draw', 'draw'],
+  ['background', '  background'],
+  ['tilesBack', '  tiles, back'],
+  ['tilesMain', '  tiles, main'],
+  ['tilesFront', '  tiles, front'],
+  ['entities', '  objects'],
+  ['worm', '  worm'],
+  ['dark', '  lantern dark'],
+  ['frame', 'whole frame']
+];
+
+const perfNow = () => (perf.on ? performance.now() : 0);
+function perfAdd(stage, t0) { if (perf.on) perf.acc[stage] = (perf.acc[stage] || 0) + performance.now() - t0; }
+function perfCount(kind, n = 1) { if (perf.on) perf.counts[kind] = (perf.counts[kind] || 0) + n; }
+
+// Counting images means seeing every drawImage, so the context's own is
+// wrapped while timing is on and given back after.
+function setPerf(on) {
+  perf.on = on;
+  perf.acc = {};
+  perf.counts = {};
+  perf.frames = 0;
+  perf.since = performance.now();
+  perf.shown = null;
+  if (on && !perf.rawDraw) {
+    perf.rawDraw = ctx.drawImage;
+    ctx.drawImage = function (...a) { perf.counts.images = (perf.counts.images || 0) + 1; return perf.rawDraw.apply(this, a); };
+  } else if (!on && perf.rawDraw) {
+    delete ctx.drawImage;      // back to the prototype's
+    perf.rawDraw = null;
+  }
+}
+
+// One frame done: fold it in, and every window turn the sums into averages.
+function perfFrame(now) {
+  if (!perf.on) return;
+  perf.frames++;
+  const span = now - perf.since;
+  if (span < PERF_WINDOW) return;
+  const per = v => v / perf.frames;
+  const mem = performance.memory;
+  perf.shown = {
+    fps: perf.frames * 1000 / span,
+    ms: Object.fromEntries(Object.entries(perf.acc).map(([k, v]) => [k, per(v)])),
+    counts: Object.fromEntries(Object.entries(perf.counts).map(([k, v]) => [k, per(v)])),
+    heap: mem ? mem.usedJSHeapSize / 1048576 : null
+  };
+  perf.acc = {};
+  perf.counts = {};
+  perf.frames = 0;
+  perf.since = now;
+}
+
+// The panel, top left under the score, in the canvas's own pixels so it stays
+// crisp and the same size whatever the zoom. A bar is the share of a 60 fps
+// frame's 16.7 ms the stage took.
+function drawPerf() {
+  if (!perf.on) return;
+  const s = perf.shown;
+  const dpr = window.devicePixelRatio || 1;
+  const line = 15 * dpr, pad = 8 * dpr, w = 290 * dpr;
+  const rows = PERF_ROWS.filter(([k]) => !s || s.ms[k] !== undefined);
+  const extra = 4;
+  const h = pad * 2 + line * (rows.length + extra + 1);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const x0 = 10 * dpr, y0 = 44 * dpr;
+  ctx.fillStyle = 'rgba(10,6,20,0.78)';
+  ctx.fillRect(x0, y0, w, h);
+  ctx.font = `${11 * dpr}px ui-monospace, Menlo, Consolas, monospace`;
+  ctx.textBaseline = 'top';
+  let y = y0 + pad;
+  const text = (t, x, color = '#efe9ff') => { ctx.fillStyle = color; ctx.fillText(t, x, y); };
+  if (!s) {
+    text('measuring…', x0 + pad);
+    ctx.restore();
+    return;
+  }
+  const budget = 1000 / 60;
+  text(`${s.fps.toFixed(0)} fps · ${(s.counts.steps || 0).toFixed(2)} steps a frame`, x0 + pad, '#ffb547');
+  y += line;
+  for (const [k, label] of rows) {
+    const v = s.ms[k] || 0;
+    const sub = label.startsWith(' ');
+    const bx = x0 + 168 * dpr, bw = 70 * dpr;
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(bx, y + 3 * dpr, bw, 7 * dpr);
+    ctx.fillStyle = v > budget ? '#ff6f6f' : v > budget / 2 ? '#ffb547' : '#6ff0c8';
+    ctx.fillRect(bx, y + 3 * dpr, Math.min(1, v / budget) * bw, 7 * dpr);
+    text(label, x0 + pad, sub ? '#a69cc9' : '#efe9ff');
+    text(`${v.toFixed(2)} ms`.padStart(9), bx + bw + 4 * dpr, sub ? '#a69cc9' : '#efe9ff');
+    y += line;
+  }
+  y += line * 0.3;
+  const c = s.counts;
+  text(`tiles drawn   ${Math.round(c.tiles || 0)}`, x0 + pad, '#a69cc9'); y += line;
+  text(`objects       ${Math.round(c.objects || 0)} live, ${Math.round(c.drawn || 0)} drawn`, x0 + pad, '#a69cc9'); y += line;
+  text(`images drawn  ${Math.round(c.images || 0)}`, x0 + pad, '#a69cc9'); y += line;
+  text(`heap          ${s.heap === null ? 'not told' : s.heap.toFixed(1) + ' MB'}`, x0 + pad, '#a69cc9');
+  ctx.restore();
+}
 
 </script>
 <!-- game.js -->
@@ -2808,6 +2942,7 @@ function update() {
   if (camScroll.active) { updateCamera(); return; }
 
   // gravity
+  const tPhysics = perfNow();
   warm.vy += GRAVITY;
   if (warm.vy > MAX_FALL) warm.vy = MAX_FALL;
 
@@ -2932,6 +3067,8 @@ function update() {
   // fell off the map
   if (warm.y > mapHeightPx + 150) loseLife();
 
+  perfAdd('physics', tPhysics);
+  const tObjects = perfNow();
   // Order matters: every platform has to have moved before one can carry her,
   // and she has to be where she ends up before anything reads her position.
   platformTimer++;
@@ -2946,6 +3083,8 @@ function update() {
   updateTeleporters();
   checkFinish();
 
+  perfAdd('objects', tObjects);
+  const tBody = perfNow();
   // --- body chain ---
   segments[0].x = warm.x;
   segments[0].y = warm.y;
@@ -2994,6 +3133,7 @@ function update() {
   }
 
   updateCamera();
+  perfAdd('body', tBody);
 }
 
 // ---------- Rendering ----------
@@ -3024,6 +3164,7 @@ function drawTileLayer(meta) {
       if (sheetRow < 0) continue;
       const x0 = snapX(c * TILE), x1 = snapX((c + 1) * TILE);
       tileset.drawCell(sheetRow, meta.tint[r][c], x0, y0, x1 - x0, y1 - y0);
+      if (perf.on) perf.counts.tiles = (perf.counts.tiles || 0) + 1;
     }
   }
 }
@@ -3039,7 +3180,7 @@ function entityGroups() {
 // written beside. No argument means every layer, for the collision view.
 function drawEntities(layer) {
   for (const group of entityGroups()) {
-    for (const e of group) if (layer === undefined || e.layer === layer) e.draw();
+    for (const e of group) if (layer === undefined || e.layer === layer) { e.draw(); if (perf.on) perfCount('drawn'); }
   }
 }
 
@@ -3206,15 +3347,26 @@ function loop(now) {
   if (gameState === 'playing') atlas.clock += delta / 1000;
   stepAccumulator += delta;
 
+  const tFrame = perfNow();
   let steps = 0;
   while (stepAccumulator >= FIXED_STEP_MS && steps < MAX_STEPS_PER_FRAME) {
     if (gameState === 'playing') update();
     stepAccumulator -= FIXED_STEP_MS;
     steps++;
   }
+  perfAdd('update', tFrame);
+  if (perf.on) {
+    perfCount('steps', steps);
+    perfCount('objects', entityGroups().reduce((n, g) => n + g.length, 0));
+  }
 
+  const tDraw = perfNow();
   ctx.setTransform(PIXEL_X, 0, 0, PIXEL_Y, 0, 0);   // game units from here on
+  let t = perfNow();
   drawBackground();
+  perfAdd('background', t);
+  // each stage timed on its own; perfAdd is a no-op while timing is off
+  const timed = (stage, fn) => { const t0 = perfNow(); fn(); perfAdd(stage, t0); };
   ctx.save();
   // the camera on a whole screen pixel, so the art isn't resampled between two
   ctx.translate(-Math.round(cam.x * PIXEL_X) / PIXEL_X, -Math.round(cam.y * PIXEL_Y) / PIXEL_Y);
@@ -3227,16 +3379,22 @@ function loop(now) {
     if (deathAnim) drawDeathAnimation(); else drawWorm();
     drawCollisionDebug();
   } else {
-    if (backMeta) drawTileLayer(backMeta);
-    drawEntities(LAYER_BACK);
-    drawTileLayer(gridMeta);
-    drawEntities(LAYER_MAIN);
-    if (deathAnim) drawDeathAnimation(); else drawWorm();
-    if (frontMeta) drawTileLayer(frontMeta);
-    drawEntities(LAYER_FRONT);
+    if (backMeta) timed('tilesBack', () => drawTileLayer(backMeta));
+    timed('entities', () => drawEntities(LAYER_BACK));
+    timed('tilesMain', () => drawTileLayer(gridMeta));
+    timed('entities', () => drawEntities(LAYER_MAIN));
+    timed('worm', () => { if (deathAnim) drawDeathAnimation(); else drawWorm(); });
+    if (frontMeta) timed('tilesFront', () => drawTileLayer(frontMeta));
+    timed('entities', () => drawEntities(LAYER_FRONT));
   }
   ctx.restore();
+  t = perfNow();
   drawDarkness();
+  perfAdd('dark', t);
+  perfAdd('draw', tDraw);
+  perfAdd('frame', tFrame);
+  perfFrame(now);
+  drawPerf();
   requestAnimationFrame(loop);
 }
 
@@ -3513,6 +3671,7 @@ const musicVolumeSlider = document.getElementById('musicVolumeSlider');
 const effectsVolumeSlider = document.getElementById('effectsVolumeSlider');
 const debugToggleBtn = document.getElementById('debugToggleBtn');
 const debugBtn = document.getElementById('debugBtn');
+const perfBtn = document.getElementById('perfBtn');
 
 function setToggle(btn, on) {
   btn.textContent = on ? 'ON' : 'OFF';
@@ -3525,6 +3684,8 @@ function refreshToggleButtons() {
   setToggle(debugToggleBtn, debugEnabled);
   debugBtn.classList.toggle('hidden', !debugEnabled);
   debugBtn.classList.toggle('on', debugCollisionView);
+  perfBtn.classList.toggle('hidden', !debugEnabled);
+  perfBtn.classList.toggle('on', perf.on);
 }
 refreshToggleButtons();
 musicVolumeSlider.value = Math.round(musicVolume * 100);
@@ -3557,11 +3718,15 @@ effectsVolumeSlider.addEventListener('change', () => {
 debugToggleBtn.addEventListener('click', () => {
   debugEnabled = !debugEnabled;
   try { localStorage.setItem('warmWormDebug', String(debugEnabled)); } catch (e) { /* ignore */ }
-  if (!debugEnabled) debugCollisionView = false; // nothing stays on once it's out of reach
+  if (!debugEnabled) { debugCollisionView = false; setPerf(false); } // nothing stays on once it's out of reach
   refreshToggleButtons();
 });
 debugBtn.addEventListener('click', () => {
   debugCollisionView = !debugCollisionView;
+  refreshToggleButtons();
+});
+perfBtn.addEventListener('click', () => {
+  setPerf(!perf.on);
   refreshToggleButtons();
 });
 
