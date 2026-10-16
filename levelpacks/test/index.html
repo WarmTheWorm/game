@@ -4018,6 +4018,8 @@ class Shield extends Pickup {
   static editor = {
     label: 'Shield',
     code: '0S',
+    // the pickup's own look, then what she wears; worn is centred on her head
+    sprite: { fw: 44, fh: 44, parts: ['all', 'worn'], note: 'all is the pickup lying in the level; worn is drawn over her head while the shield lasts.' },
     props: {
       worn: { type: 'part', default: 'worn', optional: true, label: 'Part worn on her (without one, a plain ring)' },
       pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken' }
@@ -4271,6 +4273,8 @@ class Plant extends Entity {
   static editor = {
     label: 'Plant',
     code: '0V',
+    // a new sprite's layout in the asset pack creator (sprite-templates.js)
+    sprite: { fw: 76, fh: 224, pivot: [0.5, 0.88], note: 'bud is the plant at rest, stem stretches up to head as it lunges, and head bites — head may have frames of its own.' },
     props: {
       reach: { type: 'int', default: 100, label: 'How high it lunges, px' },
       trigger: { type: 'int', default: 40, label: 'How near overhead sets it off, px' },
@@ -4370,6 +4374,7 @@ class Checkpoint extends Entity {
   static editor = {
     label: 'Checkpoint',
     code: '0!',
+    sprite: { fw: 108, fh: 186, pivot: [0.5, 0.82], note: 'off until she reaches it, on after.' },
     props: {
       off: { type: 'part', default: 'off', label: 'Part before she reaches it' },
       on: { type: 'part', default: 'on', label: 'Part once reached' },

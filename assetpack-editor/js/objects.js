@@ -102,27 +102,65 @@ $('#objList').addEventListener('click', e => {
   savePack();
 });
 
-// A new sprite's name and frame size, asked for once. It is drawn a game pixel
-// to an art pixel to begin with, so one 64 wide stands two tiles wide; Tiles
-// wide on its preview changes that. null if the dialog was let go.
+// A new sprite's name, frame size and template, asked for once. Blank is one
+// empty part, drawn a game pixel to an art pixel to begin with; a template
+// (sprite-templates.js) brings the parts the game reads by name, a blank
+// frame in each, and its own size — drawn two art pixels to a game unit, as
+// the shipped sprites are. null if the dialog was let go.
 async function askNewSprite(name) {
-  const got = await ask('New sprite', [
+  const BLANK = 'Blank';
+  const tpls = spriteTemplates();
+  const tplNote = t => t ? `${t.label}: ${t.parts.map(p => p.frames > 1 ? `${p.name} ×${p.frames}` : p.name).join(', ')}. ${t.note || ''}`
+    : 'One empty part. It is drawn a game pixel to a pixel at first — a tile is 32 — and Tiles wide changes that after.';
+  const asking = ask('New sprite', [
+    { key: 'tpl', label: 'Start from', type: 'select', options: [BLANK, ...tpls.map(t => t.label)], value: BLANK },
     { key: 'name', label: 'Name', value: name },
     { key: 'w', label: 'Width of a frame (pixels)', type: 'number', value: 32 },
     { key: 'h', label: 'Height of a frame (pixels)', type: 'number', value: 32 },
-    { type: 'note', label: 'It is drawn a game pixel to a pixel at first — a tile is 32 — and Tiles wide changes that after.' }
+    { type: 'note', label: tplNote(null) }
   ], 'Make it');
+  // picking a template fills in its name and size, and says what it brings
+  const field = k => $(`#askBody [data-k="${k}"]`);
+  let named = false;
+  field('name').addEventListener('input', () => { named = true; });
+  field('tpl').addEventListener('change', e => {
+    const t = tpls.find(x => x.label === e.target.value);
+    field('w').value = t ? t.fw : 32;
+    field('h').value = t ? t.fh : 32;
+    if (!named) field('name').value = t ? freeSpriteName(t.name) : name;
+    $('#askBody .hint').textContent = tplNote(t);
+  });
+  const got = await asking;
   if (!got) return null;
+  const tpl = tpls.find(x => x.label === got.tpl) || null;
   const w = parseInt(got.w, 10), h = parseInt(got.h, 10);
   if (!(w >= 1 && w <= 512 && h >= 1 && h <= 512)) { toast('Pick a size from 1 to 512 pixels', true); return null; }
   const base = String(got.name).trim().replace(/[^A-Za-z0-9_-]+/g, '') || name;
-  let nm = base, n = 2;
-  while (spriteByName(nm)) nm = base + n++;
-  const s = newSprite(nm);
+  const s = newSprite(freeSpriteName(base));
   s.fw = w;
   s.fh = h;
-  s.tiles = num(w / TILE, 6);
+  s.tiles = num(w / (tpl ? TEMPLATE_ART_SCALE : 1) / TILE, 6);
+  if (tpl) {
+    s.pivot = [...tpl.pivot];
+    s.parts = tpl.parts.map((p, i) => ({ id: uid(), name: p.name, color: PART_COLORS[i % PART_COLORS.length] }));
+    s.active = s.parts[0].id;
+    const blank = blankCanvas(w, h), src = blank.toDataURL();
+    s.parts.forEach((part, i) => {
+      for (let k = 0; k < (tpl.parts[i].frames || 1); k++) {
+        const f = { id: uid(), src, partId: part.id };
+        fcan.set(f.id, cloneCanvas(blank));
+        s.frames.push(f);
+      }
+    });
+  }
   return s;
+}
+
+// The name, or the name with the first number after it no sprite has.
+function freeSpriteName(base) {
+  let nm = base, n = 2;
+  while (spriteByName(nm)) nm = base + n++;
+  return nm;
 }
 
 $('#objAdd').onclick = async () => {

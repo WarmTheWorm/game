@@ -8,6 +8,8 @@ class Plant extends Entity {
   static editor = {
     label: 'Plant',
     code: '0V',
+    // a new sprite's layout in the asset pack creator (sprite-templates.js)
+    sprite: { fw: 76, fh: 224, pivot: [0.5, 0.88], note: 'bud is the plant at rest, stem stretches up to head as it lunges, and head bites — head may have frames of its own.' },
     props: {
       reach: { type: 'int', default: 100, label: 'How high it lunges, px' },
       trigger: { type: 'int', default: 40, label: 'How near overhead sets it off, px' },

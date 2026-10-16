@@ -6,6 +6,8 @@ class Shield extends Pickup {
   static editor = {
     label: 'Shield',
     code: '0S',
+    // the pickup's own look, then what she wears; worn is centred on her head
+    sprite: { fw: 44, fh: 44, parts: ['all', 'worn'], note: 'all is the pickup lying in the level; worn is drawn over her head while the shield lasts.' },
     props: {
       worn: { type: 'part', default: 'worn', optional: true, label: 'Part worn on her (without one, a plain ring)' },
       pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken' }
