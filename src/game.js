@@ -2260,6 +2260,9 @@ try {
   if (savedEV !== null) effectsVolume = parseFloat(savedEV);
   if (savedDebug !== null) debugEnabled = savedDebug === 'true';
 } catch (e) { /* ignore */ }
+// ?debug=1 — the level editor's Test asks for it — turns Debug on for this
+// visit only, leaving the player's own setting as it was saved
+if (new URLSearchParams(location.search).get('debug') === '1') debugEnabled = true;
 sound.musicOn = musicEnabled;
 sound.effectsOn = effectsEnabled;
 sound.setMusicVolume(musicVolume);
