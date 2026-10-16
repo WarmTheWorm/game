@@ -7,7 +7,7 @@
 
 let currentObj = null;
 
-const classLabel = C => `${C.editor.label || C.name} — ${C.name} (${C.codes.join(' ')})`;
+const classLabel = C => C.name;
 
 function renderGameObjects() {
   renderGoList();
