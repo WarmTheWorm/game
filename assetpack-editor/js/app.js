@@ -109,6 +109,7 @@ async function boot(already) {
   const lamps = migrateLanterns(pack);
   const wormMade = migrateWorm(pack);
   const treasured = migrateTreasure(pack);
+  const shields = migrateShieldWorn(pack);
   const tilesCut = await migrateTileSheet(pack);
   const madeCodes = migrateCodes(pack);
   const recoded = recodeObjects(pack) > 0 || madeCodes;
@@ -125,6 +126,10 @@ async function boot(already) {
   renderBackgrounds();
   renderSounds();
   renderPackTab();
+  if (shields) {
+    savePack();
+    toast('A shield wears two sprites now — its own, and the one she wears, which was its worn part');
+  }
   if (treasured) {
     savePack();
     toast('Coins and gems are one class now, Treasure — a gem is a Treasure that counts as a gem');

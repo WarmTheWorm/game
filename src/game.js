@@ -442,7 +442,7 @@ function drawDeathAnimation() {
 let score = 0;
 let lives = 3;
 let hasShield = false;
-let shieldWorn = null;     // { sprite, part } of the shield she holds, drawn over her head
+let shieldWorn = null;     // the worn sprite of the shield she holds, drawn over her head
 let gameState = 'start'; // 'start' | 'playing' | 'gameover'
 
 const scoreEl = document.getElementById('score');
@@ -1974,9 +1974,9 @@ function drawWorm() {
   if (headVis <= 0) return;
   const squish = isDucking ? 0.6 : 1;
 
-  // the shield's own "worn" art if it has some, or a plain ring behind her
-  const worn = hasShield && shieldWorn ? atlas.partFrame(shieldWorn.sprite, shieldWorn.part) : null;
-  if (hasShield && worn === null) {
+  // the shield's worn sprite if it has one, or a plain ring behind her
+  const worn = hasShield ? shieldWorn : null;
+  if (hasShield && !worn) {
     ctx.beginPath();
     ctx.arc(head.x, head.y, head.r + 5, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(111,227,255,0.8)';
@@ -1995,12 +1995,12 @@ function drawWorm() {
   atlas.draw(WORM.sprite, 0, 0, left ?? atlas.partFrame(WORM.sprite, WORM.head) ?? 0);
   ctx.restore();
 
-  // worn art goes over her head, centred on it by the shield's pivot: art the
-  // size of the head would vanish behind it, where the ring sits
-  if (worn !== null) {
+  // worn art goes over her head, centred on it by its own pivot, playing on
+  // its own clock: art the size of the head would vanish behind it
+  if (worn) {
     ctx.save();
     ctx.globalAlpha = headVis;
-    atlas.draw(shieldWorn.sprite, head.x, head.y, worn);
+    atlas.draw(worn, head.x, head.y, atlas.frame(worn));
     ctx.restore();
   }
   ctx.globalAlpha = 1;

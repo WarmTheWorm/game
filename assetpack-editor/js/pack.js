@@ -112,6 +112,41 @@ function migrateLanterns(p) {
   return n;
 }
 
+// A shield's worn look was a part of its own sprite; it is a sprite of its
+// own now, so the part is cut out into one (named after the shield, as + New
+// would) and the shield's worn names it. A worn part with no frames just goes.
+// How many shields were changed.
+function migrateShieldWorn(p) {
+  let n = 0;
+  for (const o of p.objects) {
+    const v = o.props && o.props.worn;
+    if (o.cls !== 'Shield' || !v || String(v).startsWith('sprite::')) continue;
+    n++;
+    const s = p.sprites.find(x => x.name === refName(o.props.sprite));
+    const part = s && s.parts.find(x => x.name === v);
+    o.props.worn = '';
+    if (!part) continue;
+    const frames = s.frames.filter(f => f.partId === part.id);
+    if (s.parts.length > 1) {
+      s.parts = s.parts.filter(x => x !== part);
+      s.frames = s.frames.filter(f => f.partId !== part.id);
+      if (s.active === part.id) s.active = s.parts[0].id;
+    }
+    if (!frames.length) continue;
+    let name = o.name + 'Worn', k = 2;
+    while (p.sprites.some(x => x.name === name)) name = o.name + 'Worn' + k++;
+    const all = { id: uid(), name: 'all', color: PART_COLORS[0] };
+    const own = {
+      ...structuredClone({ ...s, frames: [], parts: [] }),
+      id: uid(), name, parts: [all], active: all.id, collision: { shape: 'none' },
+      frames: frames.map(f => ({ id: uid(), src: f.src, partId: all.id }))
+    };
+    p.sprites.splice(p.sprites.indexOf(s) + 1, 0, own);
+    o.props.worn = 'sprite::' + name;
+  }
+  return n;
+}
+
 // Coins and gems were two classes doing the same thing; both are Treasure
 // now, a gem told apart by its props and counting as a gem. A coin keeps its
 // third character; a gem, whose code was 0G, takes the first one free. True if

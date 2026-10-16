@@ -136,10 +136,13 @@ Key · extends `Pickup` · code `nK` · stands at 50%, 50% of its cell (its digi
 
 Shield · extends `Pickup` · code `0S` · stands at 50%, 50% of its cell
 
+Two sprites: its own, lying in the level, and `worn`, drawn over her head
+while the shield lasts — centred on it by its pivot, animated by its own fps.
+
 | Property | Type | Default | What it is |
 |---|---|---|---|
 | `sprite` | sprite | — | Sprite |
-| `worn` | part (optional) | `worn` | Part worn on her (without one, a plain ring) |
+| `worn` | sprite | — | Sprite worn over her head (without one, a plain ring) |
 | `pickSound` | sound | `sound::shieldUp` | Sound when taken |
 
 ### Lantern

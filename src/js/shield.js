@@ -1,30 +1,22 @@
-// A shield's sprite may carry a part to wear: how it looks on her once taken,
-// drawn over her head in place of the plain ring. Lying on the ground it shows
-// its other frames, so the worn look never turns up in its loop.
+// A shield wears two sprites: its own, lying in the level, and `worn`, how it
+// looks on her once taken — drawn over her head, centred on it by its pivot
+// and animated by its own fps, in place of the plain ring she gets without one.
 class Shield extends Pickup {
   static bucket = 'shieldPickups';
   static editor = {
     label: 'Shield',
     code: '0S',
-    // the pickup's own look, then what she wears; worn is centred on her head
-    sprite: { fw: 44, fh: 44, parts: ['all', 'worn'], note: 'all is the pickup lying in the level; worn is drawn over her head while the shield lasts.' },
     props: {
-      worn: { type: 'part', default: 'worn', optional: true, label: 'Part worn on her (without one, a plain ring)' },
+      worn: { type: 'sprite', default: '', label: 'Sprite worn over her head (without one, a plain ring)' },
       pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken' }
     }
   };
 
-  frame() {
-    const parts = atlas.def(this.obj).parts;
-    const worn = this.props.worn;
-    if (!parts || parts[worn] === undefined) return atlas.frame(this.obj);
-    const own = Object.keys(parts).find(p => p !== worn);
-    return own ? atlas.partFrame(this.obj, own) : 0;
-  }
-
   take() {
     hasShield = true;
-    shieldWorn = { sprite: this.obj, part: this.props.worn };   // what drawWorm puts on her
+    // what drawWorm puts on her: the worn sprite, if the pack has it
+    const worn = refName(this.props.worn);
+    shieldWorn = worn && atlas.defs[worn] ? worn : null;
     playSound(this.props.pickSound);
   }
 }
