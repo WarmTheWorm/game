@@ -21,6 +21,7 @@
     "rock": {"class":"RockSpawner","code":"0R0","props":{"sprite":"sprite::rock","interval":140,"gravity":0.55,"maxFall":12}},
     "rock2": {"class":"RockSpawner","code":"0R1","props":{"sprite":"sprite::rock","interval":140,"gravity":0.22,"maxFall":4.5}},
     "shield": {"class":"Shield","code":"0S0","props":{"sprite":"sprite::shield","worn":"worn","pickSound":"sound::shieldUp"}},
-    "sign": {"class":"Sign","code":"nM0","props":{"sprite":"sprite::sign"}}
+    "sign": {"class":"Sign","code":"nM0","props":{"sprite":"sprite::sign"}},
+    "worm": {"class":"Worm","props":{"sprite":"sprite::worm","body":"body","tail":"tail","head":"headRight","headLeft":"headLeft","segments":14,"speed":3,"jump":10.5}}
   }
 }

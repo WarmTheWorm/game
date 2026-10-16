@@ -16,6 +16,8 @@ function packProblems() {
   }
   for (const o of pack.objects) bad.push(...objectProblems(o).map(p => `${o.name}: ${p}`));
   for (const [code, names] of clashingCodes()) bad.push(`${names.join(' and ')} both use the code ${code}.`);
+  const worms = pack.objects.filter(o => o.cls === 'Worm');
+  if (worms.length > 1) bad.push(`${worms.map(o => o.name).join(' and ')} are both Worm objects — the game takes one, so keep one.`);
   for (const [id, d] of Object.entries(pack.sounds.defs)) {
     if (d && d.src && !pack.sounds.media[d.src]) bad.push(`The sound "${id}" names ${d.src}, which is not in the pack.`);
     if (d && !d.src && d.layers && !d.layers.length) bad.push(`The sound "${id}" has no layers left, so it would make no noise.`);
@@ -64,7 +66,7 @@ function objectProblems(o) {
   const C = gameClass(o.cls);
   if (!C) return [`its class "${o.cls}" is not one the game has.`];
   const want = C.codes.map(c => c + variantOf(o));
-  if (!variantOf(o) || o.code.join() !== want.join()) bad.push(`its codes should be ${want.join(' ')}.`);
+  if (C.codes.length && (!variantOf(o) || o.code.join() !== want.join())) bad.push(`its codes should be ${want.join(' ')}.`);
   const sprite = spriteByName(refName(o.props.sprite));
   if (!sprite) bad.push(`its sprite "${o.props.sprite || 'none'}" is not in the pack.`);
   for (const [k, d] of Object.entries(classDefs(o.cls))) {

@@ -112,6 +112,25 @@ function migrateLanterns(p) {
   return n;
 }
 
+// The worm became an object like the rest: a pack without a Worm object gets
+// one, wearing the sprite called worm if it has one, and her sprite gets the
+// collision circle she has always hit the tiles with, if it has none. True if
+// either was done.
+function migrateWorm(p) {
+  const had = p.objects.find(o => o.cls === 'Worm');
+  const worn = p.sprites.find(x => x.name === refName(had ? had.props.sprite : 'worm'));
+  const circled = !!worn && (!worn.collision || worn.collision.shape === 'none');
+  if (circled) worn.collision = { shape: 'circle', r: 11 };
+  if (had) return circled;
+  const s = p.sprites.find(x => x.name === 'worm');
+  let name = 'worm', n = 2;
+  while (p.objects.some(o => o.name === name)) name = 'worm' + n++;
+  const o = { id: uid(), name, cls: 'Worm', code: [], props: { sprite: s ? 'sprite::worm' : '' } };
+  fillProps(o);
+  p.objects.push(o);
+  return true;
+}
+
 // An object whose codes aren't its class's — the class's code has changed in
 // the game since it was saved, as platforms' did — takes the class's again,
 // keeping its own third character.

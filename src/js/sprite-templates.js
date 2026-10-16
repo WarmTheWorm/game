@@ -6,19 +6,12 @@
 //
 // Every class whose editor block has part props gets a template of its own,
 // its parts named by those props' defaults; its `editor.sprite` adds a size,
-// a pivot, frame counts, or parts it reads without a prop. What is no class —
-// the worm — is listed here. A new kind with a layout of its own is one more
-// entry, or one `sprite` block on its class.
+// a pivot, frame counts, or parts it reads without a prop. A layout that
+// belongs to no class goes in the list below. A new kind with a layout of its
+// own is one `sprite` block on its class, or one more entry here.
 //
 //   { name, label, fw, fh, pivot, parts: [{ name, frames }], note }
-const SPRITE_TEMPLATES_EXTRA = [
-  {
-    name: 'worm', label: 'Worm',
-    fw: 44, fh: 44, pivot: [0.5, 0.5],
-    parts: [{ name: 'body', frames: 5 }, { name: 'tail' }, { name: 'headLeft' }, { name: 'headRight' }],
-    note: 'Her head is 22 game units across — 44 pixels. body is five shades, head to tail; tail is the tip; headLeft and headRight are her face each way.'
-  }
-];
+const SPRITE_TEMPLATES_EXTRA = [];
 
 // Pixels of art to a game unit in a template.
 const TEMPLATE_ART_SCALE = 2;

@@ -123,7 +123,9 @@ function objectsManifest() {
   for (const o of [...pack.objects].sort((a, b) => a.name.localeCompare(b.name))) {
     if (!o.name.trim()) continue;
     fillProps(o);
-    objects[o.name] = { class: o.cls, code: o.code.length === 1 ? o.code[0] : [...o.code], props: { ...o.props } };
+    // a class no map block places — the worm — has no code to write
+    const code = o.code.length ? { code: o.code.length === 1 ? o.code[0] : [...o.code] } : {};
+    objects[o.name] = { class: o.cls, ...code, props: { ...o.props } };
   }
   return { sprites: 'sprites.json', objects };
 }

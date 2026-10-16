@@ -58,7 +58,7 @@ its **Sprites** tab.
 | `nM0` | `Sign::sign` | `sprite::sign` | |
 | `0W0` | `Decoration::cloud` | `sprite::cloud` | |
 | `n=0` | `Platform::platform` | `sprite::platform` | |
-| `0P0` | — her start | `sprite::worm`, drawn by `game.js` | parts `body`, `tail`, `headLeft`, `headRight` |
+| `0P0` | — her start | `Worm::worm`: `sprite::worm` | parts `body`, `tail`, `headRight` (head), `headLeft` (optional) |
 
 ## The classes
 
@@ -246,6 +246,24 @@ Decoration · extends `Entity` · code `0W` · stands at 50%, 50% of its cell
 | Property | Type | Default | What it is |
 |---|---|---|---|
 | `sprite` | sprite | — | Sprite |
+
+### Worm
+
+Worm · extends `Entity` · no code: she is the player, never placed by a block;
+the game takes the pack's one Worm object at every load (`js/worm.js`). Her
+head radius — what she hits the tiles with — is her sprite's collision circle
+(half the longer side of a box; 11 without one).
+
+| Property | Type | Default | What it is |
+|---|---|---|---|
+| `sprite` | sprite | `sprite::worm` | Sprite |
+| `body` | part | `body` | Body — its frames are the shades, head to tail |
+| `tail` | part | `tail` | Tail tip |
+| `head` | part | `headRight` | Head, facing right |
+| `headLeft` | part (optional) | `headLeft` | Head facing left (without one, the right one mirrored) |
+| `segments` | int | `14` | Body parts, head to tail |
+| `speed` | float | `3` | Run speed, px a frame |
+| `jump` | float | `10.5` | Jump speed, px a frame |
 
 ## Adding a class
 

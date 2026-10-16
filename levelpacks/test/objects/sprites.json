@@ -25,6 +25,6 @@
     "rock": {"frame":{"x":0,"y":1480,"w":36,"h":35},"frames":1,"scale":0.5,"anchor":[7.5,8.5],"collision":{"shape":"circle","x":7.5,"y":8.5,"r":9}},
     "shield": {"frame":{"x":0,"y":1515,"w":45,"h":45},"frames":1,"scale":0.5,"anchor":[11,11],"collision":{"shape":"circle","x":11,"y":11,"r":10}},
     "sign": {"frame":{"x":0,"y":1560,"w":77,"h":82},"frames":1,"scale":0.5,"anchor":[19,25],"collision":{"shape":"circle","x":19,"y":25,"r":16}},
-    "worm": {"frame":{"x":0,"y":1642,"w":52,"h":45},"frames":8,"scale":0.5,"anchor":[11,11],"parts":{"body":[0,4],"headLeft":6,"headRight":7,"tail":5}}
+    "worm": {"frame":{"x":0,"y":1642,"w":52,"h":45},"frames":8,"scale":0.5,"anchor":[11,11],"parts":{"body":[0,4],"headLeft":6,"headRight":7,"tail":5},"collision":{"shape":"circle","x":11,"y":11,"r":11}}
   }
 }

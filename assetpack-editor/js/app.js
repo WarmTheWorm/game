@@ -107,6 +107,7 @@ async function boot(already) {
   const folded = split ? [] : migrateGlow(pack);
   // both run: an old pack may need its codes made, then brought up to date
   const lamps = migrateLanterns(pack);
+  const wormMade = migrateWorm(pack);
   const tilesCut = await migrateTileSheet(pack);
   const madeCodes = migrateCodes(pack);
   const recoded = recodeObjects(pack) > 0 || madeCodes;
@@ -123,6 +124,10 @@ async function boot(already) {
   renderBackgrounds();
   renderSounds();
   renderPackTab();
+  if (wormMade) {
+    savePack();
+    toast('The worm is an object now — her sprite, parts and moves are on the Objects tab');
+  }
   if (tilesCut) {
     savePack();
     toast("The terrain sheet has no labels any more — each row's collision is the button beside it");

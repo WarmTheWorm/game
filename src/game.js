@@ -238,11 +238,15 @@ function updateCamera() {
 
 // ---------- Warm (the worm) ----------
 let START = { x: 3 * TILE + TILE / 2, y: 2 * TILE };
-const R = 11;               // head radius
+// Her look and her moves are the pack's Worm object's (js/worm.js), taken
+// again whenever a level's objects are: useWorm() below. These are what she
+// has until then.
+let WORM = { sprite: 'worm', body: 'body', tail: 'tail', head: 'headRight', headLeft: 'headLeft' };
+let R = 11;                 // head radius: her sprite's collision, what hits the tiles
 const GRAVITY = 0.55;
 const MAX_FALL = 12;
-const SPEED = 3.0;
-const JUMP_V = -10.5;
+let SPEED = 3.0;
+let JUMP_V = -10.5;
 
 const warm = { x: START.x, y: START.y, vx: 0, vy: 0, grounded: false, face: 1 };
 
@@ -332,12 +336,28 @@ function checkStatAchievements() {
 // body: longer now. Each part's distance from the part before it is capped
 // at its own radius, but parts have NO collision with each other — they can
 // freely overlap/pass through one another when the worm curls up.
-const SEGMENT_COUNT = 14;
-const RADII = Array.from({ length: SEGMENT_COUNT }, (_, i) => {
-  const t = i / (SEGMENT_COUNT - 1);
+let SEGMENT_COUNT = 14;
+const taper = () => Array.from({ length: SEGMENT_COUNT }, (_, i) => {
+  const t = i / Math.max(1, SEGMENT_COUNT - 1);
   return R * (1 - t * 0.68); // tapers from full head radius down to a thin tail
 });
+let RADII = taper();
 let segments = RADII.map(r => ({ x: START.x, y: START.y, vy: 0, r }));
+
+// Takes her settings from the objects in use. A change of size or length
+// rebuilds her body where her head is.
+function useWorm() {
+  const w = Worm.current();
+  WORM = w;
+  SPEED = +w.speed || 3;
+  JUMP_V = -(+w.jump || 10.5);
+  const count = Math.max(2, Math.min(40, Math.round(+w.segments) || 14));
+  if (w.r === R && count === SEGMENT_COUNT) return;
+  R = w.r;
+  SEGMENT_COUNT = count;
+  RADII = taper();
+  segments = RADII.map(r => ({ x: warm.x, y: warm.y, vy: 0, r }));
+}
 
 let leftPressed = false, rightPressed = false, jumpPressed = false;
 let jumpPressedPrev = false;
@@ -409,7 +429,7 @@ function drawDeathAnimation() {
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rot);
     ctx.scale(p.r / R, p.r / R);
-    atlas.draw('worm', 0, 0, p.shade);
+    atlas.draw(WORM.sprite, 0, 0, p.shade);
     ctx.restore();
   }
   ctx.restore();
@@ -761,6 +781,7 @@ function loadCustomLevel(text, opts = {}) {
   // A level brings its own object manifest, whose objects' codes say what
   // each block spawns; a pasted one falls back to the root manifest.
   atlas.use(opts.manifest || atlas.root);
+  useWorm();
   const sheet = new Tileset(opts.tileset);
   const map = parseBlockMap(text, sheet);
   if (!map) return { ok: false, error: 'That looks empty — paste a level first.' };
@@ -1288,6 +1309,7 @@ function captureWorld(flag) {
 function restoreWorld(w) {
   const level = BUILTIN_LEVELS[w.index];
   atlas.use(level.manifest || atlas.root);   // the cast this world was built from
+  useWorm();
   grid = w.grid; backGrid = w.backGrid; frontGrid = w.frontGrid;
   collideGrid = w.collideGrid; gridMeta = w.gridMeta; backMeta = w.backMeta; frontMeta = w.frontMeta;
   tileset = w.tileset;
@@ -1538,7 +1560,7 @@ const PORTAL_COOLDOWN = 60;
 // she entered, then it pops back out of the far pad part by part.
 let teleportAnim = null; // { entry, dest, phase: 'in'|'out', t }
 const TELE_STEP = 3;     // frames one part takes to reappear
-const TELE_PHASE = SEGMENT_COUNT * TELE_STEP + TELE_STEP;
+const telePhase = () => SEGMENT_COUNT * TELE_STEP + TELE_STEP;
 const TELE_REEL = 3.2;   // px a part is dragged along the chain per frame
 const TELE_MAX_IN = 180; // safety cap on the suction phase
 
@@ -1619,7 +1641,7 @@ function updateTeleportAnimation() {
   for (let i = 0; i < segments.length; i++) {
     segments[i].vis = Math.max(0, Math.min(1, (a.t - i * TELE_STEP) / TELE_STEP));
   }
-  if (a.t >= TELE_PHASE && !camScroll.active) {
+  if (a.t >= telePhase() && !camScroll.active) {
     segments.forEach(s => { s.vis = 1; });
     teleportAnim = null;
   }
@@ -1905,13 +1927,13 @@ function drawEntities(layer) {
 
 // Her ramp runs head-shade to tail-shade; t is how far down the chain we are.
 function bodyShade(t) {
-  const [first, last] = atlas.partSpan('worm', 'body') || [0, 0];
+  const [first, last] = atlas.partSpan(WORM.sprite, WORM.body) || [0, 0];
   return first + Math.min(last - first, Math.floor(t * (last - first + 1)));
 }
 
 // Her parts are drawn at the head's radius, so each segment scales to its own.
 function drawWorm() {
-  const parts = atlas.def('worm').parts;
+  const parts = atlas.def(WORM.sprite).parts;
   if (!parts) return; // the loop runs before the manifest lands
   const last = segments.length - 1;
   for (let i = last; i >= 1; i--) {
@@ -1925,9 +1947,9 @@ function drawWorm() {
     if (i === last) {
       const prev = segments[i - 1];
       ctx.rotate(Math.atan2(p.y - prev.y, p.x - prev.x)); // tip trails the body
-      atlas.draw('worm', 0, 0, atlas.partFrame('worm', 'tail') ?? 0);
+      atlas.draw(WORM.sprite, 0, 0, atlas.partFrame(WORM.sprite, WORM.tail) ?? 0);
     } else {
-      atlas.draw('worm', 0, 0, bodyShade(i / last));
+      atlas.draw(WORM.sprite, 0, 0, bodyShade(i / last));
     }
     ctx.restore();
   }
@@ -1952,9 +1974,12 @@ function drawWorm() {
   ctx.save();
   ctx.globalAlpha = headVis;
   ctx.translate(head.x, head.y + head.r * (1 - squish));
-  ctx.scale(headVis, squish * headVis);
-  // facing is a frame, so the head keeps the last direction while standing still
-  atlas.draw('worm', 0, 0, atlas.partFrame('worm', warm.face < 0 ? 'headLeft' : 'headRight') ?? 0);
+  // facing is a frame, so the head keeps the last direction while standing
+  // still; without a left one, the right one turned round
+  const left = warm.face < 0 ? atlas.partFrame(WORM.sprite, WORM.headLeft) : null;
+  const turn = warm.face < 0 && left === null ? -1 : 1;
+  ctx.scale(headVis * turn, squish * headVis);
+  atlas.draw(WORM.sprite, 0, 0, left ?? atlas.partFrame(WORM.sprite, WORM.head) ?? 0);
   ctx.restore();
 
   // worn art goes over her head, centred on it by the shield's pivot: art the

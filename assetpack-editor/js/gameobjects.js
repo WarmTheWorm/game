@@ -109,9 +109,12 @@ function renderGoForm() {
         ${C ? '' : `<option selected>${esc(o.cls)} — not in the game</option>`}
         ${GAME_CLASSES.map(K => `<option value="${K.name}" ${K.name === o.cls ? 'selected' : ''}>${esc(classLabel(K))}</option>`).join('')}
       </select></label>
+      ${C && !C.codes.length ? `<p class="hint" style="grid-column:1/-1">No map block places ${esc(C.editor.label.toLowerCase())}: ${C.editor.player
+        ? 'she is the player, and a level says only where she starts. The game takes the one Worm object in the pack.'
+        : 'the game makes it itself.'}</p>` : `
       <div class="ctl" style="grid-column:1/-1"><span>${o.code.length > 1 ? 'Codes' : 'Code'} — what a map block writes to place it</span>
         <div class="codes">${codeLine(o, C)}</div>
-      </div>
+      </div>`}
     </div>
     <h3 class="subh">${esc(o.cls)} properties</h3>
     <div class="insp">${Object.entries(defs).map(([k, d]) => propField(o, k, d)).join('')}</div>
