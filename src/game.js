@@ -1019,6 +1019,38 @@ function parseBackground(spec, base) {
 
 const bgPatterns = new Map();   // one repeating fill per texture, however many levels name it
 
+// A textured background, painted once — its colour and the texture repeated
+// over it — into an image the size of the screen plus one texture each way,
+// so each frame copies the window the scroll asks for, a pixel to a pixel.
+// Measured on an Intel HD 4600, filling the screen with the repeating pattern
+// every frame took it from 60 fps to about 25; one full-screen image costs
+// next to nothing. Kept as an Image, which draws faster than a canvas would.
+// Rebuilt when the texture, its colour or the screen changes; null until it
+// has decoded, and the pattern is drawn meanwhile.
+let bgPlate = null;   // { key, img, ready, tw, th } — tw, th: one texture, in screen pixels
+function backgroundPlate(tex) {
+  const key = [background.texture, background.color, canvas.width, canvas.height, PIXEL_X].join('|');
+  if (bgPlate && bgPlate.key === key) return bgPlate.ready ? bgPlate : null;
+  // a whole number of screen pixels per repeat, so the copy wraps seamlessly
+  const tw = Math.max(1, Math.round(tex.naturalWidth * PIXEL_X)), th = Math.max(1, Math.round(tex.naturalHeight * PIXEL_Y));
+  const c = document.createElement('canvas');
+  c.width = canvas.width + tw;
+  c.height = canvas.height + th;
+  const g = c.getContext('2d');
+  g.fillStyle = background.color;
+  g.fillRect(0, 0, c.width, c.height);
+  const pattern = g.createPattern(tex, 'repeat');
+  pattern.setTransform(new DOMMatrix([tw / tex.naturalWidth, 0, 0, th / tex.naturalHeight, 0, 0]));
+  g.fillStyle = pattern;
+  g.fillRect(0, 0, c.width, c.height);
+  const img = new Image();
+  const plate = { key, img, ready: false, tw, th };
+  img.onload = () => { plate.ready = true; };
+  img.src = c.toDataURL();
+  bgPlate = plate;
+  return null;
+}
+
 function drawBackground() {
   // The level is the whole world, so nothing is painted past its edges: a
   // level smaller than the window sits in the surround instead of bleeding
@@ -1029,6 +1061,23 @@ function drawBackground() {
   const bottom = Math.min(VIEW_H, mapHeightPx - cam.y);
   ctx.clearRect(0, 0, VIEW_W, VIEW_H);
   if (right <= left || bottom <= top) return;
+
+  const tex = background.texture ? loadTexture(background.texture) : null;
+  const plate = tex && tex.complete && tex.naturalWidth ? backgroundPlate(tex) : null;
+  if (plate) {
+    // the part of the level on screen, in screen pixels, copied from where
+    // the scroll has got to in the plate
+    const L = Math.round(left * PIXEL_X), T = Math.round(top * PIXEL_Y);
+    const W = Math.round(right * PIXEL_X) - L, H = Math.round(bottom * PIXEL_Y) - T;
+    const mod = (v, m) => ((v % m) + m) % m;
+    const sx = Math.round(mod(cam.x * background.scroll * PIXEL_X, plate.tw));
+    const sy = Math.round(mod(cam.y * background.scroll * PIXEL_Y, plate.th));
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(plate.img, sx + L, sy + T, W, H, L, T, W, H);
+    ctx.restore();
+    return;
+  }
 
   ctx.save();
   ctx.beginPath();
@@ -1912,6 +1961,22 @@ function drawTileLayer(meta) {
   const firstRow = Math.max(0, Math.floor(cam.y / TILE) - 1);
   const lastRow = Math.min(rows - 1, Math.ceil((cam.y + VIEW_H) / TILE) + 1);
 
+  // A layer showing enough tiles is one WebGL pass (js/tilegl.js), from the
+  // camera's whole-pixel position as the loop translated it. That pass costs
+  // about the same however many tiles it draws, while a few tiles cost less in
+  // 2D — measured, the back and front layers usually lose by going through it.
+  if (tileGL.on) {
+    let shown = 0;
+    for (let r = firstRow; r <= lastRow && shown < TILE_GL_MIN; r++) {
+      for (let c = firstCol; c <= lastCol; c++) if (meta.row[r][c] >= 0 && ++shown >= TILE_GL_MIN) break;
+    }
+    if (shown >= TILE_GL_MIN &&
+        drawTileLayerGL(meta, tileset, Math.round(cam.x * PIXEL_X) / PIXEL_X, Math.round(cam.y * PIXEL_Y) / PIXEL_Y)) {
+      perfCount('glLayers');
+      return;
+    }
+  }
+
   // A tile is rarely a whole number of screen pixels, so each edge is put on
   // the nearest one; neighbours then share an edge exactly, and no sky shows
   // through the seam between them.
@@ -2539,12 +2604,12 @@ perfBtn.addEventListener('click', () => {
   setPerf(!perf.on);
   refreshToggleButtons();
 });
-// F2 opens and closes the panel whether or not Debug is on in Options
+// F2 opens and closes the panel whether or not Debug is on in Options; F3
+// switches the tiles between one WebGL pass and the 2D path, to compare them
 window.addEventListener('keydown', e => {
-  if (e.key !== 'F2' || e.repeat) return;
-  e.preventDefault();
-  setPerf(!perf.on);
-  refreshToggleButtons();
+  if (e.repeat) return;
+  if (e.key === 'F2') { e.preventDefault(); setPerf(!perf.on); refreshToggleButtons(); }
+  if (e.key === 'F3') { e.preventDefault(); tileGL.on = !tileGL.on; }
 });
 
 const MEDALS = ['🥇', '🥈', '🥉'];

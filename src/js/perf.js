@@ -83,7 +83,7 @@ function perfFrame(now) {
 function countLines(s) {
   const c = s.counts;
   return [
-    `tiles drawn   ${Math.round(c.tiles || 0)}`,
+    `tiles drawn   ${Math.round(c.tiles || 0)} in 2D, ${Math.round(c.glLayers || 0)} layer${Math.round(c.glLayers || 0) === 1 ? '' : 's'} in WebGL`,
     `objects       ${Math.round(c.objects || 0)} live, ${Math.round(c.drawn || 0)} drawn`,
     `images drawn  ${Math.round(c.images || 0)}`,
     `heap          ${s.heap === null ? 'not told' : s.heap.toFixed(1) + ' MB'}`
@@ -109,7 +109,8 @@ function drawPerf() {
   const labelW = Math.max(...PERF_ROWS.map(([, l]) => ctx.measureText(l).width));
   const bx = x0 + pad + labelW + 10 * dpr, bw = 70 * dpr;
   const numW = ctx.measureText('000.00 ms').width;
-  const head = s ? `${s.fps.toFixed(0)} fps · ${(s.counts.steps || 0).toFixed(2)} steps a frame` : 'measuring…';
+  const tiles = tileGL.on && !tileGL.broken ? 'tiles WebGL' : 'tiles 2D';
+  const head = s ? `${s.fps.toFixed(0)} fps · ${(s.counts.steps || 0).toFixed(2)} steps · ${tiles} (F3)` : 'measuring…';
   const lines = s ? countLines(s) : [];
   const w = Math.max(bx + bw + 8 * dpr + numW, ...[head, ...lines].map(t => x0 + pad + ctx.measureText(t).width)) - x0 + pad;
   // header, the stages, a gap, then the counts
