@@ -31,15 +31,31 @@ $('#resetBtn').onclick = async () => {
   toast('Started over');
 };
 
+// The packs the dev server has in assetpacks/, or null when it can't say.
+async function knownPacks() {
+  try {
+    const res = await fetch('/__assetpacks');
+    return res.ok ? await res.json() : null;
+  } catch { return null; }
+}
+
 $('#importBtn').onclick = async () => {
-  const got = await ask('Read an existing pack', [
-    { key: 'dir', label: 'Folder, as this page can reach it', value: '/assetpacks/garden/' },
+  const OTHER = 'Other folder…';
+  const list = await knownPacks();
+  const got = await ask('Read an existing pack', list && list.length ? [
+    { key: 'pick', label: 'Asset pack', type: 'select', options: [...list.map(p => p.name), OTHER], value: list[0].name },
+    { key: 'dir', label: `Folder, for ${OTHER}`, value: '' },
+    { type: 'note', label: 'Everything open here is replaced by what is read.' }
+  ] : [
+    { key: 'dir', label: 'Asset pack — its name, or its folder', value: 'garden' },
     { type: 'note', label: 'Everything open here is replaced by what is read.' }
   ], 'Read it');
-  if (!got || !got.dir) return;
+  if (!got) return;
+  const dir = got.pick && got.pick !== OTHER ? list.find(p => p.name === got.pick).dir : got.dir;
+  if (!dir || !dir.trim()) { toast('Say which folder to read', true); return; }
   toast('Reading…');
   try {
-    pack = await importPack(got.dir);
+    pack = await importPack(dir);
     current = null;
     currentObj = null;
     sndSel = Object.keys(pack.sounds.defs)[0] || null;

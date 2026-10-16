@@ -4,15 +4,40 @@
 // Everything the manifest states is in drawn units, so the maths here is the
 // packer's run backwards.
 
+// Whatever was typed, as the path the page reads it by: a bare name is a pack
+// in assetpacks/, and a path on disk — D:\\...\\assetpacks\\garden — or one
+// without its leading slash is taken from its assetpacks/ on.
+function packDir(typed) {
+  let d = String(typed).trim().replace(/\\/g, '/');
+  const at = d.toLowerCase().lastIndexOf('assetpacks/');
+  if (at >= 0) d = '/' + d.slice(at);
+  else if (!d.includes('/')) d = '/assetpacks/' + d;
+  else if (!/^(\/|https?:)/.test(d)) d = '/' + d;
+  return d.endsWith('/') ? d : d + '/';
+}
+
 async function importPack(dir) {
-  const base = dir.endsWith('/') ? dir : dir + '/';
+  const base = packDir(dir);
+  const reach = async url => {
+    try { return await fetch(url); }
+    catch { throw new Error("the page can't reach the dev server — start it with npm run creator"); }
+  };
   const get = async (path, what) => {
-    const res = await fetch(base + path);
+    const res = await reach(base + path);
     if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
     return what === 'json' ? res.json() : res.arrayBuffer();
   };
 
-  const lib = await get('assetpack.json', 'json');
+  // say what is wrong with a folder that isn't an asset pack, not just that a
+  // file wasn't there
+  const libRes = await reach(base + 'assetpack.json');
+  if (!libRes.ok) {
+    const level = await reach(base + 'levelpack.json');
+    throw new Error(level.ok
+      ? `${base} is a level pack — read an asset pack, one of the folders in assetpacks/`
+      : `there is no asset pack at ${base}`);
+  }
+  const lib = await libRes.json();
   const next = newPack();
   next.name = base.replace(/\/$/, '').split('/').pop() || 'Imported';
 
