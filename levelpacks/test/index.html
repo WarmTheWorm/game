@@ -2278,11 +2278,12 @@ function loadCustomLevel(text, opts = {}) {
   const all = [map.back, map.main, map.front];
 
   const newGrid = Array.from({ length: newRows }, () => Array(newCols).fill('.'));
-  // 'x' counts from any layer, so a map can carry its platform limits
-  // wherever they read best.
+  // A platform stop (js/platform-stop.js, glyph x) counts from any layer, so
+  // a map can carry its platform limits wherever they read best.
+  const stop = PlatformStop.codes[0][1];
   const markGrid = Array.from({ length: newRows }, (_, r) => {
     let out = '';
-    for (let c = 0; c < newCols; c++) out += all.some(l => l.glyphs[r][c] === 'x') ? 'x' : '.';
+    for (let c = 0; c < newCols; c++) out += all.some(l => l.glyphs[r][c] === stop) ? 'x' : '.';
     return out;
   });
 
@@ -2306,6 +2307,7 @@ function loadCustomLevel(text, opts = {}) {
     const name = objectFor(ch, d, v);
     const Cls = name && classOf(name);
     if (!Cls) return;
+    if (Cls.editorOnly) return;      // a mark for building levels: read above, never put in the world
     // a door is the one thing that only counts in the solid layer
     if (Cls.mainLayerOnly && !onMain) return;
     // platforms wait for the terrain, since how far they travel depends on it
@@ -4699,6 +4701,26 @@ class Platform extends Entity {
 }
 
 </script>
+<!-- js/platform-stop.js -->
+<script>
+// Where a moving platform turns back: placed in any layer, on the platform's
+// line of travel, it ends the run there as a solid tile would. It is only for
+// building levels — the editor draws it as a marker, the game reads it as a
+// limit while it builds the platforms and never spawns or draws it. Without
+// one a platform runs until the first tile that collides, or the map's edge.
+class PlatformStop extends Entity {
+  static editor = {
+    label: 'Platform stop',
+    code: '0x',
+    props: {}
+  };
+
+  // never put in the world; the level editor shows this mark in its place
+  static editorOnly = true;
+  static marker = { colour: '#ff5a5a', letter: '⛔' };
+}
+
+</script>
 <!-- js/rock.js -->
 <script>
 // ---------- Falling rocks ----------
@@ -5075,7 +5097,7 @@ const GAME_CLASSES = [
   Beetle, Moth, Frog,
   Treasure, Key, Shield, Lantern,
   Portal, Checkpoint, Flag, Door, Sign,
-  Plant, RockSpawner, Platform, Decoration,
+  Plant, RockSpawner, Platform, PlatformStop, Decoration,
   Worm
 ];
 const CLASS_BY_NAME = new Map(GAME_CLASSES.map(C => [C.name, C]));

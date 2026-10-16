@@ -21,6 +21,7 @@ $('#levelBtn').onclick = () => openInLevelEditor();
 
 $('#resetBtn').onclick = async () => {
   if (!await ask('Start over?', [{ type: 'note', label: 'This throws away the pack open here. It cannot be undone.' }], 'Throw it away')) return;
+  storageLocked = false;
   await dbClear();
   pack = newPack();
   current = null;
@@ -56,6 +57,7 @@ $('#importBtn').onclick = async () => {
   toast('Reading…');
   try {
     pack = await importPack(dir);
+    storageLocked = false;      // replacing what is stored is what Import is for
     current = null;
     currentObj = null;
     sndSel = Object.keys(pack.sounds.defs)[0] || null;
@@ -96,7 +98,12 @@ function warmMedia() {
 async function boot(already) {
   if (!already) {
     let saved = null;
-    try { saved = await dbGet(); } catch { /* a first run has nothing stored */ }
+    // a first run reads back nothing; a read that fails is not a first run,
+    // and the pack it could not read is left alone
+    try { saved = await dbGet(); } catch (err) {
+      storageLocked = true;
+      toast('Could not read the pack saved here — nothing will be saved until you Import a pack or Start over', true);
+    }
     pack = saved && (saved.sprites || saved.objects) ? saved : newPack();
     sndSel = Object.keys(pack.sounds.defs)[0] || null;
   }
@@ -110,6 +117,7 @@ async function boot(already) {
   const wormMade = migrateWorm(pack);
   const treasured = migrateTreasure(pack);
   const shields = migrateShieldWorn(pack);
+  const stopMade = migratePlatformStop(pack);
   const tilesCut = await migrateTileSheet(pack);
   const madeCodes = migrateCodes(pack);
   const recoded = recodeObjects(pack) > 0 || madeCodes;
@@ -126,6 +134,10 @@ async function boot(already) {
   renderBackgrounds();
   renderSounds();
   renderPackTab();
+  if (stopMade) {
+    savePack();
+    toast('Added a platform stop — place it in the level editor where a platform should turn');
+  }
   if (shields) {
     savePack();
     toast('A shield wears two sprites now — its own, and the one she wears, which was its worn part');

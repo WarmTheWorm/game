@@ -828,11 +828,12 @@ function loadCustomLevel(text, opts = {}) {
   const all = [map.back, map.main, map.front];
 
   const newGrid = Array.from({ length: newRows }, () => Array(newCols).fill('.'));
-  // 'x' counts from any layer, so a map can carry its platform limits
-  // wherever they read best.
+  // A platform stop (js/platform-stop.js, glyph x) counts from any layer, so
+  // a map can carry its platform limits wherever they read best.
+  const stop = PlatformStop.codes[0][1];
   const markGrid = Array.from({ length: newRows }, (_, r) => {
     let out = '';
-    for (let c = 0; c < newCols; c++) out += all.some(l => l.glyphs[r][c] === 'x') ? 'x' : '.';
+    for (let c = 0; c < newCols; c++) out += all.some(l => l.glyphs[r][c] === stop) ? 'x' : '.';
     return out;
   });
 
@@ -856,6 +857,7 @@ function loadCustomLevel(text, opts = {}) {
     const name = objectFor(ch, d, v);
     const Cls = name && classOf(name);
     if (!Cls) return;
+    if (Cls.editorOnly) return;      // a mark for building levels: read above, never put in the world
     // a door is the one thing that only counts in the solid layer
     if (Cls.mainLayerOnly && !onMain) return;
     // platforms wait for the terrain, since how far they travel depends on it

@@ -58,6 +58,7 @@ its **Sprites** tab.
 | `nM0` | `Sign::sign` | `sprite::sign` | |
 | `0W0` | `Decoration::cloud` | `sprite::cloud` | |
 | `n=0` | `Platform::platform` | `sprite::platform` | |
+| `0x0` | `PlatformStop::platformStop` | — (the editor marks it) | where a platform turns; never in the game |
 | `0P0` | — her start | `Worm::worm`: `sprite::worm` | parts `body`, `tail`, `headRight` (head), `headLeft` (optional) |
 
 ## The classes
@@ -236,6 +237,15 @@ Platform · extends `Entity` · code `n=` (its digit is its direction: 0 right, 
 |---|---|---|---|
 | `sprite` | sprite | — | Sprite |
 | `speed` | float | `0.04` | Speed (over a 2.5-tile run; longer runs take longer) |
+
+### PlatformStop
+
+PlatformStop · extends `Entity` · code `0x` · editor only
+
+Placed in any layer on a platform's line of travel, it ends the run there as
+a solid tile would. The level editor draws it as a red ⛔ marker; the game
+reads it while building the platforms and never spawns or draws it. It needs
+no sprite.
 
 ### Decoration
 

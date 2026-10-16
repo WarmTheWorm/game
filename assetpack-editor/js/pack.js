@@ -168,6 +168,19 @@ function migrateTreasure(p) {
   return old.length > 0;
 }
 
+// Platforms turn at a platform stop, which the level editor places from the
+// pack's objects like anything else; a pack without one gets one, with no
+// art — the editor marks it, and the game never draws it. True if added.
+function migratePlatformStop(p) {
+  if (p.objects.some(o => o.cls === 'PlatformStop')) return false;
+  let name = 'platformStop', n = 2;
+  while (p.objects.some(o => o.name === name)) name = 'platformStop' + n++;
+  const o = { id: uid(), name, cls: 'PlatformStop', code: ['0x0'], props: { sprite: '' } };
+  fillProps(o);
+  p.objects.push(o);
+  return true;
+}
+
 // The worm became an object like the rest: a pack without a Worm object gets
 // one, wearing the sprite called worm if it has one, and her sprite gets the
 // collision circle she has always hit the tiles with, if it has none. True if
@@ -408,7 +421,13 @@ function writePack() {
   return saving;
 }
 
+// Set when the stored pack could not be read at start-up: the blank one open
+// instead must not be saved over it, so nothing is written until the person
+// imports a pack or starts over, which say they mean to replace it.
+let storageLocked = false;
+
 function savePack() {
+  if (storageLocked) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(writePack, 400);
 }

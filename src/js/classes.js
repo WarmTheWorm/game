@@ -7,7 +7,7 @@ const GAME_CLASSES = [
   Beetle, Moth, Frog,
   Treasure, Key, Shield, Lantern,
   Portal, Checkpoint, Flag, Door, Sign,
-  Plant, RockSpawner, Platform, Decoration,
+  Plant, RockSpawner, Platform, PlatformStop, Decoration,
   Worm
 ];
 const CLASS_BY_NAME = new Map(GAME_CLASSES.map(C => [C.name, C]));

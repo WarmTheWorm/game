@@ -356,6 +356,7 @@
 <script src="../src/js/lantern.js"></script>
 <script src="../src/js/key.js"></script>
 <script src="../src/js/platform.js"></script>
+<script src="../src/js/platform-stop.js"></script>
 <script src="../src/js/rock.js"></script>
 <script src="../src/js/rock-spawner.js"></script>
 <script src="../src/js/plant.js"></script>
@@ -1034,6 +1035,12 @@ function render() {
 // glyph named.
 function drawObjectCell(cell, c, r) {
   const glyph = OBJECTS[cell.oi].glyph;
+  // a mark only the editor shows — a platform stop — unless it has art
+  const C = objClass(glyph, cell.id, cell.v);
+  if (C && C.editorOnly && !atlas.def(objSprite(glyph, cell.id, cell.v)).frame) {
+    marker({ c, r }, C.marker.colour, C.marker.letter);
+    return;
+  }
   const name = objSprite(glyph, cell.id, cell.v);
   if (!atlas.def(name).frame) { objPlaceholder(c, r, cell.id + glyph + (cell.v || '0')); return; }
   const [ax, ay] = cellAnchor(glyph, cell.id, cell.v);
@@ -1984,6 +1991,21 @@ function drawObjectSwatch(c2, glyph, digit, v) {
   c2.clearRect(0, 0, SWATCH, SWATCH);
   const name = objSprite(glyph, digit, v);
   const def = atlas.def(name);
+  const C = objClass(glyph, digit, v);
+  if (C && C.editorOnly && !def.frame) {
+    const m = C.marker, pad = SWATCH * 0.12;
+    c2.fillStyle = m.colour + '33';
+    c2.fillRect(pad, pad, SWATCH - pad * 2, SWATCH - pad * 2);
+    c2.strokeStyle = m.colour;
+    c2.lineWidth = 2;
+    c2.strokeRect(pad + 1, pad + 1, SWATCH - pad * 2 - 2, SWATCH - pad * 2 - 2);
+    c2.font = `bold ${Math.round(SWATCH * 0.45)}px system-ui, sans-serif`;
+    c2.textAlign = 'center';
+    c2.textBaseline = 'middle';
+    c2.fillStyle = m.colour;
+    c2.fillText(m.letter, SWATCH / 2, SWATCH / 2 + 1);
+    return;
+  }
   if (!def.frame) return;
   const [fw, fh] = atlas.size(name);
   const scale = Math.min(1, SWATCH / fw, SWATCH / fh);

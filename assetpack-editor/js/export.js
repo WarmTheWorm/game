@@ -68,7 +68,8 @@ function objectProblems(o) {
   const want = C.codes.map(c => c + variantOf(o));
   if (C.codes.length && (!variantOf(o) || o.code.join() !== want.join())) bad.push(`its codes should be ${want.join(' ')}.`);
   const sprite = spriteByName(refName(o.props.sprite));
-  if (!sprite) bad.push(`its sprite "${o.props.sprite || 'none'}" is not in the pack.`);
+  // a mark only the level editor shows draws without art if it has none
+  if (!sprite && !(C.editorOnly && !o.props.sprite)) bad.push(`its sprite "${o.props.sprite || 'none'}" is not in the pack.`);
   for (const [k, d] of Object.entries(classDefs(o.cls))) {
     const v = o.props[k];
     if (d.type === 'sound' && v && !pack.sounds.defs[refName(v)]) bad.push(`${k} names ${v}, which is not one of the pack's sounds.`);
