@@ -1277,16 +1277,14 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const stageEl = document.getElementById('stage');
 
-// The long side of the screen always shows LONG_SIDE_TILES tiles; the short
-// side gets whatever whole tile count best matches the screen's aspect ratio,
-// so the stage fills the screen with an empty margin smaller than one tile.
-const LONG_SIDE_TILES = 20;
-const MIN_SHORT_TILES = 6;
-let VIEW_COLS, VIEW_ROWS;
-// The view in game units, which everything is drawn in, and how many of the
-// canvas's own pixels one unit takes. The canvas is as many pixels as the
-// screen gives it, so the art — drawn at twice a unit — stays sharp instead
-// of being drawn small and stretched.
+// The art is drawn at twice a game unit — a 32-unit tile is 64 pixels on the
+// sheet — and the game shows it at that size, a pixel of art to a pixel of
+// screen, so it is as sharp as it was drawn. A bigger window sees more of the
+// level rather than bigger tiles. Only a screen too small to show
+// MIN_LONG_TILES along its long side draws smaller, so a phone still sees
+// enough to play.
+const ART_SCALE = 2;              // screen pixels (CSS) per game unit
+const MIN_LONG_TILES = 12;
 let VIEW_W, VIEW_H;
 let PIXEL_X = 1, PIXEL_Y = 1;
 let mapWidthPx = cols * TILE;
@@ -1295,33 +1293,15 @@ let mapHeightPx = rows * TILE;
 function layoutStage() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const longPx = Math.max(vw, vh);
-  const shortPx = Math.min(vw, vh);
-  let shortTiles = Math.round(LONG_SIDE_TILES * shortPx / longPx);
-  shortTiles = Math.max(MIN_SHORT_TILES, Math.min(LONG_SIDE_TILES, shortTiles));
-
-  if (vw >= vh) {
-    VIEW_COLS = LONG_SIDE_TILES;
-    VIEW_ROWS = shortTiles;
-  } else {
-    VIEW_COLS = shortTiles;
-    VIEW_ROWS = LONG_SIDE_TILES;
-  }
-
-  VIEW_W = VIEW_COLS * TILE;
-  VIEW_H = VIEW_ROWS * TILE;
-
-  // Fit that exact tile ratio inside the viewport (contain), so the leftover
-  // margin on one axis is at most half a tile's on-screen size.
-  const ratio = VIEW_COLS / VIEW_ROWS;
-  let stageW = vw, stageH = vw / ratio;
-  if (stageH > vh) { stageH = vh; stageW = vh * ratio; }
-  stageEl.style.width = stageW + 'px';
-  stageEl.style.height = stageH + 'px';
+  const scale = Math.min(ART_SCALE, Math.max(vw, vh) / (MIN_LONG_TILES * TILE));
+  VIEW_W = vw / scale;
+  VIEW_H = vh / scale;
+  stageEl.style.width = vw + 'px';
+  stageEl.style.height = vh + 'px';
 
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(1, Math.round(stageW * dpr));
-  canvas.height = Math.max(1, Math.round(stageH * dpr));
+  canvas.width = Math.max(1, Math.round(vw * dpr));
+  canvas.height = Math.max(1, Math.round(vh * dpr));
   PIXEL_X = canvas.width / VIEW_W;
   PIXEL_Y = canvas.height / VIEW_H;
 }
@@ -3198,7 +3178,8 @@ function loop(now) {
   ctx.setTransform(PIXEL_X, 0, 0, PIXEL_Y, 0, 0);   // game units from here on
   drawBackground();
   ctx.save();
-  ctx.translate(-cam.x, -cam.y);
+  // the camera on a whole screen pixel, so the art isn't resampled between two
+  ctx.translate(-Math.round(cam.x * PIXEL_X) / PIXEL_X, -Math.round(cam.y * PIXEL_Y) / PIXEL_Y);
   if (debugCollisionView) {
     // Objects stay, the tile layers don't — terrain is what the red overlay is
     // describing, so drawing it twice only makes the shapes harder to read.

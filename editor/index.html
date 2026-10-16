@@ -298,9 +298,9 @@
       <span class="spacer"></span>
       <button id="dimBtn">Dim the other layers</button>
       <div class="seg" id="zoomSeg">
-        <button data-zoom="0.5">50%</button>
-        <button data-zoom="1" class="on">100%</button>
-        <button data-zoom="2">200%</button>
+        <button data-zoom="1">50%</button>
+        <button data-zoom="2" class="on">100%</button>
+        <button data-zoom="4">200%</button>
       </div>
     </div>
     <div id="scroller"><canvas id="board"></canvas></div>
@@ -511,7 +511,7 @@ let objIndex = 0;
 let objDigit = 0;
 let objVariant = '0';   // the object's own third character
 let objEntry = 0;       // which palette swatch: one per object code
-let zoom = 1;
+let zoom = 2;                  // 100%: a pixel of art to a pixel of screen, as the game shows it
 let dimOthers = false;   // off, so the board reads as the finished level
 
 // What each sign says, by the info digit its block carries. Sparse while it is
