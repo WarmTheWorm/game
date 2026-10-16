@@ -116,14 +116,14 @@
         <button class="btn sm" id="tilesNew">✎ New sheet…</button>
         <button class="btn sm" id="tilesLoad">Load tiles.png…</button></div>
       <div class="pb">
-        <p class="hint">The sheet is a labelled grid: one header cell of gutter down the left and across the top, then a row per tile type and a column per tint. A map block names a tile with its two characters plus a colour, so row <code>1#</code> column <code>1</code> is the cell <code>1#1</code> draws.</p>
-        <div class="sheetwrap" id="tilesWrap"><canvas id="tilesCv"></canvas></div>
+        <p class="hint">A row per kind of tile and a column per colour, 0 to 9. A map block names a tile by its row and column, so row <code>1#</code> column <code>1</code> is <code>1#1</code>. The button beside each row says what it collides as.</p>
+        <div class="sheetwrap" id="tilesWrap"><div class="sheetrows" id="tilesRows"></div><canvas id="tilesCv"></canvas></div>
         <div class="row gap"><p class="mono" id="tilesDims">No sheet loaded</p><span class="grow"></span><span class="mono" id="tilesHover"></span></div>
         <p class="hint">Click a tile to paint it.</p>
       </div>
     </div>
     <div class="panel">
-      <div class="ph"><h2>Rows</h2></div>
+      <div class="ph"><h2>Sheet</h2></div>
       <div class="pb insp" id="tilesProps"></div>
     </div>
   </section>

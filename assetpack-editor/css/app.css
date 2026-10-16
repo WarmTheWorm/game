@@ -258,8 +258,15 @@ dialog#ask::backdrop{background:#0b0818cc}
 .part .pname{flex:1 1 0;min-width:0;width:0}
 
 /* ---------- tile rows ---------- */
-.trows{display:grid;gap:3px}
-.trow{display:grid;grid-template-columns:36px 28px 44px 44px minmax(0,1fr);gap:8px;align-items:center}
-.trow.head span{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.trow input{text-align:center;padding:3px 4px}
-.trow .mono{color:var(--muted)}
+/* the terrain sheet's rows: a name and a collision button beside each, as
+   tall as the row's cells so they line up with the sheet */
+.sheetwrap:has(.sheetrows){display:flex;align-items:flex-start;gap:8px}
+.sheetrows{flex:none;display:flex;flex-direction:column;position:sticky;left:0;background:var(--panel);z-index:1;padding-right:6px}
+.srow{display:flex;align-items:center;gap:6px;box-sizing:border-box}
+.srow .mono{width:22px;text-align:right;color:var(--muted)}
+.hitbtn{min-width:126px;text-align:left}
+.hitbtn b,.hitmenu b{display:inline-block;width:1.2em;text-align:center;color:var(--amber)}
+.hitmenu{position:fixed;z-index:50;display:flex;flex-direction:column;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:4px;box-shadow:0 6px 20px rgba(0,0,0,.45)}
+.hitmenu button{background:none;border:0;color:var(--fg);text-align:left;padding:5px 12px 5px 8px;border-radius:5px;cursor:pointer;font:inherit;white-space:nowrap}
+.hitmenu button:hover{background:var(--line)}
+.hitmenu button.on{color:var(--amber)}

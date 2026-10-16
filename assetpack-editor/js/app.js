@@ -125,7 +125,7 @@ async function boot(already) {
   renderPackTab();
   if (tilesCut) {
     savePack();
-    toast('The terrain sheet has no labels any more — its rows are named below it');
+    toast("The terrain sheet has no labels any more — each row's collision is the button beside it");
   }
   if (lamps) {
     savePack();

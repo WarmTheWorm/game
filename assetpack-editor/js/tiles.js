@@ -2,16 +2,32 @@
 // The sheet is a grid of tiles: a row per kind of tile, a column per tint. A
 // row is named by two characters — the 1# of a 1#1 block — and says what it
 // collides as; the third character of a block is the column, always 0 to 9.
-// They are kept as the strings a level pack carries (row_0, row_1, row_C),
-// edited here a row at a time.
+// The names are fixed by the row's place on the sheet, so only the collision
+// is chosen here, with the button beside each row. They are kept as the
+// strings a level pack carries (row_0, row_1, row_C).
 
 const TILE_COLUMNS = '0123456789';
 
-// What a row can collide as, by the character the game reads.
+// Every row's name, in order: the twenty the game has always had — 0# to 9#,
+// the four ramps 0/ to 3/, then T U * o $ ~ — and after those a digit on each
+// of T U * o $ ~ again, since the game draws only those glyphs from the sheet.
+const TILE_ROW_NAMES = (() => {
+  const names = [];
+  for (const d of '0123456789') names.push(d + '#');
+  for (const d of '0123') names.push(d + '/');
+  for (const g of 'TU*o$~') names.push(' ' + g);
+  for (const g of 'TU*o$~') for (const d of '123456789') names.push(d + g);
+  return names;
+})();
+const TILE_MAX_ROWS = TILE_ROW_NAMES.length;
+
+// What a row can collide as, by the character the game reads: the mark on
+// its button, and the word.
 const TILE_HITS = [
-  [' ', 'None'], ['S', 'Solid'], ['^', 'Top half'],
-  ['0', 'Ramp up ◢'], ['1', 'Ramp down ◣'], ['2', 'Ceiling ramp ◥'], ['3', 'Ceiling ramp ◤']
+  [' ', '·', 'None'], ['S', '■', 'Solid'], ['^', '▀', 'Top half'],
+  ['0', '◢', 'Ramp up'], ['1', '◣', 'Ramp down'], ['2', '◥', 'Ceiling, right'], ['3', '◤', 'Ceiling, left']
 ];
+const hitOf = ch => TILE_HITS.find(h => h[0] === ch) || TILE_HITS[0];
 
 // Where things sit on the sheet, as src/js/tileset.js reads it: every cell is
 // the tile plus a margin of an eighth of a tile each side, and only the tile
@@ -43,13 +59,15 @@ async function migrateTileSheet(p) {
   return true;
 }
 
-// The row strings stretched or cut to the sheet's rows, so every row has an
-// id, a glyph, a collision and a draw mode.
+// The row strings fitted to the sheet's rows: the names are the fixed ones,
+// and a row new to the sheet collides as nothing until one is chosen.
 function fitRows(n) {
   const t = pack.tiles;
+  n = Math.min(n, TILE_MAX_ROWS);
   const fit = (s, pad) => (s || '').padEnd(n, pad).slice(0, n);
-  t.row_0 = fit(t.row_0, ' ');
-  t.row_1 = fit(t.row_1, ' ');
+  const names = TILE_ROW_NAMES.slice(0, n);
+  t.row_0 = names.map(s => s[0]).join('');
+  t.row_1 = names.map(s => s[1]).join('');
   t.row_C = fit(t.row_C, ' ');
   t.row_D = fit(t.row_D, 'T');
 }
@@ -91,7 +109,7 @@ function renderTiles() {
       drawSheet();
       const G = sheetGeom(t.size, img.naturalWidth, img.naturalHeight);
       $('#tilesDims').textContent = `${img.naturalWidth}×${img.naturalHeight} · tile ${t.size}px · ${G.rows} rows × ${G.cols} columns`;
-      renderTileRows(G.rows);
+      renderTileRows(G.rows, G);
     }).catch(() => { $('#tilesDims').textContent = 'That sheet could not be read'; });
   } else {
     tilesImg = null;
@@ -101,38 +119,65 @@ function renderTiles() {
   }
 }
 
-// One line per row of the sheet: its first tile, its two-character name and
-// what it collides as.
-function renderTileRows(n) {
+// The left edge of the sheet: a line per row, as tall as its cells, with its
+// fixed name and a button for what it collides as. The tile size is the
+// only other thing set here.
+function renderTileRows(n, G) {
   const t = pack.tiles;
   if (n) fitRows(n);
-  const hitOpts = cur => TILE_HITS.map(([v, label]) => `<option value="${v === ' ' ? '_' : v}" ${v === cur ? 'selected' : ''}>${label}</option>`).join('');
+  n = Math.min(n, TILE_MAX_ROWS);
+  const el = $('#tilesRows');
+  el.style.paddingTop = G ? G.gutter + 'px' : '0';
+  el.innerHTML = n && G ? [...Array(n).keys()].map(r => {
+    const [, mark, word] = hitOf(t.row_C[r]);
+    return `<div class="srow" style="height:${G.cell}px">
+      <span class="mono">${esc(TILE_ROW_NAMES[r].trim())}</span>
+      <button class="btn sm hitbtn" data-hit="${r}" title="Row ${TILE_ROW_NAMES[r].trim()} collides as ${word} — click to change"><b>${mark}</b> ${word}</button>
+    </div>`;
+  }).join('') : '';
   $('#tilesProps').innerHTML = `
     <label class="ctl"><div class="row"><span>Tile size</span><output>${t.size}px</output></div>
-      <input type="range" data-t="size" min="8" max="128" step="8" value="${t.size}"></label>
-    ${n ? `<div class="trows" style="grid-column:1/-1">
-      <div class="trow head"><span>Row</span><span></span><span>Id</span><span>Glyph</span><span>Collides as</span></div>
-      ${[...Array(n).keys()].map(r => `<div class="trow" data-r="${r}">
-        <span class="mono">${r + 1}</span>
-        <canvas class="ico" width="24" height="24" data-trow="${r}" aria-hidden="true"></canvas>
-        <input class="mono" data-tr="id" maxlength="1" value="${esc(t.row_0[r].trim())}" placeholder="·" aria-label="Row ${r + 1} id" spellcheck="false">
-        <input class="mono" data-tr="glyph" maxlength="1" value="${esc(t.row_1[r].trim())}" placeholder="·" aria-label="Row ${r + 1} glyph" spellcheck="false">
-        <select data-tr="hit" aria-label="Row ${r + 1} collision">${hitOpts(t.row_C[r])}</select>
-      </div>`).join('')}
-      <p class="hint">A map block names a tile by its row's id and glyph, then its column 0–9: row <code>1#</code>, column 1 is <code>1#1</code>. An id left empty takes any digit.</p>
-    </div>` : ''}`;
-  // each row's first tile, from the sheet as it is now
-  if (tilesImg && n) {
-    const w = tilesImg.naturalWidth || tilesImg.width, h = tilesImg.naturalHeight || tilesImg.height;
-    const G = sheetGeom(t.size, w, h);
-    $$('#tilesProps canvas[data-trow]').forEach(cv => {
-      const p = G.at(+cv.dataset.trow, 0);
-      const g = cv.getContext('2d');
-      g.imageSmoothingEnabled = true;
-      g.drawImage(tilesImg, p.x, p.y, G.size, G.size, 0, 0, 24, 24);
-    });
-  }
+      <input type="range" data-t="size" min="8" max="128" step="8" value="${t.size}"></label>`;
 }
+
+// A row's button opens the choices beside it; picking one sets the row.
+let hitMenu = null;
+function closeHitMenu() { if (hitMenu) { hitMenu.remove(); hitMenu = null; } }
+$('#tilesRows').addEventListener('click', e => {
+  const b = e.target.closest('[data-hit]');
+  if (!b) return;
+  e.stopPropagation();
+  const r = +b.dataset.hit, again = hitMenu && hitMenu.dataset.r === String(r);
+  closeHitMenu();
+  if (again) return;
+  const cur = pack.tiles.row_C[r];
+  hitMenu = document.createElement('div');
+  hitMenu.className = 'hitmenu';
+  hitMenu.dataset.r = r;
+  hitMenu.innerHTML = TILE_HITS.map(([v, mark, word]) =>
+    `<button class="${v === cur ? 'on' : ''}" data-v="${v === ' ' ? '_' : v}"><b>${mark}</b> ${word}</button>`).join('');
+  document.body.appendChild(hitMenu);
+  const box = b.getBoundingClientRect(), h = hitMenu.offsetHeight;
+  hitMenu.style.left = box.left + 'px';
+  hitMenu.style.top = Math.max(4, Math.min(box.bottom + 2, innerHeight - h - 4)) + 'px';
+  hitMenu.addEventListener('click', ev => {
+    const o = ev.target.closest('[data-v]');
+    if (!o) return;
+    ev.stopPropagation();
+    const v = o.dataset.v === '_' ? ' ' : o.dataset.v;
+    closeHitMenu();
+    if (v === pack.tiles.row_C[r]) return;
+    markUndo();
+    pack.tiles.row_C = setAt(pack.tiles.row_C, r, v);
+    savePack();
+    const [, mark, word] = hitOf(v);
+    b.innerHTML = `<b>${mark}</b> ${word}`;
+    b.title = `Row ${TILE_ROW_NAMES[r].trim()} collides as ${word} — click to change`;
+  });
+});
+document.addEventListener('click', closeHitMenu);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHitMenu(); });
+$('#tilesWrap').addEventListener('scroll', closeHitMenu);
 
 $('#tilesProps').addEventListener('input', e => {
   const t = pack.tiles;
@@ -141,18 +186,7 @@ $('#tilesProps').addEventListener('input', e => {
     t.size = +e.target.value;
     e.target.parentElement.querySelector('output').textContent = t.size + 'px';
     savePack();
-    return;
   }
-  const what = e.target.dataset.tr;
-  const row = e.target.closest('[data-r]');
-  if (!what || !row) return;
-  const r = +row.dataset.r;
-  markUndo();
-  const ch = (e.target.value || ' ').slice(-1);
-  if (what === 'id') t.row_0 = setAt(t.row_0, r, ch);
-  if (what === 'glyph') t.row_1 = setAt(t.row_1, r, ch);
-  if (what === 'hit') t.row_C = setAt(t.row_C, r, e.target.value === '_' ? ' ' : e.target.value);
-  savePack();
 });
 // a size change moves where every tile is, so the rows and sheet are redrawn
 $('#tilesProps').addEventListener('change', e => { if (e.target.dataset.t === 'size') renderTiles(); });
@@ -174,7 +208,7 @@ function tileAt(e) {
   const cv = $('#tilesCv'), b = cv.getBoundingClientRect();
   const x = (e.clientX - b.left) * cv.width / b.width, y = (e.clientY - b.top) * cv.height / b.height;
   const G = sheetGeom(pack.tiles.size, cv.width, cv.height);
-  const c = Math.floor((x - G.cell) / G.cell), r = Math.floor((y - G.cell) / G.cell);
+  const c = Math.floor((x - G.gutter) / G.cell), r = Math.floor((y - G.gutter) / G.cell);
   return r >= 0 && c >= 0 && r < G.rows && c < G.cols ? { r, c } : null;
 }
 
@@ -229,12 +263,12 @@ $('#tilesNew').onclick = async () => {
   const t = pack.tiles;
   const got = await ask('Start a new terrain sheet', [
     { key: 'rows', label: 'Rows — one per kind of tile', type: 'number', value: t.row_1.length || 20 },
-    { type: 'note', label: `Each row has 10 columns, 0 to 9, at ${t.size}px a tile. Name the rows and say what they collide as below the sheet.` },
+    { type: 'note', label: `Each row has 10 columns, 0 to 9, at ${t.size}px a tile. The rows are named in order — 0# to 9#, 0/ to 3/, then T U * o $ ~ — and the button beside each says what it collides as.` },
     ...(t.src ? [{ type: 'note', label: 'This replaces the sheet that is loaded now. Ctrl+Z brings it back.' }] : [])
   ], 'Make it');
   if (!got) return;
   const rows = parseInt(got.rows, 10);
-  if (!(rows >= 1 && rows <= 64)) { toast('Pick from 1 to 64 rows', true); return; }
+  if (!(rows >= 1 && rows <= TILE_MAX_ROWS)) { toast(`Pick from 1 to ${TILE_MAX_ROWS} rows`, true); return; }
   const cell = t.size * 1.25;
   const sheet = blankCanvas(cell * TILE_COLUMNS.length, cell * rows);
   markUndo();
