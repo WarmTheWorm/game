@@ -79,9 +79,12 @@ function propField(o, k, d) {
     }
     case 'background': input = `<select data-prop="${k}">${options(pack.backgrounds.map(b => b.name), 'background::')}</select>`; break;
     case 'part': {
-      const s = spriteByName(refName(o.props.sprite));
-      input = `<select data-prop="${k}">${options(s ? s.parts.filter(p => !p.glow).map(p => p.name) : [], '')}</select>`;
-      break;
+      // a picker like the sprite's, each part shown by its first frame
+      const sn = refName(o.props.sprite), s = spriteByName(sn);
+      const missing = v && !(s && s.parts.some(p => p.name === v)) ? ' — missing' : '';
+      return `<div class="ctl">${head}<div class="sprpick">
+        <button type="button" class="sprbtn" data-partbtn="${k}" aria-haspopup="listbox">${v ? partIcon(sn, v) : ''}<span class="nm">${esc(v || '—')}${missing}</span><span class="caret">▾</span></button>
+      </div>${hint}</div>`;
     }
     default: input = `<input data-prop="${k}" value="${esc(v ?? '')}">`;
   }
@@ -169,7 +172,8 @@ function setProp(o, k, v) {
   markUndo();
   o.props[k] = v;
   // a new sprite has other parts to choose from, and its own icon
-  if (d.type === 'sprite') renderGoForm(); else drawGoPreview();
+  // a picker's button shows what it holds, so it is drawn again
+  if (d.type === 'sprite' || d.type === 'part') renderGoForm(); else drawGoPreview();
   renderGoList();
   savePack();
 }
@@ -273,6 +277,29 @@ function openSpritePicker(btn) {
   if (focus) focus.focus();
 }
 
+// The same list for a part prop: the parts of the object's sprite.
+function openPartPicker(btn) {
+  const o = currentObj;
+  const k = btn.dataset.partbtn;
+  const cur = o.props[k] || '';
+  const sn = refName(o.props.sprite), s = spriteByName(sn);
+  closeSpritePicker();
+  const list = document.createElement('div');
+  list.className = 'sprlist';
+  list.setAttribute('role', 'listbox');
+  const parts = s ? s.parts.filter(p => !p.glow) : [];
+  list.innerHTML = [
+    `<button type="button" role="option" class="spropt ${!cur ? 'on' : ''}" data-sprset="${k}" data-v="" aria-selected="${!cur}"><span>—</span></button>`,
+    ...parts.map(p => `
+    <button type="button" role="option" class="spropt ${p.name === cur ? 'on' : ''}" data-sprset="${k}" data-v="${esc(p.name)}"
+      aria-selected="${p.name === cur}">${partIcon(sn, p.name)}<span>${esc(p.name)}</span><small>${framesOfPart(s, p.id).length} fr</small></button>`)
+  ].join('') + (parts.length ? '' : '<p class="empty">Its sprite has no parts — pick a sprite first.</p>');
+  btn.parentElement.appendChild(list);
+  paintIcons(list);
+  const focus = list.querySelector('.on') || list.querySelector('button');
+  if (focus) focus.focus();
+}
+
 document.addEventListener('click', e => { if (!e.target.closest('.sprpick')) closeSpritePicker(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSpritePicker(); });
 
@@ -282,6 +309,13 @@ $('#goForm').addEventListener('click', e => {
   const sb = e.target.closest('[data-sprbtn]');
   if (sb) {
     if ($('.sprlist')) closeSpritePicker(); else openSpritePicker(sb);
+    return;
+  }
+  const pb = e.target.closest('[data-partbtn]');
+  if (pb) {
+    const open = pb.parentElement.querySelector('.sprlist');
+    closeSpritePicker();
+    if (!open) openPartPicker(pb);
     return;
   }
   const opt = e.target.closest('[data-sprset]');

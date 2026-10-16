@@ -62,18 +62,42 @@ function insertFrame(o, partId, afterId, canvas) {
 // its glow), fitted into a small square. Markup first, painted once in the page.
 const ICON = 24;
 const spriteIcon = name => `<canvas class="ico" width="${ICON}" height="${ICON}" data-ico="${esc(name)}" aria-hidden="true"></canvas>`;
+// One part of a sprite, by its first frame.
+const partIcon = (name, part) => `<canvas class="ico" width="${ICON}" height="${ICON}" data-ico="${esc(name)}" data-part="${esc(part)}" aria-hidden="true"></canvas>`;
+
+// The smallest box round a canvas's opaque pixels, or null if it has none.
+function drawnBox(cv) {
+  const { width: W, height: H } = cv;
+  if (!W || !H) return null;
+  const d = cv.getContext('2d').getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!d[(y * W + x) * 4 + 3]) continue;
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return x1 < 0 ? null : [x0, y0, x1 - x0 + 1, y1 - y0 + 1];
+}
 
 function paintIcons(root) {
   root.querySelectorAll('canvas[data-ico]').forEach(cv => {
     const g = cv.getContext('2d');
     g.clearRect(0, 0, ICON, ICON);
     const s = spriteByName(cv.dataset.ico);
-    const f = s && (bodyFrames(s)[0] || s.frames[0]);
+    const part = s && cv.dataset.part !== undefined ? s.parts.find(p => p.name === cv.dataset.part) : null;
+    const f = s && (cv.dataset.part !== undefined
+      ? part && s.frames.find(x => x.partId === part.id)
+      : bodyFrames(s)[0] || s.frames[0]);
     if (!f) return;
-    const k = Math.min(ICON / s.fw, ICON / s.fh);
-    const w = s.fw * k, h = s.fh * k;
+    // a part is often a small piece of a big frame, so its icon is cut to
+    // what it draws; a sprite's shows the whole frame
+    const src = frameCanvas(s, f);
+    const box = part ? drawnBox(src) : null;
+    const [sx, sy, sw, sh] = box || [0, 0, s.fw, s.fh];
+    const k = Math.min(ICON / sw, ICON / sh);
+    const w = sw * k, h = sh * k;
     g.imageSmoothingEnabled = k < 1;       // shrinking wants smoothing; growing stays crisp
-    g.drawImage(frameCanvas(s, f), (ICON - w) / 2, (ICON - h) / 2, w, h);
+    g.drawImage(src, sx, sy, sw, sh, (ICON - w) / 2, (ICON - h) / 2, w, h);
   });
 }
 

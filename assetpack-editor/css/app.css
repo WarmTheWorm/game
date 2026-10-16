@@ -271,3 +271,6 @@ dialog#ask::backdrop{background:#0b0818cc}
 .hitmenu button{background:none;border:0;color:var(--fg);text-align:left;padding:5px 12px 5px 8px;border-radius:5px;cursor:pointer;font:inherit;white-space:nowrap}
 .hitmenu button:hover{background:var(--line)}
 .hitmenu button.on{color:var(--amber)}
+/* a part in the part picker says how many frames it has, on the right */
+.spropt span{flex:1;min-width:0;text-align:left}
+.spropt small{color:var(--muted);font-size:11.5px}
