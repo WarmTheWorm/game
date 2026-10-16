@@ -286,8 +286,8 @@ function saveLevelStars() {
 
 function computeStarsForCurrentLevel() {
   let stars = 1; // awarded just for reaching the finish
-  const total = coins.length + gems.length;
-  const collected = coins.filter(c => c.collected).length + gems.filter(g => g.collected).length;
+  const total = coins.length;
+  const collected = coins.filter(c => c.collected).length;
   if (total > 0 && collected === total) stars++;
   if (!levelDeathOccurred) stars++;
   return stars;
@@ -731,6 +731,18 @@ function makeMapLayer(gRows, gCols) {
   };
 }
 
+// Glyphs that once had a class of their own and now name an object of a
+// shared one: a G block was a gem before gems were Treasure.
+const LEGACY_GLYPHS = { G: 'gem' };
+
+// The object a block names, or what an old glyph meant when nothing has it.
+function objectFor(glyph, digit, variant) {
+  const name = atlas.objectAt(glyph, digit, variant);
+  if (name) return name;
+  const old = LEGACY_GLYPHS[glyph];
+  return old && atlas.object(old) ? old : null;
+}
+
 function parseBlockMap(text, sheet) {
   const lines = text.replace(/\r/g, '').split('\n');
   while (lines.length && lines[0].trim() === '') lines.shift();
@@ -807,7 +819,7 @@ function loadCustomLevel(text, opts = {}) {
 
   // Each class says which list it lands in, so this never names a kind.
   const spawned = {
-    enemies: [], coins: [], gems: [], keyPickups: [], shieldPickups: [],
+    enemies: [], coins: [], keyPickups: [], shieldPickups: [],
     portals: [], checkpoints: [], plants: [], rockSpawners: [],
     lockedDoorSpots: [], finishPoints: [], signs: [], lanterns: [], decorations: []
   };
@@ -822,7 +834,7 @@ function loadCustomLevel(text, opts = {}) {
   // which is all that decides when they are drawn.
   const spawnEntity = (ch, d, v, r, c, layer, onMain) => {
     if (ch === 'P') { startPos = { x: c * TILE + TILE / 2, y: r * TILE }; return; }
-    const name = atlas.objectAt(ch, d, v);
+    const name = objectFor(ch, d, v);
     const Cls = name && classOf(name);
     if (!Cls) return;
     // a door is the one thing that only counts in the solid layer
@@ -893,7 +905,6 @@ function loadCustomLevel(text, opts = {}) {
 
   enemies = spawned.enemies;
   coins = spawned.coins;
-  gems = spawned.gems;
   keyPickups = spawned.keyPickups;
   shieldPickups = spawned.shieldPickups;
   lanterns = spawned.lanterns;
@@ -929,7 +940,7 @@ function applyPicks() {
     if (typeof block !== 'string' || block.length < 2) continue;
     const data = asDigit(block[0]);
     const glyph = block[1];
-    const name = atlas.objectAt(glyph, data, block[2]);
+    const name = objectFor(glyph, data, block[2]);
     const Cls = name && classOf(name);
     if (!Cls || !(Cls.prototype instanceof Pickup)) continue;
     Cls.spawn(0, 0, data, name, 0).take();
@@ -1303,7 +1314,7 @@ function captureWorld(flag) {
     index: currentLevelIndex, flag, respawnPoint, died: levelDeathOccurred,
     grid, backGrid, frontGrid, collideGrid, gridMeta, backMeta, frontMeta, tileset,
     cols, rows, mapWidthPx, mapHeightPx, START, background, levelMusic,
-    enemies, coins, gems, keyPickups, shieldPickups, lockedDoorSpots,
+    enemies, coins, keyPickups, shieldPickups, lockedDoorSpots,
     movingPlatforms, plants, rockSpawners, rocks,
     portals, checkpoints, finishPoints, signs, levelMessages, levelPicks, lanterns, decorations, lightReach, lightRadius
   };
@@ -1322,7 +1333,7 @@ function restoreWorld(w) {
   levelMusic = w.levelMusic;
   sound.use(level.sounds || sound.root);
   sound.setTrack(levelMusic);
-  enemies = w.enemies; coins = w.coins; gems = w.gems;
+  enemies = w.enemies; coins = w.coins;
   keyPickups = w.keyPickups; shieldPickups = w.shieldPickups;
   lanterns = w.lanterns; lightReach = w.lightReach; lightRadius = w.lightRadius;
   decorations = w.decorations;
@@ -1503,8 +1514,7 @@ let platformTimer = 0;
 let rockSpawners = [];
 let rocks = [];
 let plants = [];
-let coins = [];
-let gems = [];
+let coins = [];     // every Treasure, coins and gems alike
 let shieldPickups = [];
 let keyPickups = [];
 let lanterns = [];
@@ -1827,7 +1837,7 @@ function update() {
   if (rocks.length > 40) rocks = rocks.filter(r => r.alive);
   for (const list of [plants, enemies]) for (const e of list) e.update();
   checkEnemyCollisions();
-  for (const list of [coins, gems, shieldPickups, keyPickups, lanterns, checkpoints, signs]) for (const e of list) e.update();
+  for (const list of [coins, shieldPickups, keyPickups, lanterns, checkpoints, signs]) for (const e of list) e.update();
   updateTeleporters();
   checkFinish();
 
@@ -1917,7 +1927,7 @@ function drawTileLayer(meta) {
 // thing appears here once; what it looks like is its own draw().
 function entityGroups() {
   return [decorations, lockedDoorSpots, portals, checkpoints, finishPoints, signs, movingPlatforms,
-          coins, gems, shieldPickups, keyPickups, lanterns, rocks, plants, enemies];
+          coins, shieldPickups, keyPickups, lanterns, rocks, plants, enemies];
 }
 
 // One pass per block line, so a thing is drawn with the terrain it was

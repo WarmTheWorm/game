@@ -13,7 +13,7 @@ The game only spawns objects. A map block is three characters, and they are
 its object's **code**:
 
 - the first two are the **class's**, fixed by the class itself — Beetle `0E`,
-  Moth `1E`, Frog `2E`, Coin `0C`. A class whose digit says something about
+  Moth `1E`, Frog `2E`, Treasure `0C`. A class whose digit says something about
   the one placed has `n` there, for any digit: a key's id (`nK`, so `3K0` is
   key 3), a platform's direction (`n=`: `0=` right, `1=` left, `2=` up,
   `3=` down).
@@ -21,7 +21,7 @@ its object's **code**:
   automatically — the first coin `0C0`, the second `0C1`.
 
 ```json
-"coin2": {"class":"Coin","code":"0C1","props":{"sprite":"sprite::coin2","score":1,"pickSound":"sound::coin"}}
+"coin2": {"class":"Treasure","code":"0C1","props":{"sprite":"sprite::coin2","score":1,"pickSound":"sound::coin","tally":"coins"}}
 ```
 
 The object is placed as its class, with its own property values over the
@@ -40,9 +40,9 @@ its **Sprites** tab.
 | `0E0` | `Beetle::beetle` | `sprite::beetle` | |
 | `1E0` | `Moth::moth` | `sprite::moth` | |
 | `2E0` | `Frog::frog` | `sprite::frog` | |
-| `0C0` | `Coin::coin` | `sprite::coin` | |
-| `0C1` | `Coin::coin2` | `sprite::coin2` | |
-| `0G0` | `Gem::gem` | `sprite::gem` | |
+| `0C0` | `Treasure::coin` | `sprite::coin` | |
+| `0C1` | `Treasure::coin2` | `sprite::coin2` | |
+| `0C2` | `Treasure::gem` | `sprite::gem` | `score: 5`, `pickSound: sound::gem`, `tally: gems` |
 | `nK0` | `Key::key` | `sprite::key` | |
 | `0S0` | `Shield::shield` | `sprite::shield` | |
 | `0N0` | `Lantern::lanternFull` | `sprite::lanternFull` | |
@@ -108,25 +108,20 @@ Frog · extends `Enemy` · code `2E` · stands at 50%, 0% of its cell
 | `hopForward` | float | `2.2` | Hop strength, forward |
 | `pause` | int | `40` | Frames on the ground between hops |
 
-### Coin
+### Treasure
 
-Coin · extends `Pickup` · code `0C` · stands at 50%, 50% of its cell
+Treasure · extends `Pickup` · code `0C` · stands at 50%, 50% of its cell
+
+Coins and gems alike: objects differ by sprite, score and sound, and `tally`
+says which achievement count taking one adds to. Gems were a class of their
+own on `0G`; an old `G` block still reads as the pack's `gem`.
 
 | Property | Type | Default | What it is |
 |---|---|---|---|
 | `sprite` | sprite | — | Sprite |
 | `score` | int | `1` | Score |
 | `pickSound` | sound | `sound::coin` | Sound when taken |
-
-### Gem
-
-Gem · extends `Pickup` · code `0G` · stands at 50%, 50% of its cell
-
-| Property | Type | Default | What it is |
-|---|---|---|---|
-| `sprite` | sprite | — | Sprite |
-| `score` | int | `5` | Score |
-| `pickSound` | sound | `sound::gem` | Sound when taken |
+| `tally` | choice: coins, gems, none | `coins` | Counts toward the achievements as |
 
 ### Key
 

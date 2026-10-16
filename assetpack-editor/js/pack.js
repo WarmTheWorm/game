@@ -112,6 +112,27 @@ function migrateLanterns(p) {
   return n;
 }
 
+// Coins and gems were two classes doing the same thing; both are Treasure
+// now, a gem told apart by its props and counting as a gem. A coin keeps its
+// third character; a gem, whose code was 0G, takes the first one free. True if
+// any was changed.
+function migrateTreasure(p) {
+  const old = p.objects.filter(o => o.cls === 'Coin' || o.cls === 'Gem');
+  const gems = old.filter(o => o.cls === 'Gem');
+  for (const o of old) {
+    o.props = { ...o.props, tally: o.cls === 'Gem' ? 'gems' : 'coins' };
+    o.cls = 'Treasure';
+  }
+  // the coins' codes stand; each gem then takes the first one left
+  const used = new Set(p.objects.filter(x => x.cls === 'Treasure' && !gems.includes(x)).map(variantOf));
+  for (const o of gems) {
+    const v = [...VARIANTS].find(x => !used.has(x)) || '0';
+    used.add(v);
+    o.code = ['0C' + v];
+  }
+  return old.length > 0;
+}
+
 // The worm became an object like the rest: a pack without a Worm object gets
 // one, wearing the sprite called worm if it has one, and her sprite gets the
 // collision circle she has always hit the tiles with, if it has none. True if
@@ -288,7 +309,7 @@ const OLD_GLYPHS = {
   '>': 'platform', '<': 'platform', '^': 'platform', v: 'platform'
 };
 const OLD_CLASSES = {
-  E: ['Beetle', 'Moth', 'Frog'], C: 'Coin', G: 'Gem', K: 'Key', S: 'Shield', N: 'Lantern',
+  E: ['Beetle', 'Moth', 'Frog'], C: 'Treasure', G: 'Treasure', K: 'Key', S: 'Shield', N: 'Lantern',
   O: 'Portal', '!': 'Checkpoint', V: 'Plant', R: 'RockSpawner', L: 'Door', F: 'Flag',
   M: 'Sign', W: 'Decoration', '>': 'Platform', '<': 'Platform', '^': 'Platform', v: 'Platform'
 };
@@ -316,6 +337,7 @@ function migrateSplit(p) {
       let name = base, extra = {};
       if (cls === 'Lantern') { const [n, reach] = OLD_LANTERNS[part] || [base + part, 0]; name = n; extra = { part, reach }; }
       if (cls === 'RockSpawner' && sprite.fall) extra = { gravity: sprite.fall.gravity, maxFall: sprite.fall.max };
+      if (glyph === 'G') extra = { score: 5, pickSound: 'sound::gem', tally: 'gems' };
       if (!byName[name]) {
         const o = { id: uid(), name, cls, code: [], props: { sprite: 'sprite::' + art(base), ...extra } };
         fillProps(o);

@@ -351,8 +351,7 @@
 <script src="../src/js/moth.js"></script>
 <script src="../src/js/frog.js"></script>
 <script src="../src/js/pickup.js"></script>
-<script src="../src/js/coin.js"></script>
-<script src="../src/js/gem.js"></script>
+<script src="../src/js/treasure.js"></script>
 <script src="../src/js/shield.js"></script>
 <script src="../src/js/lantern.js"></script>
 <script src="../src/js/key.js"></script>
@@ -460,6 +459,35 @@ const OBJ_BY_GLYPH = new Map(OBJECTS.map((o, i) => [o.glyph, i]));
 // > < ^ v for platforms, which are = with the direction as the digit now. No
 // class has those codes any more, so reading them as what they meant is safe.
 const OLD_CODES = { '1C': '0C1', '1N': '0N1', '2N': '0N2', '1R': '0R1' };
+// Glyphs whose class went into another: a G block was a gem before gems were
+// Treasure. It reads as the pack's gem object, or the third treasure, 0C2,
+// which is the gem in every pack made since.
+const OLD_OBJECTS = { G: { name: 'gem', code: '0C2' } };
+const oldObjectCode = glyph => {
+  const o = OLD_OBJECTS[glyph];
+  if (!o) return null;
+  const def = atlas.objects && atlas.object(o.name);
+  return (def && codesOf(def)[0]) || o.code;
+};
+
+// Cells are kept as an index into OBJECTS, so a save says which list it was
+// made with; a save from before that was made with this one.
+const OBJECT_GLYPHS_BEFORE = ['E', 'C', 'G', 'K', 'S', 'N', 'O', '!', 'F', 'L', 'M', 'V', 'R', '=', 'W'];
+function remapObjects(savedPacks, was) {
+  const now = OBJECTS.map(o => o.glyph);
+  if (was.join() === now.join()) return;
+  for (const pk of savedPacks) for (const lv of pk.levels || []) for (const layer of lv.layers || []) {
+    for (const line of layer) for (let c = 0; c < line.length; c++) {
+      const cell = line[c];
+      if (!cell || cell.oi === undefined) continue;
+      const glyph = was[cell.oi];
+      const code = OBJ_BY_GLYPH.has(glyph) ? null : oldObjectCode(glyph);
+      if (code) line[c] = { oi: OBJ_BY_GLYPH.get(code[1]), id: +code[0] || 0, v: code[2] || '0' };
+      else if (OBJ_BY_GLYPH.has(glyph)) cell.oi = OBJ_BY_GLYPH.get(glyph);
+      else line[c] = null;
+    }
+  }
+}
 const OLD_PLATFORMS = { '>': 0, '<': 1, '^': 2, 'v': 3 };
 
 const objName = (glyph, digit, v) => atlas.objectAt(glyph, digit, v) || glyph;
@@ -912,6 +940,11 @@ function fromBlockMap(text) {
         let digit = (id >= '0' && id <= '9') ? +id : 0;
         if (OLD_PLATFORMS[glyph] !== undefined) {
           layers[li][r][c] = { oi: OBJ_BY_GLYPH.get('='), id: OLD_PLATFORMS[glyph], v: isBlank(tintCh) || !tintCh ? '0' : tintCh };
+          continue;
+        }
+        const gone = !OBJ_BY_GLYPH.has(glyph) && oldObjectCode(glyph);
+        if (gone) {
+          layers[li][r][c] = { oi: OBJ_BY_GLYPH.get(gone[1]), id: +gone[0] || 0, v: gone[2] || '0' };
           continue;
         }
         if (OBJ_BY_GLYPH.has(glyph)) {
@@ -2050,7 +2083,7 @@ document.addEventListener('keydown', e => {
 function save() {
   try {
     stashPack();
-    localStorage.setItem(STORE_KEY, JSON.stringify({ packs, packIndex }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ packs, packIndex, objGlyphs: OBJECTS.map(o => o.glyph) }));
   } catch (err) { /* private mode, etc. */ }
 }
 function load() {
@@ -2069,6 +2102,7 @@ function load() {
       return false;
     }
     if (!packs.length) return false;
+    remapObjects(packs, data.objGlyphs || OBJECT_GLYPHS_BEFORE);
     applyPack(packs[packIndex]);
     return true;
   } catch (err) { return false; }

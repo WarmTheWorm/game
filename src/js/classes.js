@@ -5,7 +5,7 @@
 // in index.html (and the asset editor's), and a name here.
 const GAME_CLASSES = [
   Beetle, Moth, Frog,
-  Coin, Gem, Key, Shield, Lantern,
+  Treasure, Key, Shield, Lantern,
   Portal, Checkpoint, Flag, Door, Sign,
   Plant, RockSpawner, Platform, Decoration,
   Worm
