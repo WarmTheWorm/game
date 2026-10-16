@@ -364,8 +364,15 @@ $('#objLanes').addEventListener('click', e => {
   const fr = e.target.closest('.frame');
   if (!fr) return;
   const id = fr.dataset.fid;
-  selFrames.has(id) ? selFrames.delete(id) : selFrames.add(id);
-  fr.classList.toggle('sel', selFrames.has(id));
+  // a click picks this frame alone; Ctrl (Cmd) adds to or takes from the picks,
+  // for dragging or deleting several at once
+  if (e.ctrlKey || e.metaKey) {
+    selFrames.has(id) ? selFrames.delete(id) : selFrames.add(id);
+  } else {
+    selFrames.clear();
+    selFrames.add(id);
+  }
+  $$('#objLanes .frame').forEach(el => el.classList.toggle('sel', selFrames.has(el.dataset.fid)));
   // and shows it in the preview, held there until Play
   const f = current.frames.find(x => x.id === id);
   const lane = framesOfPart(current, f.partId);
