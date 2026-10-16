@@ -260,7 +260,8 @@ dialog#ask::backdrop{background:#0b0818cc}
 /* ---------- tile rows ---------- */
 /* the terrain sheet's rows: a name and a collision button beside each, as
    tall as the row's cells so they line up with the sheet */
-.sheetwrap:has(.sheetrows){display:flex;align-items:flex-start;gap:8px}
+#tilesWrap{display:flex;align-items:flex-start;gap:8px}
+#tilesWrap canvas{flex:none}
 .sheetrows{flex:none;display:flex;flex-direction:column;position:sticky;left:0;background:var(--panel);z-index:1;padding-right:6px}
 .srow{display:flex;align-items:center;gap:6px;box-sizing:border-box}
 .srow .mono{width:22px;text-align:right;color:var(--muted)}
