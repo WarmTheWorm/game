@@ -278,3 +278,108 @@ $('#tilesNew').onclick = async () => {
   savePack();
   toast('New sheet — click a tile to paint it');
 };
+
+// ---------- copy and paste ----------
+// Over a tile, Ctrl+C copies it and Ctrl+V pastes onto the tile under the
+// pointer. Ctrl+Shift+V is the smart paste: it fills the whole row, column 0
+// as copied and every other column recoloured to its own colour, the way
+// tools/gen/tiles.ps1 makes them. The copy is the same one the pixel editor
+// uses, so a tile can go into a sprite and a frame into a tile.
+
+// Each column's colour; column 0 is the art's own.
+const TILE_TINTS = [null, '#8a5a35', '#8a8a92', '#d1452f', '#e08a2e', '#e0c92e', '#2ec4c4', '#3a7fd1', '#8a4fd1', '#d14f9e'];
+const TINT_LIFT = 0.22;            // flat tint blended over the recolour
+
+function rgbToHsl(r, g, b) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+function hslToRgb(h, s, l) {
+  if (!s) return [l, l, l];
+  const hue = (p, q, t) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  return [hue(p, q, h + 1 / 3), hue(p, q, h), hue(p, q, h - 1 / 3)];
+}
+
+// A copy of `src` in the colour `hex`: its hue and saturation, the art's own
+// lightness, so cracks and highlights survive.
+function tintedCanvas(src, hex) {
+  const out = cloneCanvas(src), g = out.getContext('2d');
+  const img = g.getImageData(0, 0, out.width, out.height), px = img.data;
+  const n = parseInt(hex.slice(1), 16);
+  const tr = (n >> 16 & 255) / 255, tg = (n >> 8 & 255) / 255, tb = (n & 255) / 255;
+  const [th, ts] = rgbToHsl(tr, tg, tb);
+  for (let i = 0; i < px.length; i += 4) {
+    if (!px[i + 3]) continue;
+    const [, , l] = rgbToHsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
+    const [r, gg, b] = hslToRgb(th, ts, l);
+    px[i] = Math.round((r * (1 - TINT_LIFT) + tr * TINT_LIFT) * 255);
+    px[i + 1] = Math.round((gg * (1 - TINT_LIFT) + tg * TINT_LIFT) * 255);
+    px[i + 2] = Math.round((b * (1 - TINT_LIFT) + tb * TINT_LIFT) * 255);
+  }
+  g.putImageData(img, 0, 0);
+  return out;
+}
+
+function copyTile(r, c) {
+  const G = sheetGeom(pack.tiles.size, tilesImg.naturalWidth || tilesImg.width, tilesImg.naturalHeight || tilesImg.height);
+  const p = G.at(r, c), tc = blankCanvas(G.size, G.size);
+  tc.getContext('2d').drawImage(tilesImg, p.x, p.y, G.size, G.size, 0, 0, G.size, G.size);
+  pixelClip = tc;
+  $('#opPaste').disabled = false;
+  toast(`Copied ${tileName(r, c)} — Ctrl+V pastes it, Ctrl+Shift+V fills its row in every colour`);
+}
+
+// Pastes onto the given cells: [[column, canvas]], all on row r. A copy of
+// another size is centred, never scaled, as in the pixel editor.
+function pasteTiles(r, cells) {
+  const w = tilesImg.naturalWidth || tilesImg.width, h = tilesImg.naturalHeight || tilesImg.height;
+  const G = sheetGeom(pack.tiles.size, w, h);
+  const sheet = blankCanvas(w, h), sg = sheet.getContext('2d');
+  sg.drawImage(tilesImg, 0, 0);
+  for (const [c, art] of cells) {
+    const p = G.at(r, c);
+    sg.save();
+    sg.beginPath();
+    sg.rect(p.x, p.y, G.size, G.size);
+    sg.clip();
+    sg.clearRect(p.x, p.y, G.size, G.size);
+    sg.drawImage(art, p.x + Math.round((G.size - art.width) / 2), p.y + Math.round((G.size - art.height) / 2));
+    sg.restore();
+  }
+  markUndo();
+  pack.tiles.src = sheet.toDataURL('image/png');
+  tilesImg = sheet;
+  drawSheet();
+  savePack();
+}
+
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || $('#paint').open || e.target.matches('input,select,textarea')) return;
+  if (!$('[data-page="tiles"]').classList.contains('on') || !tilesHot || !tilesImg) return;
+  const { r, c } = tilesHot;
+  // by the key's place, so it works whatever the keyboard's language
+  const key = e.code || 'Key' + (e.key || '').toUpperCase();
+  if (key === 'KeyC') { e.preventDefault(); copyTile(r, c); return; }
+  if (key !== 'KeyV') return;
+  e.preventDefault();
+  if (!pixelClip) { toast('Copy a tile first — hover it and press Ctrl+C', true); return; }
+  if (!e.shiftKey) {
+    pasteTiles(r, [[c, pixelClip]]);
+    toast(`Pasted onto ${tileName(r, c)}`);
+    return;
+  }
+  pasteTiles(r, TILE_TINTS.map((hex, col) => [col, hex ? tintedCanvas(pixelClip, hex) : pixelClip]));
+  toast(`Pasted across row ${tileName(r)}, each column in its own colour`);
+});
