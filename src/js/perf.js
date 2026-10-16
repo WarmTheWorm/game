@@ -1,5 +1,6 @@
 // ---------- Debug: performance ----------
-// With the ⏱ button on (it shows while Debug is on in Options), every stage of
+// With the ⏱ button on (it shows while Debug is on in Options) or F2 pressed
+// at any time, every stage of
 // a frame is timed and the averages drawn over the level, twice a second:
 // what the fixed-step update spent on her physics, on the objects and on her
 // body, and what drawing spent on the backdrop, each tile layer, the objects,

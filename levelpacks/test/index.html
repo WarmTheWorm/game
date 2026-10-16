@@ -1106,7 +1106,8 @@ const atlas = new ObjectAtlas();
 <!-- js/perf.js -->
 <script>
 // ---------- Debug: performance ----------
-// With the ⏱ button on (it shows while Debug is on in Options), every stage of
+// With the ⏱ button on (it shows while Debug is on in Options) or F2 pressed
+// at any time, every stage of
 // a frame is timed and the averages drawn over the level, twice a second:
 // what the fixed-step update spent on her physics, on the objects and on her
 // body, and what drawing spent on the backdrop, each tile layer, the objects,
@@ -3684,7 +3685,7 @@ function refreshToggleButtons() {
   setToggle(debugToggleBtn, debugEnabled);
   debugBtn.classList.toggle('hidden', !debugEnabled);
   debugBtn.classList.toggle('on', debugCollisionView);
-  perfBtn.classList.toggle('hidden', !debugEnabled);
+  perfBtn.classList.toggle('hidden', !debugEnabled && !perf.on);
   perfBtn.classList.toggle('on', perf.on);
 }
 refreshToggleButtons();
@@ -3726,6 +3727,13 @@ debugBtn.addEventListener('click', () => {
   refreshToggleButtons();
 });
 perfBtn.addEventListener('click', () => {
+  setPerf(!perf.on);
+  refreshToggleButtons();
+});
+// F2 opens and closes the panel whether or not Debug is on in Options
+window.addEventListener('keydown', e => {
+  if (e.key !== 'F2' || e.repeat) return;
+  e.preventDefault();
   setPerf(!perf.on);
   refreshToggleButtons();
 });

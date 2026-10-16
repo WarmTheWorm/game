@@ -2445,7 +2445,7 @@ function refreshToggleButtons() {
   setToggle(debugToggleBtn, debugEnabled);
   debugBtn.classList.toggle('hidden', !debugEnabled);
   debugBtn.classList.toggle('on', debugCollisionView);
-  perfBtn.classList.toggle('hidden', !debugEnabled);
+  perfBtn.classList.toggle('hidden', !debugEnabled && !perf.on);
   perfBtn.classList.toggle('on', perf.on);
 }
 refreshToggleButtons();
@@ -2487,6 +2487,13 @@ debugBtn.addEventListener('click', () => {
   refreshToggleButtons();
 });
 perfBtn.addEventListener('click', () => {
+  setPerf(!perf.on);
+  refreshToggleButtons();
+});
+// F2 opens and closes the panel whether or not Debug is on in Options
+window.addEventListener('keydown', e => {
+  if (e.key !== 'F2' || e.repeat) return;
+  e.preventDefault();
   setPerf(!perf.on);
   refreshToggleButtons();
 });
