@@ -74,6 +74,25 @@ function solidAt(col, row) {
   return hitAt(col, row) === HIT_SOLID;
 }
 
+// Whether her head, a circle of R about (x, y), clears every solid tile and
+// the solid top of every half tile — with a pixel to spare, so resting
+// against a wall counts as fitting. What a platform checks before it moves her.
+function wormFitsAt(x, y) {
+  const c0 = Math.floor((x - R) / TILE), c1 = Math.floor((x + R) / TILE);
+  const r0 = Math.floor((y - R) / TILE), r1 = Math.floor((y + R) / TILE);
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      const hit = hitAt(c, r);
+      if (hit !== HIT_SOLID && hit !== HIT_HALF) continue;
+      const bottom = hit === HIT_HALF ? r * TILE + TILE / 2 : (r + 1) * TILE;
+      const nx = Math.max(c * TILE, Math.min(x, (c + 1) * TILE));
+      const ny = Math.max(r * TILE, Math.min(y, bottom));
+      if (Math.hypot(x - nx, y - ny) < R - 1) return false;
+    }
+  }
+  return true;
+}
+
 // topY/botY are the moving body's real vertical extent this frame; edgeX is
 // the exact x of the edge being tested, so a wedge is sampled against its
 // diagonal at the right x rather than just "somewhere in this column".

@@ -45,16 +45,23 @@ class Platform extends Entity {
   }
 
   // Solid only from the top — she can stand on and ride it, but it doesn't
-  // block her from the sides or below.
+  // block her from the sides or below. It moves her only as far as she fits:
+  // carried into a wall she stays against it and the platform slides on
+  // under her, and lifted into a ceiling she stops below it — the platform
+  // never pushes her into the terrain.
   carry() {
     const left = this.x, right = this.x + this.w, top = this.y;
     if (warm.vy >= 0 &&
         warm.x + R > left && warm.x - R < right &&
         warm.y + R >= top - 2 && warm.y + R <= top + 16) {
-      warm.x += (this.x - this.prevX); // carry her along as it moves
-      warm.y = top - R;
-      warm.vy = 0;
-      warm.grounded = true;
+      const dx = this.x - this.prevX;
+      if (dx && wormFitsAt(warm.x + dx, warm.y)) warm.x += dx;
+      const y = top - R;
+      if (y >= warm.y || wormFitsAt(warm.x, y)) {
+        warm.y = y;
+        warm.vy = 0;
+        warm.grounded = true;
+      }
     }
   }
 
