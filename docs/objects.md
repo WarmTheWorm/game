@@ -262,6 +262,7 @@ head radius — what she hits the tiles with — is her sprite's collision circl
 | `head` | part | `headRight` | Head, facing right |
 | `headLeft` | part (optional) | `headLeft` | Head facing left (without one, the right one mirrored) |
 | `segments` | int | `14` | Body parts, head to tail |
+| `tailScale` | float | `0.32` | Tail size, a share of the head (1 = no taper) |
 | `speed` | float | `3` | Run speed, px a frame |
 | `jump` | float | `10.5` | Jump speed, px a frame |
 

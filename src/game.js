@@ -337,9 +337,10 @@ function checkStatAchievements() {
 // at its own radius, but parts have NO collision with each other — they can
 // freely overlap/pass through one another when the worm curls up.
 let SEGMENT_COUNT = 14;
+let TAIL_SCALE = 0.32;      // the tail's radius, as a share of the head's
 const taper = () => Array.from({ length: SEGMENT_COUNT }, (_, i) => {
   const t = i / Math.max(1, SEGMENT_COUNT - 1);
-  return R * (1 - t * 0.68); // tapers from full head radius down to a thin tail
+  return R * (1 - t * (1 - TAIL_SCALE)); // tapers from full head radius down to the tail
 });
 let RADII = taper();
 let segments = RADII.map(r => ({ x: START.x, y: START.y, vy: 0, r }));
@@ -352,9 +353,11 @@ function useWorm() {
   SPEED = +w.speed || 3;
   JUMP_V = -(+w.jump || 10.5);
   const count = Math.max(2, Math.min(40, Math.round(+w.segments) || 14));
-  if (w.r === R && count === SEGMENT_COUNT) return;
+  const tail = Math.max(0.05, Math.min(2, Number.isFinite(+w.tailScale) ? +w.tailScale : 0.32));
+  if (w.r === R && count === SEGMENT_COUNT && tail === TAIL_SCALE) return;
   R = w.r;
   SEGMENT_COUNT = count;
+  TAIL_SCALE = tail;
   RADII = taper();
   segments = RADII.map(r => ({ x: warm.x, y: warm.y, vy: 0, r }));
 }

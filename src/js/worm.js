@@ -22,6 +22,7 @@ class Worm extends Entity {
       head: { type: 'part', default: 'headRight', label: 'Head, facing right' },
       headLeft: { type: 'part', default: 'headLeft', optional: true, label: 'Head facing left (without one, the right one mirrored)' },
       segments: { type: 'int', default: 14, label: 'Body parts, head to tail' },
+      tailScale: { type: 'float', default: 0.32, label: 'Tail size, a share of the head (1 = no taper)' },
       speed: { type: 'float', default: 3, label: 'Run speed, px a frame' },
       jump: { type: 'float', default: 10.5, label: 'Jump speed, px a frame' }
     }
