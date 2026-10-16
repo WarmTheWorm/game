@@ -16,7 +16,9 @@ function renderGameObjects() {
 
 function renderGoList() {
   const clash = new Set(clashingCodes().flatMap(([, names]) => names));
-  $('#goList').innerHTML = pack.objects.map(o => {
+  // grouped by class, then by name within it — the order in the pack is left alone
+  const sorted = [...pack.objects].sort((a, b) => a.cls.localeCompare(b.cls) || a.name.localeCompare(b.name));
+  $('#goList').innerHTML = sorted.map(o => {
     const bad = clash.has(o.name) || objectProblems(o).length;
     return `<button class="item ${o === currentObj ? 'on' : ''}" data-goid="${o.id}">
       <b>${spriteIcon(refName(o.props.sprite))}${esc(o.name)}</b><small class="${bad ? 'warn' : ''}">${esc(o.cls)}</small>
