@@ -128,10 +128,11 @@ class Tileset {
   firstTint() { return this.colText[0]; }
 
   // Every row is cropped to its own tile; the cell's margin is never blitted.
-  drawCell(row, col, x, y) {
+  // A size other than a tile's lets the caller snap the edges to the screen.
+  drawCell(row, col, x, y, w = TILE, h = TILE) {
     const g = this.gutter;
     const cx = g + col * this.cell, cy = g + row * this.cell;
     ctx.drawImage(this.img, cx + this.inset, cy + this.inset, this.size, this.size,
-      x, y, TILE, TILE);
+      x, y, w, h);
   }
 }

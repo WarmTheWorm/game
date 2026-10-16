@@ -839,11 +839,12 @@ class Tileset {
   firstTint() { return this.colText[0]; }
 
   // Every row is cropped to its own tile; the cell's margin is never blitted.
-  drawCell(row, col, x, y) {
+  // A size other than a tile's lets the caller snap the edges to the screen.
+  drawCell(row, col, x, y, w = TILE, h = TILE) {
     const g = this.gutter;
     const cx = g + col * this.cell, cy = g + row * this.cell;
     ctx.drawImage(this.img, cx + this.inset, cy + this.inset, this.size, this.size,
-      x, y, TILE, TILE);
+      x, y, w, h);
   }
 }
 
@@ -1282,6 +1283,12 @@ const stageEl = document.getElementById('stage');
 const LONG_SIDE_TILES = 20;
 const MIN_SHORT_TILES = 6;
 let VIEW_COLS, VIEW_ROWS;
+// The view in game units, which everything is drawn in, and how many of the
+// canvas's own pixels one unit takes. The canvas is as many pixels as the
+// screen gives it, so the art — drawn at twice a unit — stays sharp instead
+// of being drawn small and stretched.
+let VIEW_W, VIEW_H;
+let PIXEL_X = 1, PIXEL_Y = 1;
 let mapWidthPx = cols * TILE;
 let mapHeightPx = rows * TILE;
 
@@ -1301,8 +1308,8 @@ function layoutStage() {
     VIEW_ROWS = LONG_SIDE_TILES;
   }
 
-  canvas.width = VIEW_COLS * TILE;
-  canvas.height = VIEW_ROWS * TILE;
+  VIEW_W = VIEW_COLS * TILE;
+  VIEW_H = VIEW_ROWS * TILE;
 
   // Fit that exact tile ratio inside the viewport (contain), so the leftover
   // margin on one axis is at most half a tile's on-screen size.
@@ -1311,6 +1318,12 @@ function layoutStage() {
   if (stageH > vh) { stageH = vh; stageW = vh * ratio; }
   stageEl.style.width = stageW + 'px';
   stageEl.style.height = stageH + 'px';
+
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(stageW * dpr));
+  canvas.height = Math.max(1, Math.round(stageH * dpr));
+  PIXEL_X = canvas.width / VIEW_W;
+  PIXEL_Y = canvas.height / VIEW_H;
 }
 
 layoutStage();
@@ -1324,12 +1337,12 @@ const camScroll = { active: false, fromX: 0, fromY: 0, toX: 0, toY: 0, t: 0, dur
 // Where the free camera would sit for a worm at (x, y). A scroll has to land
 // exactly here, or the follow camera snaps the moment it takes back over.
 function camTargetFor(x, y) {
-  const cx = mapWidthPx <= canvas.width
+  const cx = mapWidthPx <= VIEW_W
     ? 0   // level narrower than the screen — no horizontal scrolling needed
-    : Math.max(0, Math.min(mapWidthPx - canvas.width, x - canvas.width / 2));
-  const cy = mapHeightPx <= canvas.height
+    : Math.max(0, Math.min(mapWidthPx - VIEW_W, x - VIEW_W / 2));
+  const cy = mapHeightPx <= VIEW_H
     ? 0
-    : Math.max(0, Math.min(mapHeightPx - canvas.height, y - canvas.height / 2));
+    : Math.max(0, Math.min(mapHeightPx - VIEW_H, y - VIEW_H / 2));
   return { x: cx, y: cy };
 }
 
@@ -2102,9 +2115,9 @@ function drawBackground() {
   // sky across it.
   const left = Math.max(0, -cam.x);
   const top = Math.max(0, -cam.y);
-  const right = Math.min(canvas.width, mapWidthPx - cam.x);
-  const bottom = Math.min(canvas.height, mapHeightPx - cam.y);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const right = Math.min(VIEW_W, mapWidthPx - cam.x);
+  const bottom = Math.min(VIEW_H, mapHeightPx - cam.y);
+  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
   if (right <= left || bottom <= top) return;
 
   ctx.save();
@@ -2127,7 +2140,7 @@ function drawBackground() {
     const oy = ((-cam.y * background.scroll) % h + h) % h - h;
     ctx.translate(ox, oy);
     ctx.fillStyle = pattern;
-    ctx.fillRect(0, 0, canvas.width + w, canvas.height + h);
+    ctx.fillRect(0, 0, VIEW_W + w, VIEW_H + h);
   }
   ctx.restore();
 }
@@ -2151,7 +2164,7 @@ const LIGHT_CORE = 0.45;         // where the gradient stops being wholly clear
 // gradient at all, so it is one more radius to ease toward instead of a case
 // of its own. The whole window has to fit inside the clear core.
 function fullLightRadius() {
-  return Math.hypot(canvas.width, canvas.height) / LIGHT_CORE;
+  return Math.hypot(VIEW_W, VIEW_H) / LIGHT_CORE;
 }
 
 function lightTarget() {
@@ -2177,7 +2190,7 @@ function drawDarkness() {
   glow.addColorStop(0.75, 'rgba(6,4,14,0.6)');
   glow.addColorStop(1, 'rgba(6,4,14,1)');
   ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 }
 
 // ---------- Level packs ----------
@@ -2979,15 +2992,23 @@ function update() {
 // change rather than another branch.
 function drawTileLayer(meta) {
   const firstCol = Math.max(0, Math.floor(cam.x / TILE) - 1);
-  const lastCol = Math.min(cols - 1, Math.ceil((cam.x + canvas.width) / TILE) + 1);
+  const lastCol = Math.min(cols - 1, Math.ceil((cam.x + VIEW_W) / TILE) + 1);
   const firstRow = Math.max(0, Math.floor(cam.y / TILE) - 1);
-  const lastRow = Math.min(rows - 1, Math.ceil((cam.y + canvas.height) / TILE) + 1);
+  const lastRow = Math.min(rows - 1, Math.ceil((cam.y + VIEW_H) / TILE) + 1);
 
+  // A tile is rarely a whole number of screen pixels, so each edge is put on
+  // the nearest one; neighbours then share an edge exactly, and no sky shows
+  // through the seam between them.
+  const m = ctx.getTransform();
+  const snapX = u => (Math.round(m.a * u + m.e) - m.e) / m.a;
+  const snapY = u => (Math.round(m.d * u + m.f) - m.f) / m.d;
   for (let r = firstRow; r <= lastRow; r++) {
+    const y0 = snapY(r * TILE), y1 = snapY((r + 1) * TILE);
     for (let c = firstCol; c <= lastCol; c++) {
       const sheetRow = meta.row[r][c];
       if (sheetRow < 0) continue;
-      tileset.drawCell(sheetRow, meta.tint[r][c], c * TILE, r * TILE);
+      const x0 = snapX(c * TILE), x1 = snapX((c + 1) * TILE);
+      tileset.drawCell(sheetRow, meta.tint[r][c], x0, y0, x1 - x0, y1 - y0);
     }
   }
 }
@@ -3079,9 +3100,9 @@ function drawWorm() {
 let debugCollisionView = false;
 function drawCollisionDebug() {
   const firstCol = Math.max(0, Math.floor(cam.x / TILE) - 1);
-  const lastCol = Math.min(cols - 1, Math.ceil((cam.x + canvas.width) / TILE) + 1);
+  const lastCol = Math.min(cols - 1, Math.ceil((cam.x + VIEW_W) / TILE) + 1);
   const firstRow = Math.max(0, Math.floor(cam.y / TILE) - 1);
-  const lastRow = Math.min(rows - 1, Math.ceil((cam.y + canvas.height) / TILE) + 1);
+  const lastRow = Math.min(rows - 1, Math.ceil((cam.y + VIEW_H) / TILE) + 1);
 
   ctx.fillStyle = 'rgba(255,80,80,0.55)';
   ctx.strokeStyle = 'rgba(255,120,120,0.9)';
@@ -3174,6 +3195,7 @@ function loop(now) {
     steps++;
   }
 
+  ctx.setTransform(PIXEL_X, 0, 0, PIXEL_Y, 0, 0);   // game units from here on
   drawBackground();
   ctx.save();
   ctx.translate(-cam.x, -cam.y);
@@ -3181,7 +3203,7 @@ function loop(now) {
     // Objects stay, the tile layers don't — terrain is what the red overlay is
     // describing, so drawing it twice only makes the shapes harder to read.
     ctx.fillStyle = '#14101c';
-    ctx.fillRect(cam.x, cam.y, canvas.width, canvas.height);
+    ctx.fillRect(cam.x, cam.y, VIEW_W, VIEW_H);
     drawEntities();
     if (deathAnim) drawDeathAnimation(); else drawWorm();
     drawCollisionDebug();
