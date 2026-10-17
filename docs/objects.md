@@ -290,3 +290,23 @@ head radius — what she hits the tiles with — is her sprite's collision circl
 
 Its bucket — the list the world keeps its kind in (`static bucket`) — must be
 one `loadCustomLevel` in `game.js` knows about.
+
+### Guides: what a class shows of itself while a level is built
+
+A class may define `static drawGuide(g, view)` to draw something beyond its
+art where a level is being built or checked, never in normal play. It is
+called once per placed thing, and once per palette swatch, after the art:
+
+| `view.mode` | Called by | Drawn in |
+|---|---|---|
+| `board` | the level editor's board | world units; `view.r`, `view.c` its cell |
+| `panel` | a level editor palette swatch | the swatch's own pixels, `view.size` square |
+| `debug` | the game's collision view (▦) | world units |
+
+`view.digit` is its block's digit, `view.blocks(r, c)` says whether a cell
+stops things moving as the game will see it, `view.px` is screen pixels per
+unit (for lines that stay thin) and `view.hasArt` whether its sprite drew
+anything. A platform draws its run and the way it sets off (its run worked
+out by `Platform.run`, which the game's loader uses too); a platform stop
+draws its marker (`static marker`, via `Entity.drawMarker`). The editors name
+no class — they only call the hook.

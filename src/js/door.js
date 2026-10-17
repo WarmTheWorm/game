@@ -4,6 +4,7 @@
 class Door extends Entity {
   static bucket = 'lockedDoorSpots';
   static mainLayerOnly = true;   // only the solid layer has cells to stamp
+  static solidCell = true;       // which stops a platform, as a solid tile does
   static cellAnchor = [0, 0];     // it is its whole cell
   static editor = {
     label: 'Door',

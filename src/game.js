@@ -653,26 +653,15 @@ function loseLife() {
 // rescales it per platform so they all cross at the same px/frame.
 const PLATFORM_REF_AMPLITUDE = 2.5 * TILE;
 
-// First travel boundary out from (row,col) in direction `step`: an explicit
-// 'x', else any cell that collides at all, else the map edge. Returns that
-// cell's index, so the platform's own span is everything strictly between
-// the two. `hits` is the collision grid, not the glyphs.
-function platformBound(hits, gRows, gCols, marks, row, col, axis, step) {
-  const limit = axis === 'x' ? gCols : gRows;
-  let r = row, c = col;
-  for (;;) {
-    if (axis === 'x') c += step; else r += step;
-    const idx = axis === 'x' ? c : r;
-    if (idx < 0 || idx >= limit) return idx;
-    if (marks[r][c] === 'x') return idx;
-    if (hits[r][c] !== HIT_NONE) return idx;
-  }
-}
-
-function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir, name) {
+// A platform's run stops at a platform stop ('x' in marks, from any layer),
+// at any cell that collides at all, or at the map's edge (Platform.run).
+// `hits` is the collision grid, not the glyphs.
+function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir, name, digit) {
   const p = new Platform(name, col * TILE, row * TILE, 1, axis, 0, 0.02);
-  const lo = platformBound(hits, gRows, gCols, marks, row, col, axis, -1);
-  const hi = platformBound(hits, gRows, gCols, marks, row, col, axis, 1);
+  const blocks = (r, c) => r < 0 || c < 0 || r >= gRows || c >= gCols || marks[r][c] === 'x' || hits[r][c] !== HIT_NONE;
+  const run = Platform.run(blocks, row, col, axis);
+  const lo = run[0] - 1, hi = run[1] + 1;          // the cells that stop it
+  p.guide = { r: row, c: col, digit, run };        // what the collision view draws
 
   const size = axis === 'x' ? p.w : p.h;
   let min = (lo + 1) * TILE;
@@ -863,7 +852,7 @@ function loadCustomLevel(text, opts = {}) {
     // platforms wait for the terrain, since how far they travel depends on it
     if (Cls === Platform) {
       const way = PLATFORM_DIRS[d] || PLATFORM_DIRS[0];
-      platformSpots.push({ row: r, col: c, axis: way.axis, dir: way.sign, name, layer });
+      platformSpots.push({ row: r, col: c, axis: way.axis, dir: way.sign, name, layer, digit: PLATFORM_DIRS[d] ? d : 0 });
       return;
     }
     const into = spawned[Cls.bucket];
@@ -893,7 +882,7 @@ function loadCustomLevel(text, opts = {}) {
 
   // Platform ranges read the finished terrain, so they wait for the grid.
   for (const s of platformSpots) {
-    const p = makeRangedPlatform(map.main.collide, newRows, newCols, markGrid, s.row, s.col, s.axis, s.dir, s.name);
+    const p = makeRangedPlatform(map.main.collide, newRows, newCols, markGrid, s.row, s.col, s.axis, s.dir, s.name, s.digit);
     p.layer = s.layer;
     newPlatforms.push(p);
   }
@@ -2151,6 +2140,9 @@ function drawWorm() {
 // sheet's row_C says what you meant.
 let debugCollisionView = false;
 function drawCollisionDebug() {
+  // what each class shows of itself in this view: a platform its run
+  for (const p of movingPlatforms) if (p.guide) Platform.drawGuide(ctx, { mode: 'debug', ...p.guide, px: PIXEL_X });
+
   const firstCol = Math.max(0, Math.floor(cam.x / TILE) - 1);
   const lastCol = Math.min(cols - 1, Math.ceil((cam.x + VIEW_W) / TILE) + 1);
   const firstRow = Math.max(0, Math.floor(cam.y / TILE) - 1);

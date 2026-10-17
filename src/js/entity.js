@@ -21,6 +21,45 @@
 class Entity {
   static editor = { props: {} };
 
+  // Anything a class shows about itself beyond its art, where someone is
+  // building or checking a level — never in normal play. Called once per
+  // placed thing (and per palette swatch) with what is being drawn on:
+  //
+  //   view.mode   'board'  the level editor's board, in world units
+  //               'panel'  a palette swatch, in its own pixels (view.size)
+  //               'debug'  the game's collision view, in world units
+  //   view.r, view.c   its cell (board, debug)
+  //   view.digit       its block's digit — an id, or what editor.digit says
+  //   view.blocks(r, c)   whether that cell stops things moving, as the game
+  //                       will see it (board)
+  //   view.px          screen pixels per unit, for lines that stay 1px thin
+  //   view.hasArt      whether its sprite drew anything
+  //
+  // The base draws nothing; a class with something to show overrides it.
+  static drawGuide(g, view) {}
+
+  // The marker an editor-only class wears when it has no art: a tinted square
+  // with a letter, `static marker = { colour, letter }`.
+  static drawMarker(g, view) {
+    const m = this.marker;
+    if (!m || view.hasArt) return;
+    const s = view.mode === 'panel' ? view.size * 0.76 : TILE;
+    const x = view.mode === 'panel' ? (view.size - s) / 2 : view.c * TILE;
+    const y = view.mode === 'panel' ? (view.size - s) / 2 : view.r * TILE;
+    g.save();
+    g.fillStyle = m.colour + '33';
+    g.fillRect(x, y, s, s);
+    g.strokeStyle = m.colour;
+    g.lineWidth = 2 / view.px;
+    g.strokeRect(x + 1, y + 1, s - 2, s - 2);
+    g.fillStyle = m.colour;
+    g.font = `bold ${Math.round(s * 0.5)}px system-ui, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(m.letter, x + s / 2, y + s / 2 + 1);
+    g.restore();
+  }
+
   // Where in its cell an object of this class stands, as a share of the cell:
   // the middle, unless a class stands on the floor or hangs from the top. The
   // editors read it too, to draw a thing where the game will put it.

@@ -2103,26 +2103,15 @@ function loseLife() {
 // rescales it per platform so they all cross at the same px/frame.
 const PLATFORM_REF_AMPLITUDE = 2.5 * TILE;
 
-// First travel boundary out from (row,col) in direction `step`: an explicit
-// 'x', else any cell that collides at all, else the map edge. Returns that
-// cell's index, so the platform's own span is everything strictly between
-// the two. `hits` is the collision grid, not the glyphs.
-function platformBound(hits, gRows, gCols, marks, row, col, axis, step) {
-  const limit = axis === 'x' ? gCols : gRows;
-  let r = row, c = col;
-  for (;;) {
-    if (axis === 'x') c += step; else r += step;
-    const idx = axis === 'x' ? c : r;
-    if (idx < 0 || idx >= limit) return idx;
-    if (marks[r][c] === 'x') return idx;
-    if (hits[r][c] !== HIT_NONE) return idx;
-  }
-}
-
-function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir, name) {
+// A platform's run stops at a platform stop ('x' in marks, from any layer),
+// at any cell that collides at all, or at the map's edge (Platform.run).
+// `hits` is the collision grid, not the glyphs.
+function makeRangedPlatform(hits, gRows, gCols, marks, row, col, axis, dir, name, digit) {
   const p = new Platform(name, col * TILE, row * TILE, 1, axis, 0, 0.02);
-  const lo = platformBound(hits, gRows, gCols, marks, row, col, axis, -1);
-  const hi = platformBound(hits, gRows, gCols, marks, row, col, axis, 1);
+  const blocks = (r, c) => r < 0 || c < 0 || r >= gRows || c >= gCols || marks[r][c] === 'x' || hits[r][c] !== HIT_NONE;
+  const run = Platform.run(blocks, row, col, axis);
+  const lo = run[0] - 1, hi = run[1] + 1;          // the cells that stop it
+  p.guide = { r: row, c: col, digit, run };        // what the collision view draws
 
   const size = axis === 'x' ? p.w : p.h;
   let min = (lo + 1) * TILE;
@@ -2313,7 +2302,7 @@ function loadCustomLevel(text, opts = {}) {
     // platforms wait for the terrain, since how far they travel depends on it
     if (Cls === Platform) {
       const way = PLATFORM_DIRS[d] || PLATFORM_DIRS[0];
-      platformSpots.push({ row: r, col: c, axis: way.axis, dir: way.sign, name, layer });
+      platformSpots.push({ row: r, col: c, axis: way.axis, dir: way.sign, name, layer, digit: PLATFORM_DIRS[d] ? d : 0 });
       return;
     }
     const into = spawned[Cls.bucket];
@@ -2343,7 +2332,7 @@ function loadCustomLevel(text, opts = {}) {
 
   // Platform ranges read the finished terrain, so they wait for the grid.
   for (const s of platformSpots) {
-    const p = makeRangedPlatform(map.main.collide, newRows, newCols, markGrid, s.row, s.col, s.axis, s.dir, s.name);
+    const p = makeRangedPlatform(map.main.collide, newRows, newCols, markGrid, s.row, s.col, s.axis, s.dir, s.name, s.digit);
     p.layer = s.layer;
     newPlatforms.push(p);
   }
@@ -3601,6 +3590,9 @@ function drawWorm() {
 // sheet's row_C says what you meant.
 let debugCollisionView = false;
 function drawCollisionDebug() {
+  // what each class shows of itself in this view: a platform its run
+  for (const p of movingPlatforms) if (p.guide) Platform.drawGuide(ctx, { mode: 'debug', ...p.guide, px: PIXEL_X });
+
   const firstCol = Math.max(0, Math.floor(cam.x / TILE) - 1);
   const lastCol = Math.min(cols - 1, Math.ceil((cam.x + VIEW_W) / TILE) + 1);
   const firstRow = Math.max(0, Math.floor(cam.y / TILE) - 1);
@@ -4144,6 +4136,45 @@ requestAnimationFrame(loop);
 class Entity {
   static editor = { props: {} };
 
+  // Anything a class shows about itself beyond its art, where someone is
+  // building or checking a level — never in normal play. Called once per
+  // placed thing (and per palette swatch) with what is being drawn on:
+  //
+  //   view.mode   'board'  the level editor's board, in world units
+  //               'panel'  a palette swatch, in its own pixels (view.size)
+  //               'debug'  the game's collision view, in world units
+  //   view.r, view.c   its cell (board, debug)
+  //   view.digit       its block's digit — an id, or what editor.digit says
+  //   view.blocks(r, c)   whether that cell stops things moving, as the game
+  //                       will see it (board)
+  //   view.px          screen pixels per unit, for lines that stay 1px thin
+  //   view.hasArt      whether its sprite drew anything
+  //
+  // The base draws nothing; a class with something to show overrides it.
+  static drawGuide(g, view) {}
+
+  // The marker an editor-only class wears when it has no art: a tinted square
+  // with a letter, `static marker = { colour, letter }`.
+  static drawMarker(g, view) {
+    const m = this.marker;
+    if (!m || view.hasArt) return;
+    const s = view.mode === 'panel' ? view.size * 0.76 : TILE;
+    const x = view.mode === 'panel' ? (view.size - s) / 2 : view.c * TILE;
+    const y = view.mode === 'panel' ? (view.size - s) / 2 : view.r * TILE;
+    g.save();
+    g.fillStyle = m.colour + '33';
+    g.fillRect(x, y, s, s);
+    g.strokeStyle = m.colour;
+    g.lineWidth = 2 / view.px;
+    g.strokeRect(x + 1, y + 1, s - 2, s - 2);
+    g.fillStyle = m.colour;
+    g.font = `bold ${Math.round(s * 0.5)}px system-ui, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(m.letter, x + s / 2, y + s / 2 + 1);
+    g.restore();
+  }
+
   // Where in its cell an object of this class stands, as a share of the cell:
   // the middle, unless a class stands on the floor or hangs from the top. The
   // editors read it too, to draw a thing where the game will put it.
@@ -4626,6 +4657,8 @@ class Key extends Pickup {
 // sideways, setting off right and left; 2= and 3= up and down, setting off up
 // and down. game.js builds them after the terrain, since how far one travels
 // depends on what is around it.
+const PLATFORM_GUIDE = '#6fd3ff';   // the colour its guides are drawn in
+
 const PLATFORM_DIRS = [
   { axis: 'x', sign: 1 },    // 0  right
   { axis: 'x', sign: -1 },   // 1  left
@@ -4644,6 +4677,84 @@ class Platform extends Entity {
   };
 
   static cellAnchor = [0, 0];   // placed by its left end, on the cell's top
+
+  // The first and last cell a platform at (r, c) may cover along `axis`: out
+  // both ways until a cell that blocks (blocks(r, c), which answers true off
+  // the map too). The game sizes its travel from this, and drawGuide draws it,
+  // so what the editor shows is where it goes.
+  static run(blocks, r, c, axis) {
+    const dr = axis === 'y' ? 1 : 0, dc = 1 - dr;
+    const out = step => {
+      let rr = r, cc = c;
+      do { rr += dr * step; cc += dc * step; } while (!blocks(rr, cc));
+      return axis === 'x' ? cc - dc * step : rr - dr * step;
+    };
+    return [out(-1), out(1)];
+  }
+
+  // Its stretch of travel on the board and in the game's collision view, and
+  // on the board and its swatch an arrow the way it sets off.
+  static drawGuide(g, view) {
+    const way = PLATFORM_DIRS[view.digit] || PLATFORM_DIRS[0];
+    const ux = way.axis === 'x' ? way.sign : 0, uy = way.axis === 'y' ? way.sign : 0;
+    if (view.mode === 'panel') {
+      const s = view.size;
+      this.drawArrow(g, s / 2, s / 2, ux, uy, s * 0.3, 1);
+      return;
+    }
+    const [lo, hi] = view.run || this.run(view.blocks, view.r, view.c, way.axis);
+    const px = view.px || 1;
+    const along = way.axis === 'x';
+    const x = along ? lo * TILE : view.c * TILE, y = along ? view.r * TILE : lo * TILE;
+    const w = along ? (hi - lo + 1) * TILE : TILE, h = along ? TILE : (hi - lo + 1) * TILE;
+    g.save();
+    g.fillStyle = 'rgba(111,211,255,0.14)';
+    g.fillRect(x, y, w, h);
+    g.strokeStyle = PLATFORM_GUIDE;
+    g.lineWidth = 1.5 / px;
+    g.setLineDash([4 / px, 3 / px]);
+    g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    g.setLineDash([]);
+    // a bar across each end, where it turns
+    g.lineWidth = 3 / px;
+    g.beginPath();
+    if (along) {
+      g.moveTo(x + 1, y + 4); g.lineTo(x + 1, y + h - 4);
+      g.moveTo(x + w - 1, y + 4); g.lineTo(x + w - 1, y + h - 4);
+    } else {
+      g.moveTo(x + 4, y + 1); g.lineTo(x + w - 4, y + 1);
+      g.moveTo(x + 4, y + h - 1); g.lineTo(x + w - 4, y + h - 1);
+    }
+    g.stroke();
+    g.restore();
+    if (view.mode === 'board') this.drawArrow(g, (view.c + 0.5) * TILE, (view.r + 0.5) * TILE, ux, uy, TILE * 0.36, px);
+  }
+
+  // An arrow centred on (cx, cy) pointing along (ux, uy), `len` from its
+  // middle to its tip, outlined dark so it reads over any art.
+  static drawArrow(g, cx, cy, ux, uy, len, px) {
+    const wing = len * 0.6, neck = len * 0.1;
+    g.save();
+    for (const [colour, width] of [['#0b1830', len * 0.6], [PLATFORM_GUIDE, len * 0.33]]) {
+      g.strokeStyle = colour;
+      g.lineWidth = width;
+      g.beginPath();
+      g.moveTo(cx - ux * len, cy - uy * len);
+      g.lineTo(cx + ux * neck, cy + uy * neck);
+      g.stroke();
+    }
+    g.fillStyle = PLATFORM_GUIDE;
+    g.strokeStyle = '#0b1830';
+    g.lineWidth = 1.5 / px;
+    g.beginPath();
+    g.moveTo(cx + ux * len, cy + uy * len);
+    g.lineTo(cx + ux * neck - uy * wing, cy + uy * neck + ux * wing);
+    g.lineTo(cx + ux * neck + uy * wing, cy + uy * neck - ux * wing);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.restore();
+  }
 
   constructor(name, baseX, baseY, wTiles, axis, amplitude, speed) {
     super(name, baseX, baseY);
@@ -4717,7 +4828,12 @@ class PlatformStop extends Entity {
 
   // never put in the world; the level editor shows this mark in its place
   static editorOnly = true;
+  static stopsPlatforms = true;     // from any layer
   static marker = { colour: '#ff5a5a', letter: '⛔' };
+
+  static drawGuide(g, view) {
+    if (view.mode !== 'debug') this.drawMarker(g, view);
+  }
 }
 
 </script>
@@ -4973,6 +5089,7 @@ class Flag extends Entity {
 class Door extends Entity {
   static bucket = 'lockedDoorSpots';
   static mainLayerOnly = true;   // only the solid layer has cells to stamp
+  static solidCell = true;       // which stops a platform, as a solid tile does
   static cellAnchor = [0, 0];     // it is its whole cell
   static editor = {
     label: 'Door',

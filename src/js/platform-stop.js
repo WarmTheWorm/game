@@ -12,5 +12,10 @@ class PlatformStop extends Entity {
 
   // never put in the world; the level editor shows this mark in its place
   static editorOnly = true;
+  static stopsPlatforms = true;     // from any layer
   static marker = { colour: '#ff5a5a', letter: '⛔' };
+
+  static drawGuide(g, view) {
+    if (view.mode !== 'debug') this.drawMarker(g, view);
+  }
 }

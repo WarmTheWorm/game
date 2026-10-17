@@ -1012,7 +1012,7 @@ function render() {
     }
   });
   boardCtx.globalAlpha = 1;
-  drawPlatformGuides();
+  drawGuides();
 
   boardCtx.lineWidth = 1 / zoom;
   boardCtx.strokeStyle = 'rgba(255,255,255,0.07)';
@@ -1030,102 +1030,40 @@ function render() {
   }
 }
 
-// ---------- platform guides ----------
-// Editor only: each moving platform gets the stretch it will travel and an
-// arrow the way it sets off. The stretch is found as the game finds it
-// (platformBound in game.js): out from the platform's cell both ways until a
-// platform stop in any layer, a tile in the middle layer that collides, a
-// door, or the map's edge — so moving a wall or a stop shows its effect here.
-const GUIDE = '#6fd3ff';
-
-function guideBlocks(r, c) {
+// ---------- guides ----------
+// What each class shows of itself while a level is built (Entity.drawGuide):
+// a platform its run and the way it sets off, a platform stop its marker. The
+// editor names no class here; it only answers which cells stop things moving,
+// as the game will see them.
+function boardBlocks(r, c) {
   if (r < 0 || c < 0 || r >= rows || c >= cols) return true;
   for (let li = 0; li < 3; li++) {
     const cell = layers[li][r][c];
     if (!cell || cell.oi === undefined) continue;
     const C = objClass(OBJECTS[cell.oi].glyph, cell.id, cell.v);
-    if (C === PlatformStop) return true;
-    if (li === 1 && C === Door) return true;      // a door stamps its cell solid
+    if (C && C.stopsPlatforms) return true;
+    if (C && C.solidCell && li === 1) return true;
   }
   const mid = layers[1][r][c];
   return !!(mid && mid.pi !== undefined && PALETTE[mid.pi].hit !== HIT_NONE);
 }
 
-function drawPlatformGuides() {
+function drawGuides() {
   for (let li = 0; li < 3; li++) {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const cell = layers[li][r][c];
         if (!cell || cell.oi === undefined) continue;
-        if (objClass(OBJECTS[cell.oi].glyph, cell.id, cell.v) !== Platform) continue;
-        drawPlatformGuide(r, c, PLATFORM_DIRS[cell.id] || PLATFORM_DIRS[0]);
+        const glyph = OBJECTS[cell.oi].glyph;
+        const C = objClass(glyph, cell.id, cell.v);
+        if (!C) continue;
+        C.drawGuide(boardCtx, {
+          mode: 'board', r, c, digit: cell.id, blocks: boardBlocks, px: zoom,
+          hasArt: !!atlas.def(objSprite(glyph, cell.id, cell.v)).frame
+        });
       }
     }
   }
-}
-
-// The first and last cell a platform at (r, c) may cover along its axis.
-function platformRun(r, c, way) {
-  const dx = way.axis === 'x' ? 1 : 0, dy = 1 - dx;
-  const bound = step => {
-    let rr = r, cc = c;
-    do { rr += dy * step; cc += dx * step; } while (!guideBlocks(rr, cc));
-    return way.axis === 'x' ? cc : rr;
-  };
-  return [bound(-1) + 1, bound(1) - 1];
-}
-
-function drawPlatformGuide(r, c, way) {
-  const [lo, hi] = platformRun(r, c, way);
-  const g = boardCtx;
-  g.save();
-  // the stretch: a band one tile wide down the line it travels
-  const x = way.axis === 'x' ? lo * TILE : c * TILE;
-  const y = way.axis === 'x' ? r * TILE : lo * TILE;
-  const w = way.axis === 'x' ? (hi - lo + 1) * TILE : TILE;
-  const h = way.axis === 'x' ? TILE : (hi - lo + 1) * TILE;
-  g.fillStyle = 'rgba(111,211,255,0.14)';
-  g.fillRect(x, y, w, h);
-  g.strokeStyle = GUIDE;
-  g.lineWidth = 1.5 / zoom;
-  g.setLineDash([4 / zoom, 3 / zoom]);
-  g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-  g.setLineDash([]);
-  // a bar across each end, where it turns
-  g.lineWidth = 3 / zoom;
-  g.beginPath();
-  if (way.axis === 'x') {
-    g.moveTo(x + 1, y + 4); g.lineTo(x + 1, y + h - 4);
-    g.moveTo(x + w - 1, y + 4); g.lineTo(x + w - 1, y + h - 4);
-  } else {
-    g.moveTo(x + 4, y + 1); g.lineTo(x + w - 4, y + 1);
-    g.moveTo(x + 4, y + h - 1); g.lineTo(x + w - 4, y + h - 1);
-  }
-  g.stroke();
-  // the arrow on the platform's own cell, pointing the way it sets off
-  const cx = (c + 0.5) * TILE, cy = (r + 0.5) * TILE;
-  const ux = way.axis === 'x' ? way.sign : 0, uy = way.axis === 'y' ? way.sign : 0;
-  const len = TILE * 0.36, wing = TILE * 0.22, neck = len * 0.1;
-  // the shaft, outlined dark so it reads over any art, then the head
-  for (const [colour, width] of [['#0b1830', TILE * 0.22], [GUIDE, TILE * 0.12]]) {
-    g.strokeStyle = colour;
-    g.lineWidth = width;
-    g.beginPath();
-    g.moveTo(cx - ux * len, cy - uy * len);
-    g.lineTo(cx + ux * neck, cy + uy * neck);
-    g.stroke();
-  }
-  g.fillStyle = GUIDE;
-  g.strokeStyle = '#0b1830';
-  g.lineWidth = 1.5 / zoom;
-  g.beginPath();
-  g.moveTo(cx + ux * len, cy + uy * len);
-  g.lineTo(cx + ux * neck - uy * wing, cy + uy * neck + ux * wing);
-  g.lineTo(cx + ux * neck + uy * wing, cy + uy * neck - ux * wing);
-  g.closePath();
-  g.fill();
-  g.stroke();
-  g.restore();
 }
 
 // An object is drawn where it will actually land in its cell, and wearing its
@@ -1134,14 +1072,13 @@ function drawPlatformGuide(r, c, way) {
 // glyph named.
 function drawObjectCell(cell, c, r) {
   const glyph = OBJECTS[cell.oi].glyph;
-  // a mark only the editor shows — a platform stop — unless it has art
-  const C = objClass(glyph, cell.id, cell.v);
-  if (C && C.editorOnly && !atlas.def(objSprite(glyph, cell.id, cell.v)).frame) {
-    marker({ c, r }, C.marker.colour, C.marker.letter);
+  const name = objSprite(glyph, cell.id, cell.v);
+  if (!atlas.def(name).frame) {
+    // a class that draws itself without art (its guide) needs no stand-in
+    const C = objClass(glyph, cell.id, cell.v);
+    if (!(C && C.editorOnly)) objPlaceholder(c, r, cell.id + glyph + (cell.v || '0'));
     return;
   }
-  const name = objSprite(glyph, cell.id, cell.v);
-  if (!atlas.def(name).frame) { objPlaceholder(c, r, cell.id + glyph + (cell.v || '0')); return; }
   const [ax, ay] = cellAnchor(glyph, cell.id, cell.v);
   const [x, y] = atlas.place(name, (c + ax) * TILE, (r + ay) * TILE);
   const frame = objFrame(glyph, cell.id, cell.v);
@@ -2090,34 +2027,23 @@ function drawObjectSwatch(c2, glyph, digit, v) {
   c2.clearRect(0, 0, SWATCH, SWATCH);
   const name = objSprite(glyph, digit, v);
   const def = atlas.def(name);
-  const C = objClass(glyph, digit, v);
-  if (C && C.editorOnly && !def.frame) {
-    const m = C.marker, pad = SWATCH * 0.12;
-    c2.fillStyle = m.colour + '33';
-    c2.fillRect(pad, pad, SWATCH - pad * 2, SWATCH - pad * 2);
-    c2.strokeStyle = m.colour;
-    c2.lineWidth = 2;
-    c2.strokeRect(pad + 1, pad + 1, SWATCH - pad * 2 - 2, SWATCH - pad * 2 - 2);
-    c2.font = `bold ${Math.round(SWATCH * 0.45)}px system-ui, sans-serif`;
-    c2.textAlign = 'center';
-    c2.textBaseline = 'middle';
-    c2.fillStyle = m.colour;
-    c2.fillText(m.letter, SWATCH / 2, SWATCH / 2 + 1);
-    return;
+  if (def.frame) {
+    const [fw, fh] = atlas.size(name);
+    const scale = Math.min(1, SWATCH / fw, SWATCH / fh);
+    const x = def.anchor[0] - fw / 2, y = def.anchor[1] - fh / 2;
+    const frame = objFrame(glyph, digit, v);
+    c2.save();
+    c2.translate(SWATCH / 2, SWATCH / 2);
+    c2.scale(scale, scale);
+    withCtx(c2, () => {
+      atlas.draw(name, x, y, frame);
+      atlas.drawMask(name, digit, x, y, frame);
+    });
+    c2.restore();
   }
-  if (!def.frame) return;
-  const [fw, fh] = atlas.size(name);
-  const scale = Math.min(1, SWATCH / fw, SWATCH / fh);
-  const x = def.anchor[0] - fw / 2, y = def.anchor[1] - fh / 2;
-  const frame = objFrame(glyph, digit, v);
-  c2.save();
-  c2.translate(SWATCH / 2, SWATCH / 2);
-  c2.scale(scale, scale);
-  withCtx(c2, () => {
-    atlas.draw(name, x, y, frame);
-    atlas.drawMask(name, digit, x, y, frame);
-  });
-  c2.restore();
+  // and what its class shows of itself: a platform's arrow, a stop's marker
+  const C = objClass(glyph, digit, v);
+  if (C) C.drawGuide(c2, { mode: 'panel', size: SWATCH, digit, px: 1, hasArt: !!def.frame });
 }
 
 function drawSwatches() {
