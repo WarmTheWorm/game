@@ -238,7 +238,7 @@
         <button data-tool="erase">Erase</button>
         <button data-tool="start">Start</button>
       </div>
-      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells; a click inside fills them all with what is picked (a right-click empties them): <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. With <b>Shift</b>, copy, cut and Delete also work on the current layer only. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
+      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells; a click inside fills them all with what is picked (a right-click empties them): <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. With <b>Shift</b>, copy, cut and Delete also work on the current layer only. While the copy's outline follows the mouse, Ctrl+C, Ctrl+X and Delete act on the cells under it. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
     </div>
 
     <div class="group">
@@ -1164,7 +1164,26 @@ let cellClip = null;      // { w, h, layers: [3][h][w], only: a layer index, or 
 let pasteArmed = false;   // the copy's outline follows the mouse, ready for Ctrl+V
 
 // Esc, a right-click on the board or picking something to paint with puts
-// the outline away; the copy stays, and Ctrl+V brings it back.
+// the outline away; the copy stays, and Ctrl+V brings it back. While it is
+// out, the area under it can be copied, cut or emptied as a selection would.
+
+// The cells under the outline: the copy's size, top-left under the mouse.
+function outlineRect() {
+  if (selection || !pasteArmed || !cellClip || !hover) return null;
+  return { r0: hover.r, c0: hover.c, r1: Math.min(rows - 1, hover.r + cellClip.h - 1), c1: Math.min(cols - 1, hover.c + cellClip.w - 1) };
+}
+
+// Runs a selection command on the area under the outline, which stays out.
+function onOutline(fn) {
+  const rect = outlineRect();
+  if (!rect) return false;
+  selection = rect;
+  fn();
+  selection = null;
+  pasteArmed = true;
+  render();
+  return true;
+}
 function stopPasting() {
   if (!pasteArmed) return false;
   pasteArmed = false;
@@ -2301,11 +2320,24 @@ document.addEventListener('keydown', e => {
   const code = e.code || (e.key && e.key.length === 1 ? 'Key' + e.key.toUpperCase() : '');
   // with Shift, the layer being worked on alone
   const only = e.shiftKey ? activeLayer : null;
-  if ((e.ctrlKey || e.metaKey) && code === 'KeyC' && selection) { e.preventDefault(); copySelection(only); return; }
-  if ((e.ctrlKey || e.metaKey) && code === 'KeyX' && selection) { e.preventDefault(); cutSelection(only); return; }
+  if ((e.ctrlKey || e.metaKey) && code === 'KeyC' && (selection || outlineRect())) {
+    e.preventDefault();
+    if (!onOutline(() => copySelection(only))) copySelection(only);
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && code === 'KeyX' && (selection || outlineRect())) {
+    e.preventDefault();
+    if (!onOutline(() => cutSelection(only))) cutSelection(only);
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && code === 'KeyV') { e.preventDefault(); pasteSelection(e.shiftKey); return; }
   if (e.key === 'Escape' && (selection || pasteArmed)) { selection = null; pasteArmed = false; render(); showSelection(); return; }
-  if ((e.key === 'Delete' || e.key === 'Backspace') && selection) { e.preventDefault(); clearSelection(e.shiftKey ? activeLayer : null); return; }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && (selection || outlineRect())) {
+    e.preventDefault();
+    const only = e.shiftKey ? activeLayer : null;
+    if (!onOutline(() => clearSelection(only))) clearSelection(only);
+    return;
+  }
   const layerKey = { '1': 0, '2': 1, '3': 2 }[e.key];
   if (layerKey !== undefined) {
     activeLayer = layerKey;
