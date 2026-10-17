@@ -238,7 +238,7 @@
         <button data-tool="erase">Erase</button>
         <button data-tool="start">Start</button>
       </div>
-      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells; a click inside fills them all with what is picked (a right-click empties them): <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
+      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells; a click inside fills them all with what is picked (a right-click empties them): <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. With <b>Shift</b>, copy, cut and Delete also work on the current layer only. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
     </div>
 
     <div class="group">
@@ -1152,12 +1152,15 @@ function apply(at, how) {
 // under the mouse, an outline of it following the pointer; with a selection,
 // it fills the selection with the copy repeated, so a 2x2 tiles an 8x8.
 // Ctrl+Shift+V does the same with the layer being worked on alone — its
-// cells from the copy, the other layers left as they are. Esc
+// cells from the copy, the other layers left as they are. With Shift, copy,
+// cut and Delete work on the current layer only too; a copy of one layer
+// pastes back into that layer, or with Ctrl+Shift+V into the current one —
+// which moves things from layer to layer. Esc
 // lets the selection go, Delete empties it, Ctrl+Z undoes. Her start is not
 // part of the level's cells, so it is never copied.
 let selection = null;     // { r0, c0, r1, c1 }, inclusive
 let selDrag = null;       // the cell a shift-drag started on
-let cellClip = null;      // { w, h, layers: [3][h][w] }
+let cellClip = null;      // { w, h, layers: [3][h][w], only: a layer index, or null for all three }
 let pasteArmed = false;   // the copy's outline follows the mouse, ready for Ctrl+V
 
 // Esc, a right-click on the board or picking something to paint with puts
@@ -1180,30 +1183,33 @@ function showSelection(text) {
   levelMsg.textContent = text || `Selected ${w}×${h}. Ctrl+C copies it, Ctrl+V pastes the copy here, Delete empties it, Esc lets it go.`;
 }
 
-function copySelection() {
+// `only` is a layer index to work on that layer alone, or null for all three.
+const layerWords = only => only === null ? '' : ` of the ${LAYER_LABELS[only]} layer`;
+
+function copySelection(only = null) {
   if (!selection) { showSelection('Shift-drag on the board to select cells first.'); return; }
   const { w, h } = selSize(selection);
   cellClip = {
-    w, h,
+    w, h, only,
     layers: [0, 1, 2].map(li => Array.from({ length: h }, (_, y) =>
-      Array.from({ length: w }, (_, x) => cloneCell(layers[li][selection.r0 + y][selection.c0 + x]))))
+      Array.from({ length: w }, (_, x) => only === null || li === only ? cloneCell(layers[li][selection.r0 + y][selection.c0 + x]) : null)))
   };
   selection = null;
   pasteArmed = true;
   render();
-  showSelection(`Copied ${w}×${h}. Point where it goes and press Ctrl+V — or shift-drag an area for it to fill. Esc or a right-click puts it away.`);
+  showSelection(`Copied ${w}×${h}${layerWords(only)}. Point where it goes and press Ctrl+V — or shift-drag an area for it to fill. Esc or a right-click puts it away.`);
 }
 
-function cutSelection() {
+function cutSelection(only = null) {
   if (!selection) { showSelection('Shift-drag on the board to select cells first.'); return; }
   const was = selection;
-  copySelection();
+  copySelection(only);
   selection = was;
-  clearSelection();
+  clearSelection(only);
   selection = null;
   pasteArmed = true;
   render();
-  showSelection(`Cut ${cellClip.w}×${cellClip.h}. Point where it goes and press Ctrl+V — or shift-drag an area for it to fill. Esc or a right-click puts it away.`);
+  showSelection(`Cut ${cellClip.w}×${cellClip.h}${layerWords(only)}. Point where it goes and press Ctrl+V — or shift-drag an area for it to fill. Esc or a right-click puts it away.`);
 }
 
 function pasteSelection(onlyLayer = false) {
@@ -1217,10 +1223,16 @@ function pasteSelection(onlyLayer = false) {
     ? { r0: at.r, c0: at.c, r1: Math.min(rows - 1, at.r + cellClip.h - 1), c1: Math.min(cols - 1, at.c + cellClip.w - 1) }
     : selection;
   pushUndo();
-  for (const li of onlyLayer ? [activeLayer] : [0, 1, 2]) {
+  // [into, from]: every layer into itself; a one-layer copy into its own
+  // layer; with Shift, into the current layer from the same one, or from the
+  // one layer the copy holds
+  const pairs = onlyLayer ? [[activeLayer, cellClip.only ?? activeLayer]]
+    : cellClip.only !== null ? [[cellClip.only, cellClip.only]]
+    : [[0, 0], [1, 1], [2, 2]];
+  for (const [li, from] of pairs) {
     for (let r = area.r0; r <= area.r1; r++) {
       for (let c = area.c0; c <= area.c1; c++) {
-        layers[li][r][c] = cloneCell(cellClip.layers[li][(r - area.r0) % cellClip.h][(c - area.c0) % cellClip.w]);
+        layers[li][r][c] = cloneCell(cellClip.layers[from][(r - area.r0) % cellClip.h][(c - area.c0) % cellClip.w]);
       }
     }
   }
@@ -1231,7 +1243,8 @@ function pasteSelection(onlyLayer = false) {
   const tiled = !one && (pw !== cellClip.w || ph !== cellClip.h) ? `, the ${cellClip.w}×${cellClip.h} copy repeated` : '';
   render();
   save();
-  const which = onlyLayer ? ` into the ${LAYER_LABELS[activeLayer]} layer only` : '';
+  const into = pairs.length === 1 ? pairs[0][0] : null;
+  const which = into === null ? '' : ` into the ${LAYER_LABELS[into]} layer only`;
   showSelection(`Pasted ${pw}×${ph}${which}${tiled}${cut}.`);
 }
 
@@ -1252,17 +1265,17 @@ function fillSelection(how) {
     : `Filled ${w}×${h} on the ${LAYER_LABELS[activeLayer]} layer.`);
 }
 
-function clearSelection() {
+function clearSelection(only = null) {
   if (!selection) return;
   pushUndo();
-  for (let li = 0; li < 3; li++) {
+  for (const li of only === null ? [0, 1, 2] : [only]) {
     for (let r = selection.r0; r <= selection.r1; r++) {
       for (let c = selection.c0; c <= selection.c1; c++) layers[li][r][c] = null;
     }
   }
   render();
   save();
-  showSelection('Emptied.');
+  showSelection(only === null ? 'Emptied.' : `Emptied the ${LAYER_LABELS[only]} layer.`);
 }
 
 function drawSelection() {
@@ -2286,11 +2299,13 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
   // by the key's place, so it works whatever the keyboard's language
   const code = e.code || (e.key && e.key.length === 1 ? 'Key' + e.key.toUpperCase() : '');
-  if ((e.ctrlKey || e.metaKey) && code === 'KeyC' && selection) { e.preventDefault(); copySelection(); return; }
-  if ((e.ctrlKey || e.metaKey) && code === 'KeyX' && selection) { e.preventDefault(); cutSelection(); return; }
+  // with Shift, the layer being worked on alone
+  const only = e.shiftKey ? activeLayer : null;
+  if ((e.ctrlKey || e.metaKey) && code === 'KeyC' && selection) { e.preventDefault(); copySelection(only); return; }
+  if ((e.ctrlKey || e.metaKey) && code === 'KeyX' && selection) { e.preventDefault(); cutSelection(only); return; }
   if ((e.ctrlKey || e.metaKey) && code === 'KeyV') { e.preventDefault(); pasteSelection(e.shiftKey); return; }
   if (e.key === 'Escape' && (selection || pasteArmed)) { selection = null; pasteArmed = false; render(); showSelection(); return; }
-  if ((e.key === 'Delete' || e.key === 'Backspace') && selection) { e.preventDefault(); clearSelection(); return; }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selection) { e.preventDefault(); clearSelection(e.shiftKey ? activeLayer : null); return; }
   const layerKey = { '1': 0, '2': 1, '3': 2 }[e.key];
   if (layerKey !== undefined) {
     activeLayer = layerKey;
