@@ -74,7 +74,7 @@ function propField(o, k, d) {
       const cur = refName(v);
       const missing = v && !spriteByName(cur) ? ' — missing' : '';
       return `<div class="ctl">${head}<div class="sprrow"><div class="sprpick">
-        <button type="button" class="sprbtn" data-sprbtn="${k}" aria-haspopup="listbox">${spriteIcon(cur)}<span class="nm">${esc(cur || '—')}${missing}</span><span class="caret">▾</span></button>
+        <button type="button" class="sprbtn" data-sprbtn="${k}" aria-haspopup="listbox" title="Pick a sprite — double-click to open this one on the Sprites tab">${spriteIcon(cur)}<span class="nm">${esc(cur || '—')}${missing}</span><span class="caret">▾</span></button>
       </div><button type="button" class="btn sm" data-newsprite="${k}" title="Make a new sprite for this object and draw it">+ New</button></div>${hint}</div>`;
     }
     case 'background': input = `<select data-prop="${k}">${options(pack.backgrounds.map(b => b.name), 'background::')}</select>`; break;
@@ -83,7 +83,7 @@ function propField(o, k, d) {
       const sn = refName(o.props.sprite), s = spriteByName(sn);
       const missing = v && !(s && s.parts.some(p => p.name === v)) ? ' — missing' : '';
       return `<div class="ctl">${head}<div class="sprpick">
-        <button type="button" class="sprbtn" data-partbtn="${k}" aria-haspopup="listbox">${v ? partIcon(sn, v) : ''}<span class="nm">${esc(v || '—')}${missing}</span><span class="caret">▾</span></button>
+        <button type="button" class="sprbtn" data-partbtn="${k}" aria-haspopup="listbox" title="Pick a part — double-click to open the sprite on the Sprites tab">${v ? partIcon(sn, v) : ''}<span class="nm">${esc(v || '—')}${missing}</span><span class="caret">▾</span></button>
       </div>${hint}</div>`;
     }
     default: input = `<input data-prop="${k}" value="${esc(v ?? '')}">`;
@@ -255,6 +255,30 @@ function newSoundFor(o, k) {
   savePack();
   toast(was ? `Made sound::${id}, a copy of sound::${from} to change` : `Made sound::${id}`);
 }
+
+// A sprite on the Sprites tab, chosen there as if clicked in its list.
+function openSprite(name) {
+  const s = spriteByName(name);
+  if (!s) { toast(name ? `There is no sprite called ${name}` : 'No sprite picked yet', true); return; }
+  closeSpritePicker();
+  current = s;
+  showTab('objects');
+  renderObjects();
+  const item = $(`#objList [data-oid="${s.id}"]`);
+  if (item) item.scrollIntoView({ block: 'nearest' });
+}
+
+// Double-click a sprite picker to go to the sprite it holds; a part picker
+// goes to the object's own sprite, where its parts are.
+$('#goForm').addEventListener('dblclick', e => {
+  const o = currentObj;
+  if (!o) return;
+  const sb = e.target.closest('[data-sprbtn]');
+  if (sb) openSprite(refName(o.props[sb.dataset.sprbtn]));
+  else if (e.target.closest('[data-partbtn]')) openSprite(refName(o.props.sprite));
+  else return;
+  e.preventDefault();
+});
 
 // The sprite picker's list: every sprite with its icon, the current one marked.
 function closeSpritePicker() { $$('.sprlist').forEach(l => l.remove()); }
