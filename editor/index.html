@@ -1158,6 +1158,17 @@ function apply(at, how) {
 let selection = null;     // { r0, c0, r1, c1 }, inclusive
 let selDrag = null;       // the cell a shift-drag started on
 let cellClip = null;      // { w, h, layers: [3][h][w] }
+let pasteArmed = false;   // the copy's outline follows the mouse, ready for Ctrl+V
+
+// Esc, a right-click on the board or picking something to paint with puts
+// the outline away; the copy stays, and Ctrl+V brings it back.
+function stopPasting() {
+  if (!pasteArmed) return false;
+  pasteArmed = false;
+  render();
+  showSelection();
+  return true;
+}
 
 const selRect = (a, b) => ({ r0: Math.min(a.r, b.r), c0: Math.min(a.c, b.c), r1: Math.max(a.r, b.r), c1: Math.max(a.c, b.c) });
 const selSize = sel => ({ w: sel.c1 - sel.c0 + 1, h: sel.r1 - sel.r0 + 1 });
@@ -1178,8 +1189,9 @@ function copySelection() {
       Array.from({ length: w }, (_, x) => cloneCell(layers[li][selection.r0 + y][selection.c0 + x]))))
   };
   selection = null;
+  pasteArmed = true;
   render();
-  showSelection(`Copied ${w}×${h}. Point where it goes and press Ctrl+V — or shift-drag an area for it to fill.`);
+  showSelection(`Copied ${w}×${h}. Point where it goes and press Ctrl+V — or shift-drag an area for it to fill. Esc or a right-click puts it away.`);
 }
 
 function cutSelection() {
@@ -1189,8 +1201,9 @@ function cutSelection() {
   selection = was;
   clearSelection();
   selection = null;
+  pasteArmed = true;
   render();
-  showSelection(`Cut ${cellClip.w}×${cellClip.h}. Point where it goes and press Ctrl+V — or shift-drag an area for it to fill.`);
+  showSelection(`Cut ${cellClip.w}×${cellClip.h}. Point where it goes and press Ctrl+V — or shift-drag an area for it to fill. Esc or a right-click puts it away.`);
 }
 
 function pasteSelection(onlyLayer = false) {
@@ -1212,6 +1225,7 @@ function pasteSelection(onlyLayer = false) {
     }
   }
   if (!one) selection = area;            // a fill keeps its selection; a paste at the mouse leaves none
+  pasteArmed = one;                      // and stays ready to go down again
   const pw = area.c1 - area.c0 + 1, ph = area.r1 - area.r0 + 1;
   const cut = one && (pw < cellClip.w || ph < cellClip.h) ? ' — cut short by the edge of the level' : '';
   const tiled = !one && (pw !== cellClip.w || ph !== cellClip.h) ? `, the ${cellClip.w}×${cellClip.h} copy repeated` : '';
@@ -1236,7 +1250,7 @@ function clearSelection() {
 
 function drawSelection() {
   // where Ctrl+V would put the copy down, when nothing is selected
-  if (!selection && cellClip && hover && !stroke) {
+  if (!selection && pasteArmed && cellClip && hover && !stroke) {
     boardCtx.save();
     boardCtx.lineWidth = 2 / zoom;
     boardCtx.setLineDash([4 / zoom, 4 / zoom]);
@@ -1274,6 +1288,8 @@ board.addEventListener('pointerdown', e => {
     updateStatus(at);
     return;
   }
+  // a right-click while a copy is out puts it away rather than erasing
+  if (e.button === 2 && stopPasting()) return;
   selection = null;          // painting puts the selection away
   pushUndo();
   // Her start is placed once per click; the others paint while dragging.
@@ -2029,6 +2045,7 @@ dimBtn.addEventListener('click', () => {
 
 const toolSeg = document.getElementById('toolSeg');
 toolSeg.addEventListener('click', e => {
+  stopPasting();
   const b = e.target.closest('button');
   if (!b) return;
   tool = b.dataset.tool;
@@ -2062,6 +2079,7 @@ PALETTE.forEach((p, i) => {
   tag.textContent = p.label;
   cell.append(cv, tag);
   cell.addEventListener('click', () => {
+    stopPasting();
     mode = 'tile';
     tileIndex = i;
     tool = 'paint';
@@ -2128,6 +2146,7 @@ function buildObjPalette() {
     cell.append(cv, tag);
     const swatch = { cell, ctx: cv.getContext('2d'), glyph: code[1], digit: code[0], v: code[2] || '0', name };
     cell.addEventListener('click', () => {
+      stopPasting();
       mode = 'object';
       objEntry = i;
       objIndex = OBJ_BY_GLYPH.get(swatch.glyph);
@@ -2248,7 +2267,7 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && code === 'KeyC' && selection) { e.preventDefault(); copySelection(); return; }
   if ((e.ctrlKey || e.metaKey) && code === 'KeyX' && selection) { e.preventDefault(); cutSelection(); return; }
   if ((e.ctrlKey || e.metaKey) && code === 'KeyV') { e.preventDefault(); pasteSelection(e.shiftKey); return; }
-  if (e.key === 'Escape' && selection) { selection = null; render(); showSelection(); return; }
+  if (e.key === 'Escape' && (selection || pasteArmed)) { selection = null; pasteArmed = false; render(); showSelection(); return; }
   if ((e.key === 'Delete' || e.key === 'Backspace') && selection) { e.preventDefault(); clearSelection(); return; }
   const layerKey = { '1': 0, '2': 1, '3': 2 }[e.key];
   if (layerKey !== undefined) {
