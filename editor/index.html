@@ -1324,7 +1324,8 @@ function drawSelection() {
 // The eyedropper: the tile (with its colour) or object (with its digit and
 // variant) in a cell becomes what is picked in the panel, ready to paint.
 // The layer being worked on is read first; an empty cell there gives the top
-// layer that has something, and that becomes the layer worked on.
+// layer that has something, and that becomes the layer worked on. It is also
+// copied — that one cell of that one layer — so Ctrl+V puts it down too.
 function pickFromCell(at) {
   const order = [activeLayer, 2, 1, 0].filter((li, i, a) => a.indexOf(li) === i);
   const li = order.find(l => layers[l][at.r][at.c]);
@@ -1355,8 +1356,12 @@ function pickFromCell(at) {
   if (swatch) swatch.cell.scrollIntoView({ block: 'nearest' });
   render();
   updateStatus(at);
+  cellClip = {
+    w: 1, h: 1, only: li,
+    layers: [0, 1, 2].map(l => [[l === li ? cloneCell(cell) : null]])
+  };
   const what = cell.pi !== undefined ? `the ${PALETTE[cell.pi].label} tile` : `the object ${cell.id}${OBJECTS[cell.oi].glyph}${cell.v || '0'}`;
-  levelMsg.textContent = `Picked up ${what} from the ${LAYER_LABELS[li]} layer.`;
+  levelMsg.textContent = `Picked up ${what} from the ${LAYER_LABELS[li]} layer — paint with it, or Ctrl+V puts it down where you point.`;
 }
 
 let stroke = null;        // {how, last} while a drag is live
