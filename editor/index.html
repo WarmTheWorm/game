@@ -238,7 +238,7 @@
         <button data-tool="erase">Erase</button>
         <button data-tool="start">Start</button>
       </div>
-      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells: <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
+      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells: <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
     </div>
 
     <div class="group">
@@ -1150,7 +1150,9 @@ function apply(at, how) {
 // then put the selection away, so the paste follows the mouse. Ctrl+V with
 // nothing selected puts the whole copy down with its top-left on the cell
 // under the mouse, an outline of it following the pointer; with a selection,
-// it fills the selection with the copy repeated, so a 2x2 tiles an 8x8. Esc
+// it fills the selection with the copy repeated, so a 2x2 tiles an 8x8.
+// Ctrl+Shift+V does the same with the layer being worked on alone — its
+// cells from the copy, the other layers left as they are. Esc
 // lets the selection go, Delete empties it, Ctrl+Z undoes. Her start is not
 // part of the level's cells, so it is never copied.
 let selection = null;     // { r0, c0, r1, c1 }, inclusive
@@ -1191,7 +1193,7 @@ function cutSelection() {
   showSelection(`Cut ${cellClip.w}×${cellClip.h}. Point where it goes and press Ctrl+V — or shift-drag an area for it to fill.`);
 }
 
-function pasteSelection() {
+function pasteSelection(onlyLayer = false) {
   if (!cellClip) { showSelection('Nothing copied yet — select cells and press Ctrl+C.'); return; }
   // nothing selected: the whole copy, top-left on the cell under the mouse;
   // a selection: filled with the copy, repeated
@@ -1202,7 +1204,7 @@ function pasteSelection() {
     ? { r0: at.r, c0: at.c, r1: Math.min(rows - 1, at.r + cellClip.h - 1), c1: Math.min(cols - 1, at.c + cellClip.w - 1) }
     : selection;
   pushUndo();
-  for (let li = 0; li < 3; li++) {
+  for (const li of onlyLayer ? [activeLayer] : [0, 1, 2]) {
     for (let r = area.r0; r <= area.r1; r++) {
       for (let c = area.c0; c <= area.c1; c++) {
         layers[li][r][c] = cloneCell(cellClip.layers[li][(r - area.r0) % cellClip.h][(c - area.c0) % cellClip.w]);
@@ -1215,7 +1217,8 @@ function pasteSelection() {
   const tiled = !one && (pw !== cellClip.w || ph !== cellClip.h) ? `, the ${cellClip.w}×${cellClip.h} copy repeated` : '';
   render();
   save();
-  showSelection(`Pasted ${pw}×${ph}${tiled}${cut}.`);
+  const which = onlyLayer ? ` into the ${LAYER_LABELS[activeLayer]} layer only` : '';
+  showSelection(`Pasted ${pw}×${ph}${which}${tiled}${cut}.`);
 }
 
 function clearSelection() {
@@ -2244,7 +2247,7 @@ document.addEventListener('keydown', e => {
   const code = e.code || (e.key && e.key.length === 1 ? 'Key' + e.key.toUpperCase() : '');
   if ((e.ctrlKey || e.metaKey) && code === 'KeyC' && selection) { e.preventDefault(); copySelection(); return; }
   if ((e.ctrlKey || e.metaKey) && code === 'KeyX' && selection) { e.preventDefault(); cutSelection(); return; }
-  if ((e.ctrlKey || e.metaKey) && code === 'KeyV') { e.preventDefault(); pasteSelection(); return; }
+  if ((e.ctrlKey || e.metaKey) && code === 'KeyV') { e.preventDefault(); pasteSelection(e.shiftKey); return; }
   if (e.key === 'Escape' && selection) { selection = null; render(); showSelection(); return; }
   if ((e.key === 'Delete' || e.key === 'Backspace') && selection) { e.preventDefault(); clearSelection(); return; }
   const layerKey = { '1': 0, '2': 1, '3': 2 }[e.key];
