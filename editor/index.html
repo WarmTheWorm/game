@@ -543,6 +543,7 @@ let objVariant = '0';   // the object's own third character
 let objEntry = 0;       // which palette swatch: one per object code
 let zoom = 2;                  // 100%: a pixel of art to a pixel of screen, as the game shows it
 let dimOthers = false;   // off, so the board reads as the finished level
+const DIM_ALPHA = 0.15;  // how much of the other layers shows while dimmed
 
 // What each sign says, by the info digit its block carries. Sparse while it is
 // being written; `levelMessages()` packs it for the game.
@@ -998,7 +999,7 @@ function render() {
   // diagram of it. Dimming is opt-in for when the active layer has got lost.
   withCtx(boardCtx, () => {
     for (let li = 0; li < 3; li++) {
-      boardCtx.globalAlpha = (dimOthers && li !== activeLayer) ? 0.3 : 1;
+      boardCtx.globalAlpha = (dimOthers && li !== activeLayer) ? DIM_ALPHA : 1;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const cell = layers[li][r][c];
