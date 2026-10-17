@@ -437,7 +437,7 @@ pc.addEventListener('contextmenu', e => e.preventDefault());
 
 document.addEventListener('keydown', e => {
   if (!$('#paint').open || e.target.matches('input,select,textarea')) return;
-  const c = e.code;
+  const c = e.code || (e.key && e.key.length === 1 ? 'Key' + e.key.toUpperCase() : '');   // by the key's place, whatever the keyboard's language
   if (e.ctrlKey || e.metaKey) {
     if (c === 'KeyZ') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (c === 'KeyY') { e.preventDefault(); redo(); }

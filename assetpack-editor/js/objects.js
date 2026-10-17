@@ -494,8 +494,64 @@ $('#objLanes').addEventListener('drop', e => {
   savePack();
 });
 
+// ---------- copying frames ----------
+// Ctrl+C copies the picked frames; Ctrl+V adds them, as new frames, to the
+// part under the pointer — or the part picked — after the picked frame if it
+// is in that part, else at its end. The copy is the one the pixel editor and
+// the Tiles tab use: the first frame is also plain pixels there, and pixels
+// copied there paste here as one new frame. A copy of another size is centred
+// in the frame, never scaled.
+let frameClip = null;       // { frames: [canvas…] } — frames[0] is pixelClip while it is current
+let hoverLane = null;       // the part lane under the pointer
+$('#objLanes').addEventListener('mousemove', e => { hoverLane = e.target.closest('.lane')?.dataset.lane || null; });
+$('#objLanes').addEventListener('mouseleave', () => { hoverLane = null; });
+
+function copyFrames() {
+  const o = current;
+  const picked = o ? o.frames.filter(f => selFrames.has(f.id)) : [];
+  if (!picked.length) { toast('Click a frame to pick it, then Ctrl+C', true); return; }
+  frameClip = { frames: picked.map(f => cloneCanvas(frameCanvas(o, f))) };
+  pixelClip = frameClip.frames[0];
+  $('#opPaste').disabled = false;
+  toast(picked.length > 1 ? `Copied ${picked.length} frames` : 'Copied the frame — Ctrl+V pastes it into a part, or into the pixel editor');
+}
+
+function pasteFrames() {
+  const o = current;
+  if (!o) { toast('Pick a sprite first', true); return; }
+  if (!pixelClip) { toast('Copy a frame first — click one and press Ctrl+C', true); return; }
+  // the frames just copied, or pixels copied in the pixel editor or Tiles tab since
+  const srcs = frameClip && frameClip.frames[0] === pixelClip ? frameClip.frames : [pixelClip];
+  const partId = (hoverLane && partById(o, hoverLane) ? hoverLane : null) || o.active || o.parts[0].id;
+  const picked = o.frames.filter(f => selFrames.has(f.id) && f.partId === partId);
+  let after = picked.length ? picked[picked.length - 1].id : null;
+  markUndo();
+  const made = srcs.map(src => {
+    const c = blankCanvas(o.fw, o.fh);
+    c.getContext('2d').drawImage(src, Math.round((o.fw - src.width) / 2), Math.round((o.fh - src.height) / 2));
+    const f = insertFrame(o, partId, after, c);
+    after = f.id;
+    return f;
+  });
+  selFrames.clear();
+  made.forEach(f => selFrames.add(f.id));
+  o.active = partId;
+  normalizeObject(o);
+  renderObjects();
+  savePack();
+  const part = partById(o, partId);
+  const sized = srcs.some(c => c.width !== o.fw || c.height !== o.fh) ? ' (centred — the sizes differ)' : '';
+  toast(`Pasted ${made.length > 1 ? made.length + ' frames' : 'a frame'} into "${part.name}"${sized}`);
+}
+
 document.addEventListener('keydown', e => {
   if ($('#paint').open || e.target.matches('input,select,textarea')) return;
+  if ((e.ctrlKey || e.metaKey) && $('[data-page="objects"]').classList.contains('on')) {
+    // by the key's place, so it works whatever the keyboard's language
+    const key = e.code || 'Key' + (e.key || '').toUpperCase();
+    if (key === 'KeyC') { e.preventDefault(); copyFrames(); return; }
+    if (key === 'KeyV') { e.preventDefault(); pasteFrames(); return; }
+  }
   if (e.key === 'Escape' && selFrames.size) {
     selFrames.clear();
     $$('#objLanes .frame.sel').forEach(x => x.classList.remove('sel'));
