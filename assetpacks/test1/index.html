@@ -4731,30 +4731,41 @@ class Platform extends Entity {
   }
 
   // An arrow centred on (cx, cy) pointing along (ux, uy), `len` from its
-  // middle to its tip, outlined dark so it reads over any art.
+  // middle to its tip: one outline — shaft and head together, corners rounded
+  // — filled light, edged dark, with a soft shadow so it reads over any art.
   static drawArrow(g, cx, cy, ux, uy, len, px) {
-    const wing = len * 0.6, neck = len * 0.1;
+    const shaft = len * 0.17, head = len * 0.5, neck = len * 0.12;
     g.save();
-    for (const [colour, width] of [['#0b1830', len * 0.6], [PLATFORM_GUIDE, len * 0.33]]) {
-      g.strokeStyle = colour;
-      g.lineWidth = width;
-      g.beginPath();
-      g.moveTo(cx - ux * len, cy - uy * len);
-      g.lineTo(cx + ux * neck, cy + uy * neck);
-      g.stroke();
-    }
-    g.fillStyle = PLATFORM_GUIDE;
-    g.strokeStyle = '#0b1830';
-    g.lineWidth = 1.5 / px;
+    g.translate(cx, cy);
+    g.rotate(Math.atan2(uy, ux));
     g.beginPath();
-    g.moveTo(cx + ux * len, cy + uy * len);
-    g.lineTo(cx + ux * neck - uy * wing, cy + uy * neck + ux * wing);
-    g.lineTo(cx + ux * neck + uy * wing, cy + uy * neck - ux * wing);
+    g.moveTo(-len, -shaft);
+    g.lineTo(neck, -shaft);
+    g.lineTo(neck, -head);
+    g.lineTo(len, 0);
+    g.lineTo(neck, head);
+    g.lineTo(neck, shaft);
+    g.lineTo(-len, shaft);
     g.closePath();
+    g.lineJoin = 'round';
+    g.shadowColor = 'rgba(0,0,0,0.45)';
+    g.shadowBlur = 3;          // in screen pixels, whatever the zoom
+    g.shadowOffsetY = 1;
+    g.fillStyle = PLATFORM_GUIDE;
     g.fill();
+    g.shadowColor = 'transparent';
+    // a lighter top half, as if lit from above
+    g.save();
+    g.clip();
+    g.fillStyle = 'rgba(255,255,255,0.28)';
+    g.fillRect(-len, -head, len * 2, head);
+    g.restore();
+    g.strokeStyle = '#0b1830';
+    g.lineWidth = 1.6 / px;
     g.stroke();
     g.restore();
   }
+
 
   constructor(name, baseX, baseY, wTiles, axis, amplitude, speed) {
     super(name, baseX, baseY);
