@@ -238,7 +238,7 @@
         <button data-tool="erase">Erase</button>
         <button data-tool="start">Start</button>
       </div>
-      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette.</div>
+      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells: <b>Ctrl+C</b> copies them, <b>Ctrl+V</b> pastes — into one cell the whole copy, into a bigger selection the copy repeated to fill it; <b>Delete</b> empties, <b>Esc</b> lets go.</div>
     </div>
 
     <div class="group">
@@ -730,6 +730,7 @@ function undo() {
 }
 function applyState(s) {
   cols = s.cols; rows = s.rows; layers = s.layers; start = s.start;
+  if (selection && (selection.r1 >= rows || selection.c1 >= cols)) selection = null;
   messages = s.messages || [];
   exits = s.exits || [];
   levelBg = { ...DEFAULT_BG, ...(s.bg || {}) };
@@ -974,6 +975,7 @@ function resize(nc, nr, keep) {
   const old = keep ? null : layers;
   const oldCols = cols, oldRows = rows;
   cols = nc; rows = nr;
+  if (selection && (selection.r1 >= rows || selection.c1 >= cols)) selection = null;
   if (old) {
     layers = [0, 1, 2].map(li => Array.from({ length: rows }, (_, r) =>
       Array.from({ length: cols }, (_, c) =>
@@ -1022,6 +1024,8 @@ function render() {
   boardCtx.stroke();
 
   if (start) marker(start, '#4ad07a', 'P');
+
+  drawSelection();
 
   if (hover) {
     boardCtx.strokeStyle = '#b79bff';
@@ -1140,6 +1144,91 @@ function apply(at, how) {
     : { oi: objIndex, id: objDigit, v: objVariant };
 }
 
+// ---------- selecting, copying and pasting ----------
+// Shift-drag marks a rectangle of cells. Ctrl+C copies it — every layer, so
+// what comes back is what was seen — and Ctrl+V pastes: into one cell, the
+// whole copy with its top-left corner there; into a bigger rectangle, the
+// copy repeated to fill it exactly, so a 2x2 tiles an 8x8. Esc lets the
+// selection go, Delete empties it, Ctrl+Z undoes either. Her start is not
+// part of the level's cells, so it is never copied.
+let selection = null;     // { r0, c0, r1, c1 }, inclusive
+let selDrag = null;       // the cell a shift-drag started on
+let cellClip = null;      // { w, h, layers: [3][h][w] }
+
+const selRect = (a, b) => ({ r0: Math.min(a.r, b.r), c0: Math.min(a.c, b.c), r1: Math.max(a.r, b.r), c1: Math.max(a.c, b.c) });
+const selSize = sel => ({ w: sel.c1 - sel.c0 + 1, h: sel.r1 - sel.r0 + 1 });
+const cloneCell = cell => cell ? { ...cell } : null;
+
+function showSelection(text) {
+  if (!selection) { levelMsg.textContent = text || ''; return; }
+  const { w, h } = selSize(selection);
+  levelMsg.textContent = text || `Selected ${w}×${h}. Ctrl+C copies it, Ctrl+V pastes the copy here, Delete empties it, Esc lets it go.`;
+}
+
+function copySelection() {
+  if (!selection) { showSelection('Shift-drag on the board to select cells first.'); return; }
+  const { w, h } = selSize(selection);
+  cellClip = {
+    w, h,
+    layers: [0, 1, 2].map(li => Array.from({ length: h }, (_, y) =>
+      Array.from({ length: w }, (_, x) => cloneCell(layers[li][selection.r0 + y][selection.c0 + x]))))
+  };
+  showSelection(`Copied ${w}×${h}. Select where it goes — one cell, or an area to fill — and press Ctrl+V.`);
+}
+
+function pasteSelection() {
+  if (!cellClip) { showSelection('Nothing copied yet — select cells and press Ctrl+C.'); return; }
+  if (!selection) { showSelection('Shift-drag (or shift-click a cell) to pick where to paste.'); return; }
+  const { w, h } = selSize(selection);
+  const one = w === 1 && h === 1;
+  // one cell takes the whole copy; an area is filled with it, repeated
+  const area = one
+    ? { r0: selection.r0, c0: selection.c0, r1: Math.min(rows - 1, selection.r0 + cellClip.h - 1), c1: Math.min(cols - 1, selection.c0 + cellClip.w - 1) }
+    : selection;
+  pushUndo();
+  for (let li = 0; li < 3; li++) {
+    for (let r = area.r0; r <= area.r1; r++) {
+      for (let c = area.c0; c <= area.c1; c++) {
+        layers[li][r][c] = cloneCell(cellClip.layers[li][(r - area.r0) % cellClip.h][(c - area.c0) % cellClip.w]);
+      }
+    }
+  }
+  selection = area;
+  const pw = area.c1 - area.c0 + 1, ph = area.r1 - area.r0 + 1;
+  const cut = one && (pw < cellClip.w || ph < cellClip.h) ? ' — cut short by the edge of the level' : '';
+  const tiled = !one && (pw !== cellClip.w || ph !== cellClip.h) ? `, the ${cellClip.w}×${cellClip.h} copy repeated` : '';
+  render();
+  save();
+  showSelection(`Pasted ${pw}×${ph}${tiled}${cut}.`);
+}
+
+function clearSelection() {
+  if (!selection) return;
+  pushUndo();
+  for (let li = 0; li < 3; li++) {
+    for (let r = selection.r0; r <= selection.r1; r++) {
+      for (let c = selection.c0; c <= selection.c1; c++) layers[li][r][c] = null;
+    }
+  }
+  render();
+  save();
+  showSelection('Emptied.');
+}
+
+function drawSelection() {
+  if (!selection) return;
+  const x = selection.c0 * TILE, y = selection.r0 * TILE;
+  const w = (selection.c1 - selection.c0 + 1) * TILE, h = (selection.r1 - selection.r0 + 1) * TILE;
+  boardCtx.save();
+  boardCtx.fillStyle = 'rgba(255,181,71,0.12)';
+  boardCtx.fillRect(x, y, w, h);
+  boardCtx.lineWidth = 2 / zoom;
+  boardCtx.setLineDash([6 / zoom, 4 / zoom]);
+  boardCtx.strokeStyle = '#ffb547';
+  boardCtx.strokeRect(x + 1 / zoom, y + 1 / zoom, w - 2 / zoom, h - 2 / zoom);
+  boardCtx.restore();
+}
+
 let stroke = null;        // {how, last} while a drag is live
 
 board.addEventListener('contextmenu', e => e.preventDefault());
@@ -1148,6 +1237,15 @@ board.addEventListener('pointerdown', e => {
   const at = cellAt(e);
   if (!at) return;
   board.setPointerCapture(e.pointerId);
+  // Shift and drag marks a rectangle to copy, paste into or clear
+  if (e.shiftKey && e.button === 0) {
+    selDrag = at;
+    selection = selRect(at, at);
+    render();
+    updateStatus(at);
+    return;
+  }
+  selection = null;          // painting puts the selection away
   pushUndo();
   // Her start is placed once per click; the others paint while dragging.
   const how = e.button === 2 ? 'erase' : tool;
@@ -1162,12 +1260,16 @@ board.addEventListener('pointerdown', e => {
 board.addEventListener('pointermove', e => {
   const at = cellAt(e);
   hover = at;
+  if (selDrag && at) selection = selRect(selDrag, at);
   if (stroke && stroke.drag && at) apply(at, stroke.how);
   render();
   updateStatus(at);
 });
 
-const endStroke = () => { if (stroke) { stroke = null; save(); } };
+const endStroke = () => {
+  if (selDrag) { selDrag = null; showSelection(); }
+  if (stroke) { stroke = null; save(); }
+};
 board.addEventListener('pointerup', endStroke);
 board.addEventListener('pointercancel', endStroke);
 board.addEventListener('pointerleave', () => { hover = null; render(); updateStatus(null); });
@@ -2112,6 +2214,12 @@ document.addEventListener('keydown', e => {
   }
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+  // by the key's place, so it works whatever the keyboard's language
+  const code = e.code || (e.key && e.key.length === 1 ? 'Key' + e.key.toUpperCase() : '');
+  if ((e.ctrlKey || e.metaKey) && code === 'KeyC' && selection) { e.preventDefault(); copySelection(); return; }
+  if ((e.ctrlKey || e.metaKey) && code === 'KeyV') { e.preventDefault(); pasteSelection(); return; }
+  if (e.key === 'Escape' && selection) { selection = null; render(); showSelection(); return; }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selection) { e.preventDefault(); clearSelection(); return; }
   const layerKey = { '1': 0, '2': 1, '3': 2 }[e.key];
   if (layerKey !== undefined) {
     activeLayer = layerKey;
