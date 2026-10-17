@@ -238,7 +238,7 @@
         <button data-tool="erase">Erase</button>
         <button data-tool="start">Start</button>
       </div>
-      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells; a click inside fills them all with what is picked (a right-click empties them): <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. With <b>Shift</b>, copy, cut and Delete also work on the current layer only. While the copy's outline follows the mouse, Ctrl+C, Ctrl+X and Delete act on the cells under it. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
+      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases; <b>Ctrl</b>+click picks up what a cell holds. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells; a click inside fills them all with what is picked (a right-click empties them): <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. With <b>Shift</b>, copy, cut and Delete also work on the current layer only. While the copy's outline follows the mouse, Ctrl+C, Ctrl+X and Delete act on the cells under it. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
     </div>
 
     <div class="group">
@@ -1321,6 +1321,44 @@ function drawSelection() {
   boardCtx.restore();
 }
 
+// The eyedropper: the tile (with its colour) or object (with its digit and
+// variant) in a cell becomes what is picked in the panel, ready to paint.
+// The layer being worked on is read first; an empty cell there gives the top
+// layer that has something, and that becomes the layer worked on.
+function pickFromCell(at) {
+  const order = [activeLayer, 2, 1, 0].filter((li, i, a) => a.indexOf(li) === i);
+  const li = order.find(l => layers[l][at.r][at.c]);
+  if (li === undefined) { levelMsg.textContent = 'Nothing there to pick up.'; return; }
+  const cell = layers[li][at.r][at.c];
+  stopPasting();
+  if (li !== activeLayer) { activeLayer = li; pick(layerSeg, activeLayer, 'layer'); }
+  let swatch;
+  if (cell.pi !== undefined) {
+    mode = 'tile';
+    tileIndex = cell.pi;
+    tintIndex = cell.tint || 0;
+    swatch = swatches[tileIndex];
+  } else {
+    const glyph = OBJECTS[cell.oi].glyph, v = cell.v || '0';
+    const i = objSwatches.findIndex(s => s.glyph === glyph && s.v === v && (s.digit === 'n' || +s.digit === cell.id));
+    mode = 'object';
+    objIndex = cell.oi;
+    objVariant = v;
+    objDigit = cell.id;
+    if (i >= 0) objEntry = i;
+    swatch = objSwatches[i];
+  }
+  tool = 'paint';
+  pick(toolSeg, tool, 'tool');
+  drawSwatches();           // the swatches wear the colour (and id) just picked
+  refreshSelection();
+  if (swatch) swatch.cell.scrollIntoView({ block: 'nearest' });
+  render();
+  updateStatus(at);
+  const what = cell.pi !== undefined ? `the ${PALETTE[cell.pi].label} tile` : `the object ${cell.id}${OBJECTS[cell.oi].glyph}${cell.v || '0'}`;
+  levelMsg.textContent = `Picked up ${what} from the ${LAYER_LABELS[li]} layer.`;
+}
+
 let stroke = null;        // {how, last} while a drag is live
 
 board.addEventListener('contextmenu', e => e.preventDefault());
@@ -1339,6 +1377,8 @@ board.addEventListener('pointerdown', e => {
   }
   // a right-click while a copy is out puts it away rather than erasing
   if (e.button === 2 && stopPasting()) return;
+  // Ctrl+click picks up what is in the cell, as the panel's choice
+  if ((e.ctrlKey || e.metaKey) && e.button === 0) { pickFromCell(at); return; }
   // a click inside the selection does the whole rectangle at once
   if (selection && at.r >= selection.r0 && at.r <= selection.r1 && at.c >= selection.c0 && at.c <= selection.c1) {
     const how = e.button === 2 ? 'erase' : tool;
