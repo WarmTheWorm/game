@@ -238,7 +238,7 @@
         <button data-tool="erase">Erase</button>
         <button data-tool="start">Start</button>
       </div>
-      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells: <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
+      <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells; a click inside fills them all with what is picked (a right-click empties them): <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
     </div>
 
     <div class="group">
@@ -1235,6 +1235,23 @@ function pasteSelection(onlyLayer = false) {
   showSelection(`Pasted ${pw}×${ph}${which}${tiled}${cut}.`);
 }
 
+// What a click inside the selection does: the element picked in the panel
+// into every cell of it, on the layer being worked on — or, erasing (the
+// eraser, or a right-click), that layer's cells emptied. The selection stays,
+// so another pick can be tried on the same rectangle.
+function fillSelection(how) {
+  pushUndo();
+  for (let r = selection.r0; r <= selection.r1; r++) {
+    for (let c = selection.c0; c <= selection.c1; c++) apply({ r, c }, how);
+  }
+  render();
+  save();
+  const { w, h } = selSize(selection);
+  showSelection(how === 'erase'
+    ? `Emptied ${w}×${h} on the ${LAYER_LABELS[activeLayer]} layer.`
+    : `Filled ${w}×${h} on the ${LAYER_LABELS[activeLayer]} layer.`);
+}
+
 function clearSelection() {
   if (!selection) return;
   pushUndo();
@@ -1290,6 +1307,11 @@ board.addEventListener('pointerdown', e => {
   }
   // a right-click while a copy is out puts it away rather than erasing
   if (e.button === 2 && stopPasting()) return;
+  // a click inside the selection does the whole rectangle at once
+  if (selection && at.r >= selection.r0 && at.r <= selection.r1 && at.c >= selection.c0 && at.c <= selection.c1) {
+    const how = e.button === 2 ? 'erase' : tool;
+    if (how === 'paint' || how === 'erase') { fillSelection(how); return; }
+  }
   selection = null;          // painting puts the selection away
   pushUndo();
   // Her start is placed once per click; the others paint while dragging.
