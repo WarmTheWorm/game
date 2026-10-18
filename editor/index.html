@@ -203,7 +203,11 @@
       </div>
       <input type="text" id="packNameInput" placeholder="Pack name" maxlength="40" style="margin-top:6px">
       <button id="downloadBtn" class="go wide" style="margin-top:6px">⬇ Download pack</button>
-      <div class="hint">Only the pack open here is tested and downloaded. The rest wait in this browser.</div>
+      <div class="row" style="margin-top:6px">
+        <button id="storeBtn" class="wide" title="Keep this pack in the browser, where the game and the other tools can open it">💾 Save in browser</button>
+        <select id="openPackSel" class="wide" title="Open a level pack kept in this browser, or one in levelpacks/"><option value="">📂 Open a pack…</option></select>
+      </div>
+      <div class="hint">Only the pack open here is tested, downloaded or saved in the browser. The rest wait here.</div>
     </div>
 
     <div class="group">
@@ -341,6 +345,9 @@
 <!-- The sheet, the block format and the game that plays the result are all
      the real ones: tileset.js and atlas.js are loaded as-is, and Test hands
      the map text to a live copy of the game running in the frame below. -->
+<!-- the pack store the three tools share, and the worker that serves it -->
+<script src="../src/js/packstore.js"></script>
+<script>packStore.boot();</script>
 <script src="../src/js/tileset.js"></script>
 <script src="../src/js/atlas.js"></script>
 <!-- the game's classes, for what they declare: the glyphs a palette offers and
@@ -1814,7 +1821,7 @@ function zipBlob(files) {
 // was drawn with, its backgrounds, its sound manifests and every file those
 // name, and the game itself — so the unzipped folder is something that can
 // just be opened.
-async function packAssets() {
+async function packAssets(gameOptional = false) {
   // fetch() resolves on a 404, so without this a missing file is packed as the
   // error page and the download looks like it worked
   const fetchOk = async url => {
@@ -1839,7 +1846,18 @@ async function packAssets() {
     files.push({ name: PACK_BACKGROUNDS + file, data: await grab(bgDir + file) });
   }
   files.push(...await packSoundFiles(grab));
-  files.push(...await packGame(fetchOk));
+  // the built game page, which a pack kept in the browser can do without:
+  // it plays through /src/index.html?pack= instead
+  try { files.push(...await packGame(fetchOk)); } catch (err) { if (!gameOptional) throw err; }
+  return files;
+}
+
+// Everything a pack folder holds: its manifest, its levels and the copies of
+// what they use.
+async function levelPackFiles(gameOptional = false) {
+  const files = [{ name: 'levelpack.json', data: packJson() }];
+  levels.forEach((s, i) => files.push({ name: PACK_LEVELS + levelFile(i), data: JSON.stringify(levelJson(i), null, 2) }));
+  files.push(...await packAssets(gameOptional));
   return files;
 }
 
@@ -1916,10 +1934,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   if (problems.length) { levelMsg.textContent = problems[0]; return; }
   levelMsg.textContent = 'Gathering the pack…';
   try {
-    const files = [{ name: 'levelpack.json', data: packJson() }];
-    levels.forEach((s, i) => files.push({ name: PACK_LEVELS + levelFile(i), data: JSON.stringify(levelJson(i), null, 2) }));
-    files.push(...await packAssets());
-
+    const files = await levelPackFiles();
     const url = URL.createObjectURL(zipBlob(files));
     const a = document.createElement('a');
     a.href = url;
@@ -2451,6 +2466,103 @@ document.getElementById('pasteBtn').addEventListener('click', () => {
   render(); renderProps(); refreshLevels(); updateStatus(null); save();
 });
 
+// ---------- packs kept in the browser, and packs on disk ----------
+// Save in browser puts the open pack in the pack store the tools share
+// (src/js/packstore.js), laid out as its download would be, so the game opens
+// it by URL — /src/index.html?pack=/__idb/levels/<name>/levelpack.json — and
+// so does this editor's Open a pack, which also lists levelpacks/ (from
+// levelpacks/index.json). ?pack=<url to a levelpack.json> opens one on load.
+const storeBtn = document.getElementById('storeBtn');
+const openPackSel = document.getElementById('openPackSel');
+const packSlug = () => (packName || 'level-pack').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'level-pack';
+const gameUrlFor = packUrl => `/src/index.html?pack=${encodeURIComponent(packUrl)}&assets=${encodeURIComponent(EDITOR_DIR)}`;
+const storeReady = ms => Promise.race([packStore.ready(), new Promise(ok => setTimeout(() => ok(false), ms))]);
+const escHtml = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+storeBtn.addEventListener('click', async () => {
+  stashLevel();
+  const problems = packProblems();
+  if (problems.length) { levelMsg.textContent = problems[0]; return; }
+  levelMsg.textContent = 'Saving the pack in the browser…';
+  try {
+    if (!await storeReady(4000)) {
+      throw new Error('the pack store needs the page served from localhost or https, where its service worker can run');
+    }
+    const files = await levelPackFiles(true);
+    const base = await packStore.put('levels', packSlug(), files, packName || 'Level Pack');
+    const play = gameUrlFor(base + 'levelpack.json');
+    levelMsg.innerHTML = `Saved in this browser as <code>${escHtml(base)}</code> — <a href="${escHtml(play)}" target="_blank" rel="noopener">play it in the game ↗</a>`;
+    refreshOpenPacks();
+  } catch (err) {
+    levelMsg.textContent = 'Could not save it in the browser: ' + err.message;
+  }
+});
+
+async function refreshOpenPacks() {
+  const opts = ['<option value="">📂 Open a pack…</option>'];
+  try {
+    if (await storeReady(1500)) {
+      for (const p of await packStore.list('levels')) {
+        opts.push(`<option value="${escHtml(packStore.url('levels', p.name))}levelpack.json">${escHtml(p.title)} — saved in this browser</option>`);
+      }
+    }
+  } catch (err) { /* nothing stored to offer */ }
+  try {
+    const res = await fetch('/levelpacks/index.json', { cache: 'no-store' });
+    if (res.ok) for (const p of await res.json()) opts.push(`<option value="${escHtml(p.dir)}levelpack.json">${escHtml(p.title)} — levelpacks/${escHtml(p.name)}</option>`);
+  } catch (err) { /* no folder list */ }
+  openPackSel.innerHTML = opts.join('');
+}
+
+openPackSel.addEventListener('change', () => {
+  const url = openPackSel.value;
+  openPackSel.value = '';
+  if (url) openLevelPack(url);
+});
+
+// Reads a level pack — its levelpack.json and every level it reaches from its
+// first through their flags — into a new pack here, the levels in the order
+// they are reached and each flag pointing at the level it leads to.
+async function openLevelPack(url) {
+  levelMsg.textContent = 'Reading the pack…';
+  try {
+    const packUrl = new URL(url, location.href);
+    const res = await fetch(packUrl);
+    if (!res.ok) throw new Error(`${packUrl.pathname}: HTTP ${res.status}`);
+    const manifest = await res.json();
+    if (!manifest.first) throw new Error('its levelpack.json names no first level');
+    const order = [new URL(manifest.first, packUrl).href];
+    const datas = [];
+    for (let i = 0; i < order.length && i < 200; i++) {
+      const r = await fetch(order[i]);
+      if (!r.ok) throw new Error(`${new URL(order[i]).pathname}: HTTP ${r.status}`);
+      const data = await r.json();
+      datas.push(data);
+      for (const exit of data.exit || []) {
+        const href = new URL(exit, order[i]).href;
+        if (!order.includes(href)) order.push(href);
+      }
+    }
+    stashPack();
+    const read = [];
+    for (let i = 0; i < datas.length; i++) {
+      blankLevel();
+      const error = fromText(JSON.stringify(datas[i]));
+      if (error) throw new Error(`${new URL(order[i]).pathname.split('/').pop()}: ${error}`);
+      exits = (datas[i].exit || []).map(e => order.indexOf(new URL(e, order[i]).href));
+      read.push(JSON.parse(snapshot()));
+    }
+    packs.push({ name: manifest.name || 'Level Pack', levels: read, current: 0 });
+    packIndex = packs.length - 1;
+    applyPack(packs[packIndex]);
+    resize(cols, rows, true);
+    refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
+    levelMsg.textContent = `Opened "${manifest.name || 'Level Pack'}" — ${read.length} level${read.length === 1 ? '' : 's'}.`;
+  } catch (err) {
+    levelMsg.textContent = 'Could not open that pack: ' + err.message;
+  }
+}
+
 // ---------- test ----------
 // The real game, in a frame, handed the whole pack rather than one level: the
 // frame's own campaign list is replaced with the editor's, so a flag walks on
@@ -2627,7 +2739,7 @@ document.querySelectorAll('#panel .group').forEach((group, i) => {
 
 // The asset pack's library. Paths inside it are relative to the manifest, so
 // the whole folder can be moved as one.
-fetch(EDITOR_LIBRARY)
+const libraryReady = fetch(EDITOR_LIBRARY)
   .then(r => r.json())
   .then(async data => {
     const base = new URL(EDITOR_LIBRARY, location.href);
@@ -2656,13 +2768,20 @@ fetch(EDITOR_LIBRARY)
   })
   .catch(() => { /* the colour picker still works without the library */ });
 
-atlas.loadRoot(EDITOR_OBJECTS)
+const objectsReady = atlas.loadRoot(EDITOR_OBJECTS)
   .then(() => { buildObjPalette(); refreshSelection(); render(); })
   .catch(err => {
     levelMsg.textContent = location.protocol === 'file:'
       ? 'Object art loads from the asset pack, which browsers block over file://. Run npm run editor.'
       : 'Object art unavailable: ' + err.message;
   });
+
+// once the sheet and the objects are known, so its blocks read as them
+refreshOpenPacks();
+Promise.allSettled([libraryReady, objectsReady]).then(() => {
+  const asked = new URLSearchParams(location.search).get('pack');
+  if (asked) openLevelPack(asked);
+});
 </script>
 </body>
 </html>

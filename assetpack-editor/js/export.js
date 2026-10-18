@@ -130,10 +130,12 @@ async function exportPack() {
   toast(`${files.length} files — unzip into assetpacks/`);
 }
 
-// The pack as it stands, in the level editor, without a download: the dev
-// server holds it in memory under /__live/ and the editor reads that like any
-// pack folder. Nothing is written to assetpacks/, so a pack of the same name
-// there is left alone. One tab is kept for it, and each click reloads it.
+// The pack as it stands, in the level editor, without a download: its files
+// are saved in this browser's pack store (src/js/packstore.js), which the
+// service worker serves under /__idb/assets/<name>/ like any pack folder.
+// Nothing is written to assetpacks/, so a pack of the same name there is left
+// alone; the stored one stays until it is saved over, and Import offers it.
+// One tab is kept for the editor, and each click reloads it.
 async function openInLevelEditor() {
   const problems = packProblems();
   if (problems.length) { toast(problems[0], true); return; }
@@ -141,21 +143,17 @@ async function openInLevelEditor() {
   const tab = window.open('', 'wtw-level-editor');
   toast('Packing…');
   try {
+    if (!await Promise.race([packStore.ready(), new Promise(ok => setTimeout(() => ok(false), 4000))])) {
+      throw new Error('the pack store needs the page served from localhost or https, where its service worker can run');
+    }
     const files = await buildPackFiles();
-    const base = `/__live/${slug(pack.name)}/`;
-    const send = (path, init) => fetch(path, init).then(r => {
-      if (!r.ok) throw new Error(r.status === 404 || r.status === 405 ? 'no dev server' : `${path}: ${r.status}`);
-    });
-    await send(base, { method: 'DELETE' });
-    for (const f of files) await send(base + f.name, { method: 'PUT', body: f.data });
+    const base = await packStore.put('assets', slug(pack.name), files, pack.name);
     const url = `/editor/index.html?assets=${encodeURIComponent(base)}`;
     if (tab) { tab.location.href = url; tab.focus(); } else window.open(url, 'wtw-level-editor');
-    toast('Opened in the level editor');
+    toast(`Saved in this browser as ${base} and opened in the level editor`);
   } catch (err) {
     if (tab) tab.close();
-    toast(location.protocol === 'file:' || /dev server|Failed to fetch/.test(err.message)
-      ? 'This needs the dev server — run npm run creator'
-      : err.message, true);
+    toast('Could not open it in the level editor: ' + err.message, true);
   }
 }
 

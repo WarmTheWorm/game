@@ -1,0 +1,12 @@
+[
+  {
+    "name": "garden",
+    "dir": "/levelpacks/garden/",
+    "title": "Root Garden Space"
+  },
+  {
+    "name": "test",
+    "dir": "/levelpacks/test/",
+    "title": "Enemy Test"
+  }
+]

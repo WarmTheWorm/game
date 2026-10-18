@@ -466,6 +466,10 @@
      the world the classes build on. Then each kind of thing, base classes
      before the kinds that extend them, and classes.js last because it lists
      every class. -->
+<!-- the pack store the tools share: only a page asked to open a pack kept in
+     the browser (a URL naming /__idb/) needs its service worker -->
+<script src="js/packstore.js"></script>
+<script>if (decodeURIComponent(location.search).includes(packStore.PREFIX)) packStore.boot();</script>
 <script src="js/sound.js"></script>
 <script src="js/tileset.js"></script>
 <script src="js/atlas.js"></script>

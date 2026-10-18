@@ -22,10 +22,45 @@ npm run creator              # the asset pack creator
 Add `--port=N` to move off 8080, or `--no-open` to leave the browser alone.
 Naming a pack that isn't there lists the ones that are.
 
+### With any static server
+
+`tools/serve.mjs` is only a convenience: the three tools are static pages and
+run under any static server started in the project's root — live-server,
+http-server, `python -m http.server` — on `localhost` (or https). Open them by
+URL and pass the packs as parameters:
+
+```
+/src/index.html?pack=/levelpacks/garden/levelpack.json&assets=/assetpacks/garden/   the game
+/editor/index.html?assets=/assetpacks/garden/                                     the level editor
+/editor/index.html?assets=/assetpacks/garden/&pack=/levelpacks/test/levelpack.json   ... with a level pack open
+/assetpack-editor/                                                                 the asset pack creator
+```
+
+The tools hand packs to each other through the browser: a shared IndexedDB
+store (`src/js/packstore.js`), whose packs the service worker in `sw.js`
+serves under `/__idb/<kind>/<name>/` exactly as if they were folders. So
+every tool reads a pack the same way, from a URL, whether it is on disk or
+kept in the browser:
+
+- the creator's **Open in level editor** saves the pack it is editing as
+  `/__idb/assets/<name>/` and opens the editor on it; its **Import** offers the
+  packs saved in the browser and those in `assetpacks/`;
+- the level editor's **Save in browser** keeps the open pack as
+  `/__idb/levels/<name>/` and links to the game playing it
+  (`/src/index.html?pack=/__idb/levels/<name>/levelpack.json&assets=...`); its
+  **Open a pack…** reads one back, from the browser or from `levelpacks/`;
+- the game plays whatever `?pack=` and `?assets=` name.
+
+A static server cannot list folders, so the packs on disk are listed in
+`assetpacks/index.json` and `levelpacks/index.json`, which `npm run build`
+(or `npm run index-packs` alone) writes. Each origin — host and port — has a
+store of its own.
+
 ## Building
 
 ```
-npm run build                # src/ -> dist/game.html, then into every level pack
+npm run build                # src/ -> dist/game.html, then into every level pack,
+                             # then assetpacks/ and levelpacks/index.json
 ```
 
 This folds `src/index.html` and every script it names into one file, then writes
@@ -76,7 +111,7 @@ editor/         the level editor
 assetpack-editor/  the asset pack creator
 assetpacks/     what the editor draws with
 levelpacks/     campaigns the game plays
-tools/          bundle.mjs, pack.mjs, serve.mjs, and gen/ for the artwork generators
+tools/          bundle.mjs, pack.mjs, index-packs.mjs, serve.mjs, and gen/ for the artwork generators
 dist/           build output, not checked in
 old/            the project as it stood before the reorganisation
 ```

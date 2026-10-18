@@ -32,19 +32,29 @@ $('#resetBtn').onclick = async () => {
   toast('Started over');
 };
 
-// The packs the dev server has in assetpacks/, or null when it can't say.
+// The packs there are to read: the ones kept in this browser (the pack store,
+// src/js/packstore.js — what Open in level editor saves), newest first, then
+// the folders in assetpacks/ as assetpacks/index.json lists them. Each is
+// { name, dir, label }; null if there are none to offer.
 async function knownPacks() {
+  const out = [];
   try {
-    const res = await fetch('/__assetpacks');
-    return res.ok ? await res.json() : null;
-  } catch { return null; }
+    if (await packStore.ready()) {
+      for (const p of await packStore.list('assets')) out.push({ name: p.name, dir: packStore.url('assets', p.name), label: `${p.title} — saved in this browser` });
+    }
+  } catch { /* no stored packs to offer */ }
+  try {
+    const res = await fetch('/assetpacks/index.json', { cache: 'no-store' });
+    if (res.ok) for (const p of await res.json()) out.push({ name: p.name, dir: p.dir, label: `${p.name} — assetpacks/${p.name}` });
+  } catch { /* no folder list; the path can still be typed */ }
+  return out.length ? out : null;
 }
 
 $('#importBtn').onclick = async () => {
   const OTHER = 'Other folder…';
   const list = await knownPacks();
   const got = await ask('Read an existing pack', list && list.length ? [
-    { key: 'pick', label: 'Asset pack', type: 'select', options: [...list.map(p => p.name), OTHER], value: list[0].name },
+    { key: 'pick', label: 'Asset pack', type: 'select', options: [...list.map(p => p.label), OTHER], value: list[0].label },
     { key: 'dir', label: `Folder, for ${OTHER}`, value: '' },
     { type: 'note', label: 'Everything open here is replaced by what is read.' }
   ] : [
@@ -52,7 +62,7 @@ $('#importBtn').onclick = async () => {
     { type: 'note', label: 'Everything open here is replaced by what is read.' }
   ], 'Read it');
   if (!got) return;
-  const dir = got.pick && got.pick !== OTHER ? list.find(p => p.name === got.pick).dir : got.dir;
+  const dir = got.pick && got.pick !== OTHER ? list.find(p => p.label === got.pick).dir : got.dir;
   if (!dir || !dir.trim()) { toast('Say which folder to read', true); return; }
   toast('Reading…');
   try {

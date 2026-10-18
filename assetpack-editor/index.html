@@ -292,6 +292,9 @@
      the game will make of these defs; it wants a music element to exist -->
 <audio id="bgMusic" loop preload="auto"></audio>
 
+<!-- the pack store the three tools share, and the worker that serves it -->
+<script src="../src/js/packstore.js"></script>
+<script>packStore.boot();</script>
 <script src="js/util.js"></script>
 <!-- the game's own classes: what an object can be, and the properties each
      reads. Loaded for their declarations only; nothing here runs the game. -->

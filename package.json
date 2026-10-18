@@ -8,7 +8,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "node tools/bundle.mjs && node tools/pack.mjs",
+    "build": "node tools/bundle.mjs && node tools/pack.mjs && node tools/index-packs.mjs",
+    "index-packs": "node tools/index-packs.mjs",
     "game": "node tools/serve.mjs game",
     "editor": "node tools/serve.mjs editor",
     "creator": "node tools/serve.mjs creator",
