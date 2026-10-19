@@ -142,6 +142,7 @@ function drawGoPreview() {
   const cv = $('#goPv');
   const o = currentObj;
   stopParticlePreview();
+  cv.style.width = cv.style.height = '';
   if (o && o.cls === 'ParticleSystem') { startParticlePreview(o); return; }
   const s = o && spriteByName(refName(o.props.sprite));
   const C = o && gameClass(o.cls);
@@ -167,7 +168,10 @@ function drawGoPreview() {
 
 // A particle system is shown running: streaming if it streams, otherwise
 // bursting over and over, so a change to any property shows at once. It stops
-// when the tab is left and starts again when it is drawn.
+// when the tab is left and starts again when it is drawn. It is drawn at the
+// size the game shows it on a desktop screen — PREVIEW_GAME_PX screen pixels
+// a game unit, the game's ART_SCALE — over a faint grid of its tiles.
+const PREVIEW_GAME_PX = 2;
 let particlePv = null;
 
 function stopParticlePreview() {
@@ -176,12 +180,18 @@ function stopParticlePreview() {
 }
 
 function startParticlePreview(o) {
-  const cv = $('#goPv'), W = 240, H = 200;
-  cv.width = W;
-  cv.height = H;
+  const cv = $('#goPv'), stage = $('#goStage');
+  // in game units, as much as the stage has room for at the game's scale
+  const room = stage.clientWidth - parseFloat(getComputedStyle(stage).paddingLeft) * 2;
+  const W = Math.max(TILE * 2, Math.min(TILE * 6, Math.floor(room / PREVIEW_GAME_PX))), H = TILE * 4;
+  const k = PREVIEW_GAME_PX * (window.devicePixelRatio || 1);
+  cv.width = Math.round(W * k);
+  cv.height = Math.round(H * k);
+  cv.style.width = W * PREVIEW_GAME_PX + 'px';
+  cv.style.height = H * PREVIEW_GAME_PX + 'px';
   const g = cv.getContext('2d');
   const p = o.props;
-  const cloud = new ParticleCloud(p, W / 2, H / 2);
+  const cloud = new ParticleCloud(p, Math.round(W / 2), Math.round(H * 0.55));
   const s = spriteByName(refName(p.sprite));
   const fr = s && s.frames.length && frameCanvas(s, s.frames[0]);
   const art = fr ? { size: Math.max(s.fw, s.fh), draw: g2 => g2.drawImage(fr, -s.fw / 2, -s.fh / 2) } : null;
@@ -195,13 +205,20 @@ function startParticlePreview(o) {
     else if (t % every === 0) cloud.emit(p.count);
     t++;
     cloud.step();
+    g.setTransform(k, 0, 0, k, 0, 0);
     g.fillStyle = '#151922';
     g.fillRect(0, 0, W, H);
-    // where it stands: the point it throws particles from
-    g.strokeStyle = 'rgba(255,255,255,0.18)';
+    // the tiles, for size, and where it stands: the point it throws from
+    g.strokeStyle = 'rgba(255,255,255,0.07)';
+    g.lineWidth = 1 / k;
     g.beginPath();
-    g.moveTo(W / 2 - 6, H / 2); g.lineTo(W / 2 + 6, H / 2);
-    g.moveTo(W / 2, H / 2 - 6); g.lineTo(W / 2, H / 2 + 6);
+    for (let x = (cloud.x % TILE); x < W; x += TILE) { g.moveTo(x, 0); g.lineTo(x, H); }
+    for (let y = (cloud.y % TILE); y < H; y += TILE) { g.moveTo(0, y); g.lineTo(W, y); }
+    g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,0.25)';
+    g.beginPath();
+    g.moveTo(cloud.x - 4, cloud.y); g.lineTo(cloud.x + 4, cloud.y);
+    g.moveTo(cloud.x, cloud.y - 4); g.lineTo(cloud.x, cloud.y + 4);
     g.stroke();
     cloud.paint(g, art);
     run.raf = requestAnimationFrame(tick);
