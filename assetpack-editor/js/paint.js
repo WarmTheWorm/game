@@ -321,6 +321,31 @@ $('#opFh').onclick = () => transform(t => { P.w.translate(P.obj.fw, 0); P.w.scal
 $('#opFv').onclick = () => transform(t => { P.w.translate(0, P.obj.fh); P.w.scale(1, -1); P.w.drawImage(t, 0, 0); });
 $('#opClear').onclick = () => transform(() => {});
 
+// A quarter turn, pixel for pixel, about the frame's middle: a square frame
+// turns exactly; in a wider or taller one the turned art is centred and what
+// would fall outside the frame is cut off. dir is 1 for right, -1 for left.
+function rotateFrame(dir) {
+  const W = P.obj.fw, H = P.obj.fh;
+  const src = P.w.getImageData(0, 0, W, H), out = P.w.createImageData(W, H);
+  const ox = Math.floor((W - H) / 2), oy = Math.floor((H - W) / 2);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const nx = (dir > 0 ? H - 1 - y : y) + ox;
+      const ny = (dir > 0 ? x : W - 1 - x) + oy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const i = (y * W + x) * 4, j = (ny * W + nx) * 4;
+      for (let k = 0; k < 4; k++) out.data[j + k] = src.data[i + k];
+    }
+  }
+  pushUndo();
+  P.w.putImageData(out, 0, 0);
+  commitPaint();
+  drawPaint();
+  if (W !== H) paintMsg(`Turned in a ${W}×${H} frame — what fell outside it is cut off (Ctrl+Z brings it back)`);
+}
+$('#opRotL').onclick = () => rotateFrame(-1);
+$('#opRotR').onclick = () => rotateFrame(1);
+
 // ---------- copy and paste ----------
 // A whole image, kept here rather than on the system clipboard so it keeps its
 // transparency and works in any browser: copy one frame, open another — an
