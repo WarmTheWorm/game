@@ -279,7 +279,9 @@ colour over its life. Used two ways:
 
 In the level editor's board and palette each one shows a still of itself
 in the middle of a run — a burst some way through its life, a stream once it
-has filled out — fitted into its cell over a dark square. The run is seeded,
+has filled out — at its size in the game, or shrunk to fit: on the board
+it may spread over the 3x3 blocks round its cell (its own cell darkened
+under it), in the palette it fits its swatch. The run is seeded,
 so the picture holds still, and is made again when the object's props
 change.
 
