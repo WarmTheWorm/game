@@ -5,7 +5,8 @@
 // recipe for one, and it is used two ways:
 //
 //   placed in a level, it streams from its spot, `rate` particles a frame —
-//   a fountain, fireflies, smoke from a chimney;
+//   a fountain, fireflies, smoke from a chimney — or, with no rate, bursts
+//   `count` there every `interval` frames;
 //   named by another object's property (a coin's takeParticles, a rock's
 //   breakParticles), it bursts once, `count` particles, where that thing went.
 //
@@ -20,7 +21,8 @@ class ParticleSystem extends Entity {
     code: '0Z',
     props: {
       count: { type: 'int', default: 16, label: 'Particles in a burst' },
-      rate: { type: 'float', default: 0, label: 'Particles a frame, placed in a level (0 = none)' },
+      rate: { type: 'float', default: 0, label: 'Particles a frame, placed in a level (0 = bursts instead)' },
+      interval: { type: 'int', default: 60, label: 'Frames between bursts, placed with no rate (0 = never)' },
       speed: { type: 'float', default: 2, label: 'Speed, px a frame' },
       speedJitter: { type: 'float', default: 0.5, label: 'Speed varies by, as a share' },
       angle: { type: 'int', default: -90, label: 'Direction, degrees (0 right, -90 up)' },
@@ -82,7 +84,7 @@ class ParticleSystem extends Entity {
   update() {
     // a placed one only adds while it is anywhere near the screen; what it
     // already threw out keeps moving either way
-    if (this.streams && this.nearView()) this.cloud.stream();
+    if (this.streams && this.nearView()) this.cloud.run();
     this.cloud.step();
   }
 
@@ -117,11 +119,12 @@ class ParticleCloud {
     this.y = y;
     this.parts = [];
     this.owed = 0;              // the part of a particle `rate` has built up
+    this.wait = 0;              // frames to the next burst, with no rate
     this.rgbStart = particleRgb(props.colorStart);
     this.rgbEnd = particleRgb(props.colorEnd);
   }
 
-  clear() { this.parts.length = 0; this.owed = 0; }
+  clear() { this.parts.length = 0; this.owed = 0; this.wait = 0; }
 
   emit(n) {
     const p = this.props;
@@ -136,7 +139,17 @@ class ParticleCloud {
     }
   }
 
-  // this frame's share of `rate`
+  // What a placed one throws out this frame: its share of `rate`, or with no
+  // rate a burst of `count` every `interval` frames, the first at once.
+  run() {
+    const p = this.props;
+    if (p.rate > 0) { this.stream(); return; }
+    if (!(p.interval > 0)) return;
+    if (this.wait-- > 0) return;
+    this.wait = p.interval - 1;
+    this.emit(p.count);
+  }
+
   stream() {
     if (!(this.props.rate > 0)) return;
     this.owed += this.props.rate;

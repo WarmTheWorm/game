@@ -195,15 +195,13 @@ function startParticlePreview(o) {
   const s = spriteByName(refName(p.sprite));
   const fr = s && s.frames.length && frameCanvas(s, s.frames[0]);
   const art = fr ? { size: Math.max(s.fw, s.fh), draw: g2 => g2.drawImage(fr, -s.fw / 2, -s.fh / 2) } : null;
-  const every = Math.max(40, Math.round(p.life * (1 + p.lifeJitter) + 20));
-  let t = 0;
   const run = { raf: 0 };
   const tick = () => {
     if (particlePv !== run) return;
     if (!cv.isConnected || !cv.offsetParent) { particlePv = null; return; }   // the tab was left
-    if (p.rate > 0) cloud.stream();
-    else if (t % every === 0) cloud.emit(p.count);
-    t++;
+    // as it does placed in a level; one that only bursts when named, every second
+    if (p.rate > 0 || p.interval > 0) cloud.run();
+    else if (cloud.wait-- <= 0) { cloud.wait = 59; cloud.emit(p.count); }
     cloud.step();
     g.setTransform(k, 0, 0, k, 0, 0);
     g.fillStyle = '#151922';
@@ -225,9 +223,10 @@ function startParticlePreview(o) {
   };
   particlePv = run;
   tick();
-  $('#goAbout').textContent = p.rate > 0
-    ? `Streams ${p.rate} a frame where it is placed; bursts ${p.count} when another object names it`
-    : `Bursts ${p.count} when another object names it (a coin's takeParticles, a rock's breakParticles); placed in a level it stays still — give it a rate to stream`;
+  const named = `bursts ${p.count} when another object names it (a coin's takeParticles, a rock's breakParticles)`;
+  $('#goAbout').textContent = p.rate > 0 ? `Placed in a level it streams ${p.rate} a frame; it ${named}`
+    : p.interval > 0 ? `Placed in a level it bursts ${p.count} every ${p.interval} frames; it also ${named}`
+    : `Placed in a level it shows nothing (no rate, no interval); it ${named} — shown here once a second`;
 }
 
 // ---------- editing ----------

@@ -274,7 +274,8 @@ colour over its life. Used two ways:
   `breakParticles`) holds `object::<name>`, and the game bursts `count`
   particles where that thing went;
 - **placed in a level** — it streams `rate` particles a frame from its spot
-  while it is near the screen (0 streams nothing). The level editor marks it
+  while it is near the screen; with no rate it bursts `count` there every
+  `interval` frames instead (0 shows nothing). The level editor marks it
   with an orange ✶ when it has no sprite.
 
 Its sprite is optional: without one each particle is drawn as `shape`. The
@@ -286,7 +287,8 @@ coins, gems, rocks and enemies to them.
 |---|---|---|---|
 | `sprite` | sprite (optional) | — | Each particle wears it, sized and faded like a dot |
 | `count` | int | `16` | Particles in a burst |
-| `rate` | float | `0` | Particles a frame, placed in a level (0 = none) |
+| `rate` | float | `0` | Particles a frame, placed in a level (0 = bursts instead) |
+| `interval` | int | `60` | Frames between bursts, placed with no rate (0 = never) |
 | `speed` | float | `2` | Speed, px a frame |
 | `speedJitter` | float | `0.5` | Speed varies by, as a share |
 | `angle` | int | `-90` | Direction, degrees (0 right, -90 up) |
