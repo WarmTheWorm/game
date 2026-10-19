@@ -7,7 +7,7 @@ const PAL = ['#000000', '#1d1b2e', '#3b3a5c', '#6b6f8f', '#a8adc4', '#ffffff', '
              '#ff7a59', '#ffc861', '#fff3a8', '#2e7a3c', '#7fd96a', '#2a5b8a', '#5ec8ff', '#b48cff'];
 const TOOLS = [['pencil', '✎', 'Pencil', 'B'], ['eraser', '⌫', 'Eraser', 'E'], ['fill', '◧', 'Fill', 'G'],
                ['picker', '◉', 'Picker', 'I'], ['line', '╱', 'Line', 'L'], ['rect', '▭', 'Rect', 'R'],
-               ['ellipse', '◯', 'Ellipse', 'C']];
+               ['ellipse', '◯', 'Ellipse', 'C'], ['blur', '◍', 'Blur', 'U']];
 
 const P = {
   obj: null, f: null, work: null, w: null, onSave: null,
@@ -85,11 +85,11 @@ function drawPaint() {
     pcx.stroke();
   }
   if (P.hover && !P.drawing && !['fill', 'picker'].includes(P.tool)) {
-    const o = Math.floor((P.size - 1) / 2);
-    pcx.strokeStyle = 'rgba(255,181,71,.95)';
-    const box = l => pcx.strokeRect(l * z + 0.5, (P.hover.y - o) * z + 0.5, P.size * z - 1, P.size * z - 1);
+    const s = brushSize(), o = Math.floor((s - 1) / 2);
+    pcx.strokeStyle = P.tool === 'blur' ? 'rgba(94,200,255,.95)' : 'rgba(255,181,71,.95)';
+    const box = l => pcx.strokeRect(l * z + 0.5, (P.hover.y - o) * z + 0.5, s * z - 1, s * z - 1);
     box(P.hover.x - o);
-    if (P.mirror) box(fw - (P.hover.x - o) - P.size);
+    if (P.mirror) box(fw - (P.hover.x - o) - s);
   }
 }
 
@@ -145,7 +145,17 @@ const paintStyle = () => {
   return `rgba(${r},${g},${b},${Math.round(P.alpha * 255) / 255})`;
 };
 
+// The square a dab covers: the brush size, or for the blur brush a wider one
+// (3, 5 or 7 across), since a pixel alone has nothing to soften against.
+const brushSize = () => (P.tool === 'blur' ? P.size * 2 + 1 : P.size);
+
 function dab(x, y) {
+  if (P.tool === 'blur') {
+    const s = brushSize(), o = Math.floor((s - 1) / 2);
+    blurAt(x - o, y - o, s);
+    if (P.mirror) blurAt(P.obj.fw - (x - o) - s, y - o, s);
+    return;
+  }
   const o = Math.floor((P.size - 1) / 2), top = y - o;
   // pixels are replaced, never blended: a 50% pixel stays 50% even when drawn twice
   const put = l => {
@@ -154,6 +164,41 @@ function dab(x, y) {
   };
   put(x - o);
   if (P.mirror) put(P.obj.fw - (x - o) - P.size);
+}
+
+// Softens a square of the frame: each pixel becomes the average of itself and
+// its eight neighbours that are in the frame — colour and alpha together,
+// the colour weighted by alpha, so an edge fades out rather than darkening
+// towards the empty pixels around it. Read from the frame as it was, so the
+// square is one even pass; going over it again blurs it more.
+function blurAt(left, top, s) {
+  const W = P.obj.fw, H = P.obj.fh;
+  const x0 = Math.max(0, left), y0 = Math.max(0, top);
+  const x1 = Math.min(W - 1, left + s - 1), y1 = Math.min(H - 1, top + s - 1);
+  if (x1 < x0 || y1 < y0) return;
+  // the square and a pixel round it, for the neighbours
+  const rx = Math.max(0, x0 - 1), ry = Math.max(0, y0 - 1);
+  const rw = Math.min(W - 1, x1 + 1) - rx + 1, rh = Math.min(H - 1, y1 + 1) - ry + 1;
+  const src = P.w.getImageData(rx, ry, rw, rh).data;
+  const out = P.w.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+  const d = out.data, ow = x1 - x0 + 1;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const sx = x + dx - rx, sy = y + dy - ry;
+          if (x + dx < 0 || y + dy < 0 || x + dx >= W || y + dy >= H) continue;
+          const i = (sy * rw + sx) * 4, al = src[i + 3];
+          r += src[i] * al; g += src[i + 1] * al; b += src[i + 2] * al; a += al; n++;
+        }
+      }
+      const j = ((y - y0) * ow + (x - x0)) * 4;
+      d[j + 3] = Math.round(a / n);
+      if (a) { d[j] = Math.round(r / a); d[j + 1] = Math.round(g / a); d[j + 2] = Math.round(b / a); }
+    }
+  }
+  P.w.putImageData(out, x0, y0);
 }
 
 function linePx(x0, y0, x1, y1, cb) {
@@ -470,7 +515,7 @@ document.addEventListener('keydown', e => {
     else if (c === 'KeyV') { e.preventDefault(); pastePixels(); }
     return;
   }
-  const tk = { KeyB: 'pencil', KeyE: 'eraser', KeyG: 'fill', KeyI: 'picker', KeyL: 'line', KeyR: 'rect', KeyC: 'ellipse' }[c];
+  const tk = { KeyB: 'pencil', KeyE: 'eraser', KeyG: 'fill', KeyI: 'picker', KeyL: 'line', KeyR: 'rect', KeyC: 'ellipse', KeyU: 'blur' }[c];
   if (tk) { setTool(tk); return; }
   if (c === 'KeyM') $('#ptMirror').click();
   else if (c === 'KeyO') $('#onOn').click();
