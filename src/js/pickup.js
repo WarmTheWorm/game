@@ -5,6 +5,12 @@ const COIN_POP_RISE = 22;     // px
 // Taken on touch, then gone. A subclass only has to say what taking it does;
 // those that set popT also fade upward on the way out.
 class Pickup extends Entity {
+  static editor = {
+    props: {
+      takeParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when taken' }
+    }
+  };
+
   constructor(obj, x, y) {
     super(obj, x, y);
     this.collected = false;
@@ -23,6 +29,7 @@ class Pickup extends Entity {
     if (!this.touches()) return;
     this.collected = true;
     this.take();
+    ParticleSystem.burst(this.props.takeParticles, this.x, this.y, this.layer);
     updateHud();
   }
 

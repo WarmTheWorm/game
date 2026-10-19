@@ -181,6 +181,29 @@ function migratePlatformStop(p) {
   return true;
 }
 
+// Particle systems came with a few ready-made: a pack with none gets them
+// (ParticleSystem.presets), and its coins, gems, rocks and enemies that have
+// never had particles get the fitting ones. True if anything was added.
+function migrateParticles(p) {
+  if (p.objects.some(o => o.cls === 'ParticleSystem')) return false;
+  const made = {};
+  Object.entries(ParticleSystem.presets).forEach(([want, props], i) => {
+    let name = want, n = 2;
+    while (p.objects.some(o => o.name === name)) name = want + n++;
+    const o = { id: uid(), name, cls: 'ParticleSystem', code: ['0Z' + VARIANTS[i]], props: { sprite: '', ...props } };
+    fillProps(o);
+    p.objects.push(o);
+    made[want] = 'object::' + name;
+  });
+  const give = (o, k, ref) => { if (o.props[k] === undefined) o.props[k] = ref; };
+  for (const o of p.objects) {
+    if (o.cls === 'Treasure') give(o, 'takeParticles', o.props.tally === 'gems' ? made.gemSparkle : made.sparkle);
+    if (o.cls === 'RockSpawner') give(o, 'breakParticles', made.dust);
+    if (['Beetle', 'Moth', 'Frog'].includes(o.cls)) give(o, 'stompParticles', made.dust);
+  }
+  return true;
+}
+
 // The worm became an object like the rest: a pack without a Worm object gets
 // one, wearing the sprite called worm if it has one, and her sprite gets the
 // collision circle she has always hit the tiles with, if it has none. True if

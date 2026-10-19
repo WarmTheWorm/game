@@ -40,9 +40,9 @@ its **Sprites** tab.
 | `0E0` | `Beetle::beetle` | `sprite::beetle` | |
 | `1E0` | `Moth::moth` | `sprite::moth` | |
 | `2E0` | `Frog::frog` | `sprite::frog` | |
-| `0C0` | `Treasure::coin` | `sprite::coin` | |
-| `0C1` | `Treasure::coin2` | `sprite::coin2` | |
-| `0C2` | `Treasure::gem` | `sprite::gem` | `score: 5`, `pickSound: sound::gem`, `tally: gems` |
+| `0C0` | `Treasure::coin` | `sprite::coin` | `takeParticles: object::sparkle` |
+| `0C1` | `Treasure::coin2` | `sprite::coin2` | `takeParticles: object::sparkle` |
+| `0C2` | `Treasure::gem` | `sprite::gem` | `score: 5`, `pickSound: sound::gem`, `tally: gems`, `takeParticles: object::gemSparkle` |
 | `nK0` | `Key::key` | `sprite::key` | |
 | `0S0` | `Shield::shield` | `sprite::shield` | |
 | `0N0` | `Lantern::lanternFull` | `sprite::lanternFull` | |
@@ -51,13 +51,18 @@ its **Sprites** tab.
 | `nO0` | `Portal::portal` | `sprite::portal` | |
 | `0!0` | `Checkpoint::checkpoint` | `sprite::checkpoint` | |
 | `0V0` | `Plant::plant` | `sprite::plant` | |
-| `0R0` | `RockSpawner::rock` | `sprite::rock` | |
-| `0R1` | `RockSpawner::rock2` | `sprite::rock` | `gravity: 0.22`, `maxFall: 4.5` |
+| `0R0` | `RockSpawner::rock` | `sprite::rock` | `breakParticles: object::dust` |
+| `0R1` | `RockSpawner::rock2` | `sprite::rock` | `gravity: 0.22`, `maxFall: 4.5`, `breakParticles: object::dust` |
 | `nL0` | `Door::door` | `sprite::door` | |
 | `nF0` | `Flag::flag` | `sprite::flag` | |
 | `nM0` | `Sign::sign` | `sprite::sign` | |
 | `0W0` | `Decoration::cloud` | `sprite::cloud` | |
 | `n=0` | `Platform::platform` | `sprite::platform` | |
+| `0Z0` | `ParticleSystem::sparkle` | — (dots) | a gold burst, for coins |
+| `0Z1` | `ParticleSystem::gemSparkle` | — (sparks) | a violet burst, for gems |
+| `0Z2` | `ParticleSystem::dust` | — (squares) | a puff of grit, for rocks and stomps |
+| `0Z3` | `ParticleSystem::fireflies` | — (dots) | streams slowly where placed |
+| `0Z4` | `ParticleSystem::fountain` | — (dots) | streams a jet of water where placed |
 | `0x0` | `PlatformStop::platformStop` | — (the editor marks it) | where a platform turns; never in the game |
 | `0P0` | — her start | `Worm::worm`: `sprite::worm` | parts `body`, `tail`, `headRight` (head), `headLeft` (optional) |
 
@@ -78,6 +83,7 @@ Beetle · extends `Enemy` · code `0E` · stands at 50%, 0% of its cell
 | `stompScore` | int | `1` | Score for a stomp |
 | `stompSound` | sound | `sound::eat` | Sound when stomped |
 | `stompBounce` | float | `0.55` | Bounce off it, as a share of a jump |
+| `stompParticles` | object (ParticleSystem) | — | Particles when stomped |
 | `speed` | float | `1.1` | Walking speed, px a frame |
 
 ### Moth
@@ -90,6 +96,7 @@ Moth · extends `Enemy` · code `1E` · stands at 50%, 50% of its cell
 | `stompScore` | int | `1` | Score for a stomp |
 | `stompSound` | sound | `sound::eat` | Sound when stomped |
 | `stompBounce` | float | `0.55` | Bounce off it, as a share of a jump |
+| `stompParticles` | object (ParticleSystem) | — | Particles when stomped |
 | `speed` | float | `0.9` | Flying speed, px a frame |
 | `range` | float | `3` | How far it strays each way, in tiles |
 | `bob` | float | `14` | Bob height, px |
@@ -105,6 +112,7 @@ Frog · extends `Enemy` · code `2E` · stands at 50%, 0% of its cell
 | `stompScore` | int | `1` | Score for a stomp |
 | `stompSound` | sound | `sound::eat` | Sound when stomped |
 | `stompBounce` | float | `0.55` | Bounce off it, as a share of a jump |
+| `stompParticles` | object (ParticleSystem) | — | Particles when stomped |
 | `hopUp` | float | `8.5` | Hop strength, up |
 | `hopForward` | float | `2.2` | Hop strength, forward |
 | `pause` | int | `40` | Frames on the ground between hops |
@@ -123,6 +131,7 @@ own on `0G`; an old `G` block still reads as the pack's `gem`.
 | `score` | int | `1` | Score |
 | `pickSound` | sound | `sound::coin` | Sound when taken |
 | `tally` | choice: coins, gems, none | `coins` | Counts toward the achievements as |
+| `takeParticles` | object (ParticleSystem) | — | Particles when taken |
 
 ### Key
 
@@ -132,6 +141,7 @@ Key · extends `Pickup` · code `nK` · stands at 50%, 50% of its cell (its digi
 |---|---|---|---|
 | `sprite` | sprite | — | Sprite |
 | `pickSound` | sound | `sound::key` | Sound when taken |
+| `takeParticles` | object (ParticleSystem) | — | Particles when taken |
 
 ### Shield
 
@@ -145,6 +155,7 @@ while the shield lasts — centred on it by its pivot, animated by its own fps.
 | `sprite` | sprite | — | Sprite |
 | `worn` | sprite | — | Sprite worn over her head (without one, a plain ring) |
 | `pickSound` | sound | `sound::shieldUp` | Sound when taken |
+| `takeParticles` | object (ParticleSystem) | — | Particles when taken |
 
 ### Lantern
 
@@ -155,6 +166,7 @@ Lantern · extends `Pickup` · code `0N` · stands at 50%, 50% of its cell
 | `sprite` | sprite | — | Sprite |
 | `radius` | int | `0` | Light radius, in tiles (0 = full light) |
 | `pickSound` | sound | `sound::lantern` | Sound when taken |
+| `takeParticles` | object (ParticleSystem) | — | Particles when taken |
 
 ### Portal
 
@@ -228,6 +240,7 @@ Falling rock · extends `Entity` · code `0R` · stands at 50%, 0% of its cell
 | `interval` | int | `140` | Frames between drops |
 | `gravity` | float | `0.55` | Gravity |
 | `maxFall` | float | `12` | Top falling speed |
+| `breakParticles` | object (ParticleSystem) | — | Particles when a rock breaks, on the ground or on her |
 
 ### Platform
 
@@ -246,6 +259,50 @@ Placed in any layer on a platform's line of travel, it ends the run there as
 a solid tile would. The level editor draws it as a red ⛔ marker; the game
 reads it while building the platforms and never spawns or draws it. It needs
 no sprite.
+
+### ParticleSystem
+
+ParticleSystem · extends `Entity` · code `0Z` · stands at 50%, 50% of its cell
+(`js/particles.js`)
+
+A cloud of small dots, squares, sparks or tiny sprites, each thrown out at a
+speed and angle, pulled by gravity, slowed by drag, and changing size and
+colour over its life. Used two ways:
+
+- **named by another object** — a property of type `object` (a pickup's
+  `takeParticles`, an enemy's `stompParticles`, a rock spawner's
+  `breakParticles`) holds `object::<name>`, and the game bursts `count`
+  particles where that thing went;
+- **placed in a level** — it streams `rate` particles a frame from its spot
+  while it is near the screen (0 streams nothing). The level editor marks it
+  with an orange ✶ when it has no sprite.
+
+Its sprite is optional: without one each particle is drawn as `shape`. The
+asset pack creator shows it running as its preview, and gives a pack with no
+particle systems the five above (`ParticleSystem.presets`), wiring its
+coins, gems, rocks and enemies to them.
+
+| Property | Type | Default | What it is |
+|---|---|---|---|
+| `sprite` | sprite (optional) | — | Each particle wears it, sized and faded like a dot |
+| `count` | int | `16` | Particles in a burst |
+| `rate` | float | `0` | Particles a frame, placed in a level (0 = none) |
+| `speed` | float | `2` | Speed, px a frame |
+| `speedJitter` | float | `0.5` | Speed varies by, as a share |
+| `angle` | int | `-90` | Direction, degrees (0 right, -90 up) |
+| `spread` | int | `360` | Spread round it, degrees |
+| `gravity` | float | `0.1` | Gravity (negative rises) |
+| `drag` | float | `0.97` | Speed kept each frame (1 = no drag) |
+| `life` | int | `30` | Life, frames |
+| `lifeJitter` | float | `0.3` | Life varies by, as a share |
+| `radius` | float | `0` | Starts anywhere within, px |
+| `sizeStart` | float | `4` | Size at birth, px |
+| `sizeEnd` | float | `0` | Size at death, px |
+| `colorStart` | color | `#ffffff` | Colour at birth |
+| `colorEnd` | color | `#ffffff` | Colour at death |
+| `fade` | bool | `true` | Fades out |
+| `shape` | choice: circle, square, spark | `circle` | Shape, without a sprite |
+| `glow` | bool | `false` | Glows (adds light) |
 
 ### Decoration
 

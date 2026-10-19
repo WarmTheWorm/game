@@ -373,6 +373,7 @@
 <script src="../src/js/door.js"></script>
 <script src="../src/js/sign.js"></script>
 <script src="../src/js/decoration.js"></script>
+<script src="../src/js/particles.js"></script>
 <script src="../src/js/worm.js"></script>
 <script src="../src/js/classes.js"></script>
 <script>
@@ -1088,7 +1089,7 @@ function drawObjectCell(cell, c, r) {
   if (!atlas.def(name).frame) {
     // a class that draws itself without art (its guide) needs no stand-in
     const C = objClass(glyph, cell.id, cell.v);
-    if (!(C && C.editorOnly)) objPlaceholder(c, r, cell.id + glyph + (cell.v || '0'));
+    if (!(C && (C.editorOnly || C.marker))) objPlaceholder(c, r, cell.id + glyph + (cell.v || '0'));
     return;
   }
   const [ax, ay] = cellAnchor(glyph, cell.id, cell.v);

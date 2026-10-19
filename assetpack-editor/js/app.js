@@ -133,6 +133,7 @@ async function boot(already) {
   const treasured = migrateTreasure(pack);
   const shields = migrateShieldWorn(pack);
   const stopMade = migratePlatformStop(pack);
+  const sparked = migrateParticles(pack);
   const tilesCut = await migrateTileSheet(pack);
   const madeCodes = migrateCodes(pack);
   const recoded = recodeObjects(pack) > 0 || madeCodes;
@@ -149,6 +150,10 @@ async function boot(already) {
   renderBackgrounds();
   renderSounds();
   renderPackTab();
+  if (sparked) {
+    savePack();
+    toast('Added particle systems — sparkles for coins and gems, dust for rocks and stomps; see the Objects tab');
+  }
   if (stopMade) {
     savePack();
     toast('Added a platform stop — place it in the level editor where a platform should turn');

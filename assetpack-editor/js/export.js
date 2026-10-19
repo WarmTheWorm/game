@@ -69,11 +69,13 @@ function objectProblems(o) {
   if (C.codes.length && (!variantOf(o) || o.code.join() !== want.join())) bad.push(`its codes should be ${want.join(' ')}.`);
   const sprite = spriteByName(refName(o.props.sprite));
   // a mark only the level editor shows draws without art if it has none
-  if (!sprite && !(C.editorOnly && !o.props.sprite)) bad.push(`its sprite "${o.props.sprite || 'none'}" is not in the pack.`);
+  if (!sprite && !((C.editorOnly || C.spriteOptional) && !o.props.sprite)) bad.push(`its sprite "${o.props.sprite || 'none'}" is not in the pack.`);
   for (const [k, d] of Object.entries(classDefs(o.cls))) {
     const v = o.props[k];
     if (d.type === 'sound' && v && !pack.sounds.defs[refName(v)]) bad.push(`${k} names ${v}, which is not one of the pack's sounds.`);
     if (d.type === 'sprite' && k !== 'sprite' && v && !spriteByName(refName(v))) bad.push(`${k} names ${v}, which is not one of the pack's sprites.`);
+    if (d.type === 'object' && v && !pack.objects.some(x => x.name === refName(v) && (!d.class || x.cls === d.class)))
+      bad.push(`${k} names ${v}, which is not one of the pack's ${d.class || ''} objects.`);
     if (d.type === 'part' && v && !d.optional && sprite && !sprite.parts.some(p => p.name === v)) bad.push(`${k} names the part "${v}", which ${sprite.name} hasn't got.`);
   }
   return bad;

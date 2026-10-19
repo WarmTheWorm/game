@@ -9,6 +9,7 @@ class Rock extends Entity {
     super(spawner.name, spawner.x, spawner.y);
     this.gravity = spawner.props.gravity;
     this.maxFall = spawner.props.maxFall;
+    this.breakParticles = spawner.props.breakParticles;
     this.vy = 0;
     this.alive = true;
     this.spin = (Math.random() - 0.5) * 0.2;
@@ -25,18 +26,24 @@ class Rock extends Entity {
     const col = Math.floor(this.x / TILE);
     const row = Math.floor((this.y + this.r) / TILE);
     if (row >= 0 && solidAt(col, row) && this.y + this.r >= row * TILE) {
-      this.alive = false; // shattered on the ground
+      this.shatter(row * TILE); // on the ground
       return;
     }
     const rampY = rampSurfaceY(this.x, this.y);
-    if (rampY !== null && this.y + this.r >= rampY) { this.alive = false; return; }
+    if (rampY !== null && this.y + this.r >= rampY) { this.shatter(rampY); return; }
     // gone once it is past the floor of the level, not of the window: the
     // camera's height says nothing about how far there is left to fall
     if (this.y > mapHeightPx + 40) { this.alive = false; return; }
 
     if (!this.touches()) return;
-    this.alive = false;
+    this.shatter(this.y);
     hurtWarm();
+  }
+
+  // gone, in its spawner's breakParticles if it names some, at height y
+  shatter(y) {
+    this.alive = false;
+    ParticleSystem.burst(this.breakParticles, this.x, Math.min(y, this.y + this.r), this.layer);
   }
 
   draw() {

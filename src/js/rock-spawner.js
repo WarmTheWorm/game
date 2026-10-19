@@ -9,7 +9,8 @@ class RockSpawner extends Entity {
     props: {
       interval: { type: 'int', default: 140, label: 'Frames between drops' },
       gravity: { type: 'float', default: 0.55, label: 'Gravity' },
-      maxFall: { type: 'float', default: 12, label: 'Top falling speed' }
+      maxFall: { type: 'float', default: 12, label: 'Top falling speed' },
+      breakParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when a rock breaks' }
     }
   };
 

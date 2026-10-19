@@ -6,7 +6,8 @@ class Enemy extends Entity {
     props: {
       stompScore: { type: 'int', default: 1, label: 'Score for a stomp' },
       stompSound: { type: 'sound', default: 'sound::eat', label: 'Sound when stomped' },
-      stompBounce: { type: 'float', default: 0.55, label: 'Bounce off it, as a share of a jump' }
+      stompBounce: { type: 'float', default: 0.55, label: 'Bounce off it, as a share of a jump' },
+      stompParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when stomped' }
     }
   };
 

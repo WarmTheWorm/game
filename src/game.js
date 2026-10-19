@@ -830,7 +830,7 @@ function loadCustomLevel(text, opts = {}) {
   const spawned = {
     enemies: [], coins: [], keyPickups: [], shieldPickups: [],
     portals: [], checkpoints: [], plants: [], rockSpawners: [],
-    lockedDoorSpots: [], finishPoints: [], signs: [], lanterns: [], decorations: []
+    lockedDoorSpots: [], finishPoints: [], signs: [], lanterns: [], decorations: [], emitters: []
   };
   const newPlatforms = [];
   const platformSpots = [];
@@ -926,6 +926,8 @@ function loadCustomLevel(text, opts = {}) {
   plants = spawned.plants;
   rockSpawners = spawned.rockSpawners;
   rocks = [];
+  emitters = spawned.emitters;
+  bursts = [];
   finishPoints = spawned.finishPoints;
   signs = spawned.signs;
   levelMessages = Array.isArray(opts.messages) ? opts.messages : [];
@@ -1374,7 +1376,7 @@ function captureWorld(flag) {
     grid, backGrid, frontGrid, collideGrid, gridMeta, backMeta, frontMeta, tileset,
     cols, rows, mapWidthPx, mapHeightPx, START, background, levelMusic,
     enemies, coins, keyPickups, shieldPickups, lockedDoorSpots,
-    movingPlatforms, plants, rockSpawners, rocks,
+    movingPlatforms, plants, rockSpawners, rocks, emitters,
     portals, checkpoints, finishPoints, signs, levelMessages, levelPicks, lanterns, decorations, lightReach, lightRadius
   };
 }
@@ -1399,6 +1401,7 @@ function restoreWorld(w) {
   lockedDoorSpots = w.lockedDoorSpots;
   movingPlatforms = w.movingPlatforms; plants = w.plants;
   rockSpawners = w.rockSpawners; rocks = w.rocks;
+  emitters = w.emitters || []; bursts = [];
   portals = w.portals; checkpoints = w.checkpoints;
   finishPoints = w.finishPoints; signs = w.signs;
   levelMessages = w.levelMessages;
@@ -1529,6 +1532,7 @@ function startGame(keepCurtain) {
     for (const e of group) e.reset();
   }
   rocks = [];
+  bursts = [];
   keysHeld = [];
   lightReach = 0;
   returnStack = [];
@@ -1578,6 +1582,8 @@ let shieldPickups = [];
 let keyPickups = [];
 let lanterns = [];
 let decorations = [];     // scenery; drawn first so it sits behind everything
+let emitters = [];        // particle systems placed in the level (js/particles.js)
+let bursts = [];          // one-off particle bursts, a coin's sparkle; gone once done
 let signs = [];
 let levelMessages = [];   // what each 'M' block says, picked by its info digit
 let levelPicks = [];      // blocks the level counts as already taken, e.g. "1N0"
@@ -1592,6 +1598,7 @@ function checkEnemyCollisions() {
       if (warm.vy > 0 && warm.y < e.y - e.r * 0.3) {
         // stomped from above
         e.alive = false;
+        ParticleSystem.burst(e.props.stompParticles, e.x, e.y, e.layer);
         warm.vy = JUMP_V * e.props.stompBounce;
         score += e.props.stompScore;
         stats.stomps++;
@@ -1603,6 +1610,7 @@ function checkEnemyCollisions() {
         // the shield absorbs one side hit AND takes the enemy out with it
         hasShield = false;
         e.alive = false;
+        ParticleSystem.burst(e.props.stompParticles, e.x, e.y, e.layer);
         score += e.props.stompScore;
         stats.stomps++;
         saveStats();
@@ -1900,6 +1908,8 @@ function update() {
   for (const list of [plants, enemies]) for (const e of list) e.update();
   checkEnemyCollisions();
   for (const list of [coins, shieldPickups, keyPickups, lanterns, checkpoints, signs]) for (const e of list) e.update();
+  for (const list of [emitters, bursts]) for (const e of list) e.update();
+  if (bursts.length) bursts = bursts.filter(b => !b.done);
   updateTeleporters();
   checkFinish();
 
@@ -2009,7 +2019,7 @@ function drawTileLayer(meta) {
 // thing appears here once; what it looks like is its own draw().
 function entityGroups() {
   return [decorations, lockedDoorSpots, portals, checkpoints, finishPoints, signs, movingPlatforms,
-          coins, shieldPickups, keyPickups, lanterns, rocks, plants, enemies];
+          coins, shieldPickups, keyPickups, lanterns, rocks, plants, enemies, emitters, bursts];
 }
 
 // One pass per block line, so a thing is drawn with the terrain it was

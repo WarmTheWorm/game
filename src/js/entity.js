@@ -12,7 +12,9 @@
 // class chain, so an Enemy's stomp settings are every enemy's.
 //
 //   types: int, float, bool, text, color, choice (with `options`),
-//          sound, sprite, part (of the object's own sprite), background
+//          sound, sprite, part (of the object's own sprite), background,
+//          object (another of the pack's objects, of the class `class` names:
+//          'object::sparkle')
 //   optional: true  — a part that may be missing, the class managing without
 //
 // The base is enough on its own for anything that just sits there: it draws

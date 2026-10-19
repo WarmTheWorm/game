@@ -78,6 +78,13 @@ function propField(o, k, d) {
       </div><button type="button" class="btn sm" data-newsprite="${k}" title="Make a new sprite for this object and draw it">+ New</button></div>${hint}</div>`;
     }
     case 'background': input = `<select data-prop="${k}">${options(pack.backgrounds.map(b => b.name), 'background::')}</select>`; break;
+    case 'object': {
+      // another of the pack's objects, of the class the property wants
+      const of = pack.objects.filter(x => x !== o && (!d.class || x.cls === d.class)).map(x => x.name).sort();
+      input = `<div class="row gap"><select data-prop="${k}">${options(of, 'object::')}</select>
+        ${v ? `<button type="button" class="btn sm" data-openobj="${esc(refName(v))}" title="Open ${esc(refName(v))}">↗</button>` : ''}</div>`;
+      break;
+    }
     case 'part': {
       // a picker like the sprite's, each part shown by its first frame
       const sn = refName(o.props.sprite), s = spriteByName(sn);
@@ -134,6 +141,8 @@ function renderGoForm() {
 function drawGoPreview() {
   const cv = $('#goPv');
   const o = currentObj;
+  stopParticlePreview();
+  if (o && o.cls === 'ParticleSystem') { startParticlePreview(o); return; }
   const s = o && spriteByName(refName(o.props.sprite));
   const C = o && gameClass(o.cls);
   if (!s || !s.frames.length) {
@@ -156,6 +165,54 @@ function drawGoPreview() {
     : s.name;
 }
 
+// A particle system is shown running: streaming if it streams, otherwise
+// bursting over and over, so a change to any property shows at once. It stops
+// when the tab is left and starts again when it is drawn.
+let particlePv = null;
+
+function stopParticlePreview() {
+  if (particlePv) cancelAnimationFrame(particlePv.raf);
+  particlePv = null;
+}
+
+function startParticlePreview(o) {
+  const cv = $('#goPv'), W = 240, H = 200;
+  cv.width = W;
+  cv.height = H;
+  const g = cv.getContext('2d');
+  const p = o.props;
+  const cloud = new ParticleCloud(p, W / 2, H / 2);
+  const s = spriteByName(refName(p.sprite));
+  const fr = s && s.frames.length && frameCanvas(s, s.frames[0]);
+  const art = fr ? { size: Math.max(s.fw, s.fh), draw: g2 => g2.drawImage(fr, -s.fw / 2, -s.fh / 2) } : null;
+  const every = Math.max(40, Math.round(p.life * (1 + p.lifeJitter) + 20));
+  let t = 0;
+  const run = { raf: 0 };
+  const tick = () => {
+    if (particlePv !== run) return;
+    if (!cv.isConnected || !cv.offsetParent) { particlePv = null; return; }   // the tab was left
+    if (p.rate > 0) cloud.stream();
+    else if (t % every === 0) cloud.emit(p.count);
+    t++;
+    cloud.step();
+    g.fillStyle = '#151922';
+    g.fillRect(0, 0, W, H);
+    // where it stands: the point it throws particles from
+    g.strokeStyle = 'rgba(255,255,255,0.18)';
+    g.beginPath();
+    g.moveTo(W / 2 - 6, H / 2); g.lineTo(W / 2 + 6, H / 2);
+    g.moveTo(W / 2, H / 2 - 6); g.lineTo(W / 2, H / 2 + 6);
+    g.stroke();
+    cloud.paint(g, art);
+    run.raf = requestAnimationFrame(tick);
+  };
+  particlePv = run;
+  tick();
+  $('#goAbout').textContent = p.rate > 0
+    ? `Streams ${p.rate} a frame where it is placed; bursts ${p.count} when another object names it`
+    : `Bursts ${p.count} when another object names it (a coin's takeParticles, a rock's breakParticles); placed in a level it stays still — give it a rate to stream`;
+}
+
 // ---------- editing ----------
 $('#goList').addEventListener('click', e => {
   const b = e.target.closest('[data-goid]');
@@ -173,7 +230,7 @@ function setProp(o, k, v) {
   o.props[k] = v;
   // a new sprite has other parts to choose from, and its own icon
   // a picker's button shows what it holds, so it is drawn again
-  if (d.type === 'sprite' || d.type === 'part') renderGoForm(); else drawGoPreview();
+  if (d.type === 'sprite' || d.type === 'part' || d.type === 'object') renderGoForm(); else drawGoPreview();
   renderGoList();
   savePack();
 }
@@ -192,7 +249,12 @@ $('#goForm').addEventListener('input', e => {
   }
   if (e.target.dataset.g === 'name') {
     markUndo();
+    const was = o.name;
     o.name = objName(e.target.value) || o.name;
+    // whatever names it (a coin's takeParticles) follows it to its new name
+    if (o.name !== was) for (const x of pack.objects) for (const [k, v] of Object.entries(x.props)) {
+      if (v === 'object::' + was) x.props[k] = 'object::' + o.name;
+    }
     $('#goTitle').textContent = `${o.cls}::${o.name}`;
     renderGoList();
     savePack();
@@ -348,6 +410,12 @@ $('#goForm').addEventListener('click', e => {
   if (ns) { newSpriteFor(o, ns.dataset.newsprite); return; }
   const nd = e.target.closest('[data-newsound]');
   if (nd) { newSoundFor(o, nd.dataset.newsound); return; }
+  const oo = e.target.closest('[data-openobj]');
+  if (oo) {
+    currentObj = objectByName(oo.dataset.openobj) || currentObj;
+    renderGameObjects();
+    return;
+  }
   const play = e.target.closest('[data-play]');
   if (play) { sound.play(o.props[play.dataset.play]); return; }
   const g = e.target.dataset.g;
