@@ -14,18 +14,69 @@ function renderGameObjects() {
   renderGoForm();
 }
 
+// Two ways to show the list, kept in this browser: every object in one list,
+// or grouped by class — an accordion, each class opened and closed on its
+// own, the class of an object opens when it is picked.
+const GO_VIEW_KEY = 'assetEditorObjectsView', GO_OPEN_KEY = 'assetEditorObjectsOpen';
+let goView = 'list';
+let goOpen = new Set();             // classes opened in the grouped view
+let goShown = null;                 // the object picked when the groups were last drawn
+try {
+  goView = localStorage.getItem(GO_VIEW_KEY) === 'class' ? 'class' : 'list';
+  goOpen = new Set(JSON.parse(localStorage.getItem(GO_OPEN_KEY) || '[]'));
+} catch { /* the defaults, then */ }
+const keepGoView = () => {
+  try {
+    localStorage.setItem(GO_VIEW_KEY, goView);
+    localStorage.setItem(GO_OPEN_KEY, JSON.stringify([...goOpen]));
+  } catch { /* not kept */ }
+};
+
 function renderGoList() {
   const clash = new Set(clashingCodes().flatMap(([, names]) => names));
+  const isBad = o => clash.has(o.name) || objectProblems(o).length > 0;
   // grouped by class, then by name within it — the order in the pack is left alone
   const sorted = [...pack.objects].sort((a, b) => a.cls.localeCompare(b.cls) || a.name.localeCompare(b.name));
-  $('#goList').innerHTML = sorted.map(o => {
-    const bad = clash.has(o.name) || objectProblems(o).length;
-    return `<button class="item ${o === currentObj ? 'on' : ''}" data-goid="${o.id}">
-      <b>${spriteIcon(refName(o.props.sprite))}${esc(o.name)}</b><small class="${bad ? 'warn' : ''}">${esc(o.cls)}</small>
+  // in a group the class goes without saying, so an item shows its code
+  const item = (o, tag) => `<button class="item ${o === currentObj ? 'on' : ''}" data-goid="${o.id}">
+      <b>${spriteIcon(refName(o.props.sprite))}${esc(o.name)}</b><small class="${isBad(o) ? 'warn' : ''}">${esc(tag)}</small>
     </button>`;
-  }).join('') || '<p class="empty">No objects yet.</p>';
-  paintIcons($('#goList'));
+  $$('#goView button').forEach(b => b.classList.toggle('on', b.dataset.view === goView));
+  const box = $('#goList');
+  if (!sorted.length) box.innerHTML = '<p class="empty">No objects yet.</p>';
+  else if (goView === 'list') box.innerHTML = sorted.map(o => item(o, o.cls)).join('');
+  else {
+    const groups = new Map();
+    for (const o of sorted) (groups.get(o.cls) || groups.set(o.cls, []).get(o.cls)).push(o);
+    // a newly picked object's class opens; one closed after stays closed
+    if (currentObj && currentObj !== goShown) goOpen.add(currentObj.cls);
+    goShown = currentObj;
+    box.innerHTML = [...groups].map(([cls, list]) => {
+      const bad = list.some(isBad);
+      return `<details class="gogroup" data-cls="${esc(cls)}" ${goOpen.has(cls) ? 'open' : ''}>
+        <summary><span class="${bad ? 'warn' : ''}">${esc(cls)}</span><span class="n">${list.length}</span></summary>
+        <div class="items">${list.map(o => item(o, o.code[0] || '—')).join('')}</div>
+      </details>`;
+    }).join('');
+  }
+  paintIcons(box);
 }
+
+$('#goView').addEventListener('click', e => {
+  const b = e.target.closest('[data-view]');
+  if (!b || b.dataset.view === goView) return;
+  goView = b.dataset.view;
+  keepGoView();
+  renderGoList();
+});
+
+// 'toggle' doesn't bubble, so it is caught on the way down
+$('#goList').addEventListener('toggle', e => {
+  const d = e.target.closest && e.target.closest('.gogroup');
+  if (!d) return;
+  if (d.open) goOpen.add(d.dataset.cls); else goOpen.delete(d.dataset.cls);
+  keepGoView();
+}, true);
 
 // ---------- the form ----------
 // The code is not chosen: the class fixes its first two characters and the
