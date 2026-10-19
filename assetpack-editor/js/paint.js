@@ -428,10 +428,67 @@ function copyPixels() {
   pixelClip = cloneCanvas(P.work);
   $('#opPaste').disabled = false;
   paintMsg(`Copied ${pixelClip.width}×${pixelClip.height}`);
+  copyToSystem(pixelClip);
+}
+
+// The system clipboard too, as a PNG: so a frame pastes into other programs,
+// and so what Ctrl+V finds there is always the last thing copied, here or
+// anywhere else. Where the browser won't allow it, the copy stays here alone.
+function copyToSystem(canvas) {
+  if (!navigator.clipboard || !window.ClipboardItem) return;
+  canvas.toBlob(blob => {
+    if (blob) navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).catch(() => {});
+  }, 'image/png');
+}
+
+// An image from outside — another program, a web page — onto the frame: as
+// it is and centred if it fits, scaled down to fit (keeping its shape) if
+// not. It becomes the copy here too, so it can be pasted again.
+async function pasteImage(blob) {
+  let bmp;
+  try { bmp = await createImageBitmap(blob); } catch { paintMsg('The clipboard holds an image this browser cannot read'); return; }
+  const { fw, fh } = P.obj;
+  const k = Math.min(1, fw / bmp.width, fh / bmp.height);
+  const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+  const c = blankCanvas(w, h);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = k < 1;
+  g.drawImage(bmp, 0, 0, w, h);
+  pixelClip = c;
+  $('#opPaste').disabled = false;
+  const x = Math.round((fw - w) / 2), y = Math.round((fh - h) / 2);
+  transform(() => P.w.drawImage(c, x, y));
+  paintMsg(k < 1
+    ? `Pasted a ${bmp.width}×${bmp.height} image, scaled to ${w}×${h} to fit`
+    : `Pasted a ${bmp.width}×${bmp.height} image${w === fw && h === fh ? '' : ', centred'}`);
+}
+
+// What Ctrl+V brings: the browser hands over the clipboard with the paste, so
+// an image there — from here or anywhere — is what goes in; without one, the
+// copy made here.
+document.addEventListener('paste', e => {
+  if (!$('#paint').open || (e.target.matches && e.target.matches('input,select,textarea'))) return;
+  e.preventDefault();
+  const item = [...(e.clipboardData ? e.clipboardData.items : [])].find(i => i.kind === 'file' && i.type.startsWith('image/'));
+  if (item) pasteImage(item.getAsFile());
+  else pastePixels();
+});
+
+// The Paste button asks for the clipboard itself (the browser may ask first).
+async function pasteFromButton() {
+  try {
+    if (navigator.clipboard && navigator.clipboard.read) {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find(t => t.startsWith('image/'));
+        if (type) { await pasteImage(await item.getType(type)); return; }
+      }
+    }
+  } catch { /* not allowed, or nothing there: the copy made here */ }
+  pastePixels();
 }
 
 function pastePixels() {
-  if (!pixelClip) { paintMsg('Copy a frame first'); return; }
+  if (!pixelClip) { paintMsg('Copy a frame first — or an image, anywhere'); return; }
   const { fw, fh } = P.obj;
   const x = Math.round((fw - pixelClip.width) / 2), y = Math.round((fh - pixelClip.height) / 2);
   transform(() => P.w.drawImage(pixelClip, x, y));
@@ -441,7 +498,7 @@ function pastePixels() {
 }
 
 $('#opCopy').onclick = copyPixels;
-$('#opPaste').onclick = pastePixels;
+$('#opPaste').onclick = pasteFromButton;
 $$('[data-shift]').forEach(b => b.onclick = () => {
   const [dx, dy] = b.dataset.shift.split(',').map(Number);
   transform(t => {
@@ -531,7 +588,7 @@ document.addEventListener('keydown', e => {
     if (c === 'KeyZ') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (c === 'KeyY') { e.preventDefault(); redo(); }
     else if (c === 'KeyC') { e.preventDefault(); copyPixels(); }
-    else if (c === 'KeyV') { e.preventDefault(); pastePixels(); }
+    // Ctrl+V is left to the browser, which fires 'paste' with the clipboard
     return;
   }
   const tk = { KeyB: 'pencil', KeyE: 'eraser', KeyG: 'fill', KeyI: 'picker', KeyL: 'line', KeyR: 'rect', KeyC: 'ellipse', KeyU: 'blur', KeyT: 'outline' }[c];
