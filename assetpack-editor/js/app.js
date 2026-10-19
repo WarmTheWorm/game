@@ -1,7 +1,12 @@
 // ---------- the shell ----------
 // Tabs, boot and the few things that cut across every panel.
 
+// The tab last shown is remembered in this browser, so a refresh comes back
+// to it.
+const TAB_KEY = 'assetEditorTab';
+
 function showTab(name) {
+  try { localStorage.setItem(TAB_KEY, name); } catch { /* private mode: the first tab, then */ }
   $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
   $$('.page').forEach(p => p.classList.toggle('on', p.dataset.page === name));
   if (name === 'gameobjects') renderGameObjects();
@@ -181,4 +186,10 @@ async function boot(already) {
   }
 }
 
-boot().catch(err => toast('Could not start: ' + err.message, true));
+boot()
+  .then(() => {
+    let tab = null;
+    try { tab = localStorage.getItem(TAB_KEY); } catch { /* none kept */ }
+    if (tab && $(`.tab[data-tab="${tab}"]`)) showTab(tab);
+  })
+  .catch(err => toast('Could not start: ' + err.message, true));
