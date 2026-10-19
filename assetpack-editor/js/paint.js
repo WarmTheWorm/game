@@ -166,11 +166,15 @@ function dab(x, y) {
   if (P.mirror) put(P.obj.fw - (x - o) - P.size);
 }
 
-// Softens a square of the frame: each pixel becomes the average of itself and
-// its eight neighbours that are in the frame — colour and alpha together,
-// the colour weighted by alpha, so an edge fades out rather than darkening
-// towards the empty pixels around it. Read from the frame as it was, so the
-// square is one even pass; going over it again blurs it more.
+// Softens a square of the frame: each pixel becomes a weighted average of
+// itself and its eight neighbours in the frame — itself counting most
+// (BLUR_WEIGHTS), so a pass is gentle — colour and alpha together, the
+// colour weighted by alpha, so an edge fades out rather than darkening
+// towards the empty pixels around it. A pixel is softened once a stroke
+// however often the brush passes over it (P.blurred), so a stroke is one
+// even pass and another stroke softens more.
+const BLUR_WEIGHTS = [1, 2, 1, 2, 8, 2, 1, 2, 1];   // the 3x3 round a pixel, row by row
+
 function blurAt(left, top, s) {
   const W = P.obj.fw, H = P.obj.fh;
   const x0 = Math.max(0, left), y0 = Math.max(0, top);
@@ -184,13 +188,18 @@ function blurAt(left, top, s) {
   const d = out.data, ow = x1 - x0 + 1;
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
+      if (P.blurred) {
+        if (P.blurred.has(y * W + x)) continue;
+        P.blurred.add(y * W + x);
+      }
       let r = 0, g = 0, b = 0, a = 0, n = 0;
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           const sx = x + dx - rx, sy = y + dy - ry;
           if (x + dx < 0 || y + dy < 0 || x + dx >= W || y + dy >= H) continue;
-          const i = (sy * rw + sx) * 4, al = src[i + 3];
-          r += src[i] * al; g += src[i + 1] * al; b += src[i + 2] * al; a += al; n++;
+          const w = BLUR_WEIGHTS[(dy + 1) * 3 + dx + 1];
+          const i = (sy * rw + sx) * 4, al = src[i + 3] * w;
+          r += src[i] * al; g += src[i + 1] * al; b += src[i + 2] * al; a += al; n += w;
         }
       }
       const j = ((y - y0) * ow + (x - x0)) * 4;
@@ -496,6 +505,7 @@ pc.addEventListener('pointerdown', e => {
   if (P.tool === 'outline') { pushUndo(); if (outlineAt(p.x, p.y)) commitPaint(); else P.undo.pop(); drawPaint(); return; }
   pushUndo();
   P.drawing = true; P.start = p; P.last = p;
+  P.blurred = new Set();      // what this stroke has softened already
   if (['line', 'rect', 'ellipse'].includes(P.tool)) { P.snap = snapshot(); shape(p, e.shiftKey); } else dab(p.x, p.y);
   drawPaint();
 });
