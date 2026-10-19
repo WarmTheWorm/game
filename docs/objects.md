@@ -83,7 +83,7 @@ Beetle · extends `Enemy` · code `0E` · stands at 50%, 0% of its cell
 | `stompScore` | int | `1` | Score for a stomp |
 | `stompSound` | sound | `sound::eat` | Sound when stomped |
 | `stompBounce` | float | `0.55` | Bounce off it, as a share of a jump |
-| `stompParticles` | object (ParticleSystem) | — | Particles when stomped |
+| `stompParticles` | object (ParticleSystem) | — | Particles when killed (stomped, or hit with the shield on) |
 | `speed` | float | `1.1` | Walking speed, px a frame |
 
 ### Moth
@@ -96,7 +96,7 @@ Moth · extends `Enemy` · code `1E` · stands at 50%, 50% of its cell
 | `stompScore` | int | `1` | Score for a stomp |
 | `stompSound` | sound | `sound::eat` | Sound when stomped |
 | `stompBounce` | float | `0.55` | Bounce off it, as a share of a jump |
-| `stompParticles` | object (ParticleSystem) | — | Particles when stomped |
+| `stompParticles` | object (ParticleSystem) | — | Particles when killed (stomped, or hit with the shield on) |
 | `speed` | float | `0.9` | Flying speed, px a frame |
 | `range` | float | `3` | How far it strays each way, in tiles |
 | `bob` | float | `14` | Bob height, px |
@@ -112,7 +112,7 @@ Frog · extends `Enemy` · code `2E` · stands at 50%, 0% of its cell
 | `stompScore` | int | `1` | Score for a stomp |
 | `stompSound` | sound | `sound::eat` | Sound when stomped |
 | `stompBounce` | float | `0.55` | Bounce off it, as a share of a jump |
-| `stompParticles` | object (ParticleSystem) | — | Particles when stomped |
+| `stompParticles` | object (ParticleSystem) | — | Particles when killed (stomped, or hit with the shield on) |
 | `hopUp` | float | `8.5` | Hop strength, up |
 | `hopForward` | float | `2.2` | Hop strength, forward |
 | `pause` | int | `40` | Frames on the ground between hops |
