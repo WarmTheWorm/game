@@ -44,10 +44,84 @@ class ParticleSystem extends Entity {
 
   // It may have no art of its own; the level editor marks where it stands.
   static spriteOptional = true;
-  static marker = { colour: '#ffb347', letter: '✶' };
+  static marker = { colour: '#ffb347', letter: '✶' };   // so the editor puts no stand-in under its symbol
 
+  // Its symbol where a level is built, drawn from its own props so each
+  // system reads apart at a glance: a cone the way it throws and as wide as
+  // its spread (a ring for all round), shaded from its birth colour to its
+  // death colour, a few particles in it in its own shape, colours and sizes,
+  // an arrow if gravity pulls them, and what it does placed — ≈ and its rate
+  // if it streams, ✶ and its count if it bursts.
   static drawGuide(g, view) {
-    if (view.mode !== 'debug') this.drawMarker(g, view);
+    if (view.mode === 'debug') return;
+    const p = this.propsFor(view.name);
+    const panel = view.mode === 'panel';
+    const s = panel ? view.size : TILE;                         // the cell, in what is drawn on
+    const k = panel ? view.size / TILE : 1;                     // game units to that
+    const cx = panel ? s / 2 : (view.c + 0.5) * TILE, cy = panel ? s / 2 : (view.r + 0.5) * TILE;
+    const lw = 1 / (view.px || 1);
+    const rgb0 = particleRgb(p.colorStart), rgb1 = particleRgb(p.colorEnd);
+    const col = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+    const mix = t => rgb0.map((v, i) => Math.round(v + (rgb1[i] - v) * t));
+    const a = p.angle * Math.PI / 180, spread = Math.min(360, Math.max(0, p.spread)) * Math.PI / 180;
+    const R = s * 0.44;
+    g.save();
+    if (!view.hasArt) {
+      g.fillStyle = 'rgba(20,16,32,0.55)';
+      g.fillRect(cx - s / 2 + lw, cy - s / 2 + lw, s - 2 * lw, s - 2 * lw);
+    }
+    // the cone
+    const grad = g.createRadialGradient(cx, cy, 0, cx, cy, R);
+    grad.addColorStop(0, col(rgb0, 0.55));
+    grad.addColorStop(1, col(rgb1, 0.12));
+    g.fillStyle = grad;
+    g.strokeStyle = col(rgb0, 0.9);
+    g.lineWidth = 1.2 * lw;
+    g.beginPath();
+    if (spread >= Math.PI * 2 - 1e-3) g.arc(cx, cy, R, 0, Math.PI * 2);
+    else { g.moveTo(cx, cy); g.arc(cx, cy, R, a - spread / 2, a + spread / 2); g.closePath(); }
+    g.fill();
+    g.stroke();
+    // a few of its particles, always the same ones, at their real size
+    const shown = 6;
+    for (let i = 0; i < shown; i++) {
+      const t = (i * 0.61803) % 1;                             // how far out, so how old
+      const ang = a + ((i + 0.5) / shown - 0.5) * Math.min(spread, Math.PI * 2 - 0.3);
+      const d = R * (0.25 + 0.7 * t);
+      const x = cx + Math.cos(ang) * d, y = cy + Math.sin(ang) * d;
+      const size = Math.max(1.2 * lw, (p.sizeStart + (p.sizeEnd - p.sizeStart) * t) * k);
+      const c = mix(t);
+      g.fillStyle = g.strokeStyle = col(c, p.fade ? 1 - t * 0.6 : 1);
+      if (p.shape === 'square') g.fillRect(x - size / 2, y - size / 2, size, size);
+      else if (p.shape === 'spark') {
+        g.lineWidth = Math.max(lw, size / 2);
+        g.beginPath();
+        g.moveTo(x - Math.cos(ang) * size * 1.5, y - Math.sin(ang) * size * 1.5);
+        g.lineTo(x + Math.cos(ang) * size, y + Math.sin(ang) * size);
+        g.stroke();
+      } else { g.beginPath(); g.arc(x, y, size / 2, 0, Math.PI * 2); g.fill(); }
+    }
+    // gravity: an arrow at its side, down if they fall, up if they rise
+    if (Math.abs(p.gravity) > 0.005) {
+      const up = p.gravity < 0, gx = cx - s * 0.38, h = s * 0.16;
+      const y0 = cy + (up ? h : -h), y1 = cy + (up ? -h : h);
+      g.strokeStyle = g.fillStyle = 'rgba(255,255,255,0.75)';
+      g.lineWidth = 1.5 * lw;
+      g.beginPath(); g.moveTo(gx, y0); g.lineTo(gx, y1); g.stroke();
+      const hd = s * 0.06 * (up ? -1 : 1);
+      g.beginPath(); g.moveTo(gx - Math.abs(hd), y1 - hd); g.lineTo(gx, y1); g.lineTo(gx + Math.abs(hd), y1 - hd); g.stroke();
+    }
+    // what it does placed in a level
+    const badge = p.rate > 0 ? `≈${+p.rate.toFixed(2)}` : p.interval > 0 ? `✶${p.count}` : `·${p.count}`;
+    g.font = `bold ${Math.round(s * 0.24)}px system-ui, sans-serif`;
+    g.textAlign = 'right';
+    g.textBaseline = 'bottom';
+    g.lineWidth = 3 * lw;
+    g.strokeStyle = 'rgba(0,0,0,0.75)';
+    g.strokeText(badge, cx + s / 2 - 1.5 * lw, cy + s / 2 - lw);
+    g.fillStyle = p.rate > 0 ? '#9fe3ff' : p.interval > 0 ? '#ffd27a' : '#c9c2d8';
+    g.fillText(badge, cx + s / 2 - 1.5 * lw, cy + s / 2 - lw);
+    g.restore();
   }
 
   // A few to start a pack with, which the asset pack creator adds to a pack

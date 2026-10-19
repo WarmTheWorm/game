@@ -1071,7 +1071,7 @@ function drawGuides() {
         const C = objClass(glyph, cell.id, cell.v);
         if (!C) continue;
         C.drawGuide(boardCtx, {
-          mode: 'board', r, c, digit: cell.id, blocks: boardBlocks, px: zoom,
+          mode: 'board', r, c, digit: cell.id, blocks: boardBlocks, px: zoom, name: objName(glyph, cell.id, cell.v),
           hasArt: !!atlas.def(objSprite(glyph, cell.id, cell.v)).frame
         });
       }
@@ -2309,7 +2309,7 @@ function drawObjectSwatch(c2, glyph, digit, v) {
   }
   // and what its class shows of itself: a platform's arrow, a stop's marker
   const C = objClass(glyph, digit, v);
-  if (C) C.drawGuide(c2, { mode: 'panel', size: SWATCH, digit, px: 1, hasArt: !!def.frame });
+  if (C) C.drawGuide(c2, { mode: 'panel', size: SWATCH, digit, px: 1, hasArt: !!def.frame, name: objName(glyph, digit, v) });
 }
 
 function drawSwatches() {

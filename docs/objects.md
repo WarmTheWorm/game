@@ -275,8 +275,14 @@ colour over its life. Used two ways:
   particles where that thing went;
 - **placed in a level** — it streams `rate` particles a frame from its spot
   while it is near the screen; with no rate it bursts `count` there every
-  `interval` frames instead (0 shows nothing). The level editor marks it
-  with an orange ✶ when it has no sprite.
+  `interval` frames instead (0 shows nothing).
+
+In the level editor's board and palette each one draws its own symbol from
+its props: a cone the way it throws and as wide as its spread (a ring for
+all round), shaded from its birth colour to its death colour, a few of its
+particles in its shape and sizes, an arrow if gravity pulls them down or
+up, and a badge for what it does placed — `≈rate` if it streams, `✶count`
+if it bursts on its interval, `·count` if it only bursts when named.
 
 Its sprite is optional: without one each particle is drawn as `shape`. The
 asset pack creator shows it running as its preview, and gives a pack with no
@@ -362,7 +368,8 @@ called once per placed thing, and once per palette swatch, after the art:
 | `panel` | a level editor palette swatch | the swatch's own pixels, `view.size` square |
 | `debug` | the game's collision view (▦) | world units |
 
-`view.digit` is its block's digit, `view.blocks(r, c)` says whether a cell
+`view.digit` is its block's digit, `view.name` the object placed (so a class
+can read its props with `propsFor`), `view.blocks(r, c)` says whether a cell
 stops things moving as the game will see it, `view.px` is screen pixels per
 unit (for lines that stay thin) and `view.hasArt` whether its sprite drew
 anything. A platform draws its run and the way it sets off (its run worked

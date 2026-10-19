@@ -36,6 +36,7 @@ class Entity {
   //                       will see it (board)
   //   view.px          screen pixels per unit, for lines that stay 1px thin
   //   view.hasArt      whether its sprite drew anything
+  //   view.name        the object placed (board, panel), for its props
   //
   // The base draws nothing; a class with something to show overrides it.
   static drawGuide(g, view) {}
