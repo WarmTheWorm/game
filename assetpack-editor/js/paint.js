@@ -7,7 +7,8 @@ const PAL = ['#000000', '#1d1b2e', '#3b3a5c', '#6b6f8f', '#a8adc4', '#ffffff', '
              '#ff7a59', '#ffc861', '#fff3a8', '#2e7a3c', '#7fd96a', '#2a5b8a', '#5ec8ff', '#b48cff'];
 const TOOLS = [['pencil', '✎', 'Pencil', 'B'], ['eraser', '⌫', 'Eraser', 'E'], ['fill', '◧', 'Fill', 'G'],
                ['picker', '◉', 'Picker', 'I'], ['line', '╱', 'Line', 'L'], ['rect', '▭', 'Rect', 'R'],
-               ['ellipse', '◯', 'Ellipse', 'C'], ['blur', '◍', 'Blur', 'U'], ['outline', '◌', 'Outline', 'T']];
+               ['ellipse', '◯', 'Ellipse', 'C'], ['blur', '◍', 'Blur', 'U'], ['outline', '◌', 'Outline', 'T'],
+               ['select', '⬚', 'Select', 'S'], ['lasso', '➰', 'Lasso', 'A']];
 
 const P = {
   obj: null, f: null, work: null, w: null, onSave: null,
@@ -76,6 +77,7 @@ function drawPaint() {
   for (const l of P.layers) { pcx.globalAlpha = l.a; pcx.drawImage(l.c, 0, 0, W, H); }
   pcx.globalAlpha = 1;
   pcx.drawImage(P.work, 0, 0, W, H);
+  drawSelection(z);
   if (P.grid && z >= 6) {
     pcx.strokeStyle = 'rgba(255,255,255,.09)';
     pcx.lineWidth = 1;
@@ -84,7 +86,7 @@ function drawPaint() {
     for (let y = 1; y < fh; y++) { pcx.moveTo(0, y * z + 0.5); pcx.lineTo(W, y * z + 0.5); }
     pcx.stroke();
   }
-  if (P.hover && !P.drawing && !['fill', 'picker', 'outline'].includes(P.tool)) {
+  if (P.hover && !P.drawing && !['fill', 'picker', 'outline', 'select', 'lasso'].includes(P.tool)) {
     const s = brushSize(), o = Math.floor((s - 1) / 2);
     pcx.strokeStyle = P.tool === 'blur' ? 'rgba(94,200,255,.95)' : 'rgba(255,181,71,.95)';
     const box = l => pcx.strokeRect(l * z + 0.5, (P.hover.y - o) * z + 0.5, s * z - 1, s * z - 1);
@@ -95,6 +97,9 @@ function drawPaint() {
 
 function loadPaint(f) {
   disarmDel();
+  if (P.work && P.float) dropFloat();
+  if (P.work) flushPaint();
+  P.sel = null; P.float = null; P.selPts = null; P.moving = null;
   P.f = f;
   P.work = blankCanvas(P.obj.fw, P.obj.fh);
   P.w = P.work.getContext('2d', { willReadFrequently: true });
@@ -138,6 +143,234 @@ function flushPaint() {
 }
 function commitPaint() { P.dirty = true; clearTimeout(P.timer); P.timer = setTimeout(flushPaint, 150); }
 function goFrame(f) { flushPaint(); loadPaint(f); }
+
+// ---------- selecting part of a frame ----------
+// Select drags out a rectangle, Lasso draws round a shape; either way the
+// pixels inside are the selection (P.sel, a mask), outlined. Ctrl+C copies
+// them, Ctrl+X cuts them, Delete empties them. Dragging inside the selection
+// lifts its pixels into a floating piece (P.float) that follows the pointer;
+// a copied selection pastes back as one, where it was taken from. A floating
+// piece is set down by Enter, a click outside it, another tool or another
+// frame. Escape lets a selection go and sets a floating piece down.
+const isSelectTool = () => P.tool === 'select' || P.tool === 'lasso';
+const inFrame = (x, y) => x >= 0 && y >= 0 && x < P.obj.fw && y < P.obj.fh;
+const selHas = (x, y) => !!P.sel && inFrame(x, y) && P.sel.mask[y * P.obj.fw + x] === 1;
+const inFloat = (x, y) => !!P.float && x >= P.float.x && y >= P.float.y && x < P.float.x + P.float.c.width && y < P.float.y + P.float.c.height;
+
+// The pixels a rectangle or a drawn outline takes in: those whose middles
+// fall inside it, and those it passes over.
+function maskFrom(points, rect) {
+  const W = P.obj.fw, H = P.obj.fh, mask = new Uint8Array(W * H);
+  if (rect) {
+    const [a, b] = [points[0], points[points.length - 1]];
+    for (let y = Math.max(0, Math.min(a.y, b.y)); y <= Math.min(H - 1, Math.max(a.y, b.y)); y++) {
+      for (let x = Math.max(0, Math.min(a.x, b.x)); x <= Math.min(W - 1, Math.max(a.x, b.x)); x++) mask[y * W + x] = 1;
+    }
+    return mask;
+  }
+  const pts = points.map(q => [q.x + 0.5, q.y + 0.5]);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const px = x + 0.5, py = y + 0.5;
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i], [xj, yj] = pts[j];
+        if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      if (inside) mask[y * W + x] = 1;
+    }
+  }
+  for (let i = 1; i < points.length; i++) {
+    linePx(points[i - 1].x, points[i - 1].y, points[i].x, points[i].y, (x, y) => { if (inFrame(x, y)) mask[y * W + x] = 1; });
+  }
+  if (points.length) { const q = points[0]; if (inFrame(q.x, q.y)) mask[q.y * W + q.x] = 1; }
+  return mask;
+}
+
+// The selected pixels, alone, in the smallest canvas that holds them, and
+// where that canvas sits in the frame. null if nothing is selected.
+function selectedPixels() {
+  if (!P.sel) return null;
+  const W = P.obj.fw, H = P.obj.fh, m = P.sel.mask;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (m[y * W + x]) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  if (x1 < 0) return null;
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  const src = P.w.getImageData(x0, y0, w, h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!m[(y + y0) * W + x + x0]) src.data[(y * w + x) * 4 + 3] = 0;
+  const c = blankCanvas(w, h);
+  c.getContext('2d').putImageData(src, 0, 0);
+  return { c, x: x0, y: y0 };
+}
+
+function clearSelected() {
+  const W = P.obj.fw, H = P.obj.fh, id = P.w.getImageData(0, 0, W, H);
+  for (let k = 0; k < W * H; k++) if (P.sel.mask[k]) id.data[k * 4 + 3] = 0;
+  P.w.putImageData(id, 0, 0);
+}
+
+// Puts a floating piece down, where it is. False if there was none.
+function dropFloat() {
+  if (!P.float) return false;
+  const f = P.float;
+  P.float = null;
+  P.w.drawImage(f.c, f.x, f.y);
+  // what was put down stays selected, so it can be picked up again
+  const W = P.obj.fw, mask = new Uint8Array(W * P.obj.fh);
+  const d = f.c.getContext('2d').getImageData(0, 0, f.c.width, f.c.height).data;
+  for (let y = 0; y < f.c.height; y++) for (let x = 0; x < f.c.width; x++) {
+    if (d[(y * f.c.width + x) * 4 + 3] && inFrame(x + f.x, y + f.y)) mask[(y + f.y) * W + x + f.x] = 1;
+  }
+  P.sel = { mask };
+  commitPaint();
+  drawPaint();
+  return true;
+}
+
+// A piece to place: it floats over the frame until it is set down. The
+// frame is snapshotted first, so one Ctrl+Z takes it all back.
+function floatPiece(c, x, y) {
+  dropFloat();
+  pushUndo();
+  P.sel = null;
+  P.float = { c, x, y };
+  drawPaint();
+}
+
+function copySelection(cut) {
+  const piece = P.float ? { c: P.float.c, x: P.float.x, y: P.float.y } : selectedPixels();
+  if (!piece) return false;
+  pixelClip = cloneCanvas(piece.c);
+  pixelClip.selFrom = { x: piece.x, y: piece.y };    // a part of a frame: it floats back in where it was
+  $('#opPaste').disabled = false;
+  copyToSystem(pixelClip);
+  if (cut) {
+    if (P.float) { P.float = null; commitPaint(); }
+    else { pushUndo(); clearSelected(); commitPaint(); }
+    P.sel = null;
+    drawPaint();
+  }
+  paintMsg(`${cut ? 'Cut' : 'Copied'} ${pixelClip.width}×${pixelClip.height} — Ctrl+V floats it back in, then drag it into place`);
+  return true;
+}
+
+// Fill and Clear with a selection: every selected pixel, joined or not —
+// the colour picked (a right-click, or no opacity, empties them instead).
+function fillSelection(erase) {
+  const W = P.obj.fw, H = P.obj.fh, id = P.w.getImageData(0, 0, W, H);
+  const a = Math.round(P.alpha * 255);
+  const c = (erase || !a) ? [0, 0, 0, 0] : [...hexRgb(P.color), a];
+  pushUndo();
+  for (let k = 0; k < W * H; k++) if (P.sel.mask[k]) for (let n = 0; n < 4; n++) id.data[k * 4 + n] = c[n];
+  P.w.putImageData(id, 0, 0);
+  commitPaint();
+  drawPaint();
+}
+
+function deleteSelection() {
+  if (P.float) { P.float = null; commitPaint(); drawPaint(); return true; }
+  if (!P.sel) return false;
+  pushUndo();
+  clearSelected();
+  P.sel = null;
+  commitPaint();
+  drawPaint();
+  return true;
+}
+
+function selectDown(p) {
+  if (P.float && inFloat(p.x, p.y)) {
+    P.moving = { px: p.x, py: p.y, fx: P.float.x, fy: P.float.y };
+    return;
+  }
+  dropFloat();
+  if (selHas(p.x, p.y)) {
+    // lift the selection off the frame and carry it
+    const piece = selectedPixels();
+    pushUndo();
+    clearSelected();
+    P.sel = null;
+    P.float = piece;
+    P.moving = { px: p.x, py: p.y, fx: piece.x, fy: piece.y };
+    drawPaint();
+    return;
+  }
+  P.sel = null;
+  P.selPts = [p];
+  drawPaint();
+}
+
+function selectMove(p) {
+  if (P.moving) {
+    P.float.x = P.moving.fx + p.x - P.moving.px;
+    P.float.y = P.moving.fy + p.y - P.moving.py;
+  } else if (P.selPts) {
+    const last = P.selPts[P.selPts.length - 1];
+    if (P.tool === 'select') P.selPts = [P.selPts[0], p];
+    else if (last.x !== p.x || last.y !== p.y) P.selPts.push(p);
+  }
+  drawPaint();
+}
+
+function selectUp() {
+  if (P.moving) { P.moving = null; commitPaint(); drawPaint(); return; }
+  if (!P.selPts) return;
+  const pts = P.selPts;
+  P.selPts = null;
+  const mask = maskFrom(pts, P.tool === 'select');
+  P.sel = mask.some(v => v) ? { mask } : null;
+  drawPaint();
+}
+
+// The floating piece, the selection's outline, and the lasso or rectangle
+// being drawn.
+function drawSelection(z) {
+  const W = P.obj.fw;
+  if (P.float) {
+    const f = P.float;
+    pcx.drawImage(f.c, f.x * z, f.y * z, f.c.width * z, f.c.height * z);
+    pcx.save();
+    pcx.setLineDash([4, 3]);
+    pcx.strokeStyle = 'rgba(94,200,255,.95)';
+    pcx.strokeRect(f.x * z + 0.5, f.y * z + 0.5, f.c.width * z - 1, f.c.height * z - 1);
+    pcx.restore();
+  }
+  if (P.sel) {
+    const m = P.sel.mask, H = P.obj.fh;
+    pcx.save();
+    pcx.beginPath();
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!m[y * W + x]) continue;
+      if (!selHas(x, y - 1)) { pcx.moveTo(x * z, y * z + 0.5); pcx.lineTo((x + 1) * z, y * z + 0.5); }
+      if (!selHas(x, y + 1)) { pcx.moveTo(x * z, (y + 1) * z - 0.5); pcx.lineTo((x + 1) * z, (y + 1) * z - 0.5); }
+      if (!selHas(x - 1, y)) { pcx.moveTo(x * z + 0.5, y * z); pcx.lineTo(x * z + 0.5, (y + 1) * z); }
+      if (!selHas(x + 1, y)) { pcx.moveTo((x + 1) * z - 0.5, y * z); pcx.lineTo((x + 1) * z - 0.5, (y + 1) * z); }
+    }
+    pcx.lineWidth = 1;
+    pcx.strokeStyle = '#000';
+    pcx.stroke();
+    pcx.setLineDash([3, 3]);
+    pcx.strokeStyle = '#fff';
+    pcx.stroke();
+    pcx.restore();
+  }
+  if (P.selPts) {
+    pcx.save();
+    pcx.setLineDash([3, 3]);
+    pcx.strokeStyle = '#ffb547';
+    pcx.lineWidth = 1.5;
+    if (P.tool === 'select') {
+      const [a, b] = [P.selPts[0], P.selPts[P.selPts.length - 1]];
+      const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+      pcx.strokeRect(x * z + 0.5, y * z + 0.5, (Math.abs(a.x - b.x) + 1) * z - 1, (Math.abs(a.y - b.y) + 1) * z - 1);
+    } else {
+      pcx.beginPath();
+      P.selPts.forEach((q, i) => (i ? pcx.lineTo : pcx.moveTo).call(pcx, (q.x + 0.5) * z, (q.y + 0.5) * z));
+      pcx.stroke();
+    }
+    pcx.restore();
+  }
+}
 
 // ---------- drawing primitives ----------
 const paintStyle = () => {
@@ -335,8 +568,8 @@ function pickAt(p) {
 
 const snapshot = () => P.w.getImageData(0, 0, P.obj.fw, P.obj.fh);
 function pushUndo() { P.undo.push(snapshot()); if (P.undo.length > 80) P.undo.shift(); P.redo = []; }
-function undo() { if (!P.undo.length) return; P.redo.push(snapshot()); P.w.putImageData(P.undo.pop(), 0, 0); commitPaint(); drawPaint(); }
-function redo() { if (!P.redo.length) return; P.undo.push(snapshot()); P.w.putImageData(P.redo.pop(), 0, 0); commitPaint(); drawPaint(); }
+function undo() { if (!P.undo.length) return; P.float = null; P.sel = null; P.redo.push(snapshot()); P.w.putImageData(P.undo.pop(), 0, 0); commitPaint(); drawPaint(); }
+function redo() { if (!P.redo.length) return; P.float = null; P.sel = null; P.undo.push(snapshot()); P.w.putImageData(P.redo.pop(), 0, 0); commitPaint(); drawPaint(); }
 function transform(fn) {
   pushUndo();
   const t = cloneCanvas(P.work);
@@ -346,7 +579,13 @@ function transform(fn) {
 }
 
 // ---------- paint UI ----------
-function setTool(t) { P.tool = t; $$('.tool').forEach(b => b.classList.toggle('on', b.dataset.t === t)); drawPaint(); }
+function setTool(t) {
+  // a floating piece is set down; the selection stays, for Fill and Clear
+  if (t !== 'select' && t !== 'lasso') dropFloat();
+  P.tool = t;
+  $$('.tool').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  drawPaint();
+}
 function setColor(h) {
   P.color = h;
   $('#ptColor').value = h;
@@ -382,7 +621,11 @@ $('#opUndo').onclick = undo;
 $('#opRedo').onclick = redo;
 $('#opFh').onclick = () => transform(t => { P.w.translate(P.obj.fw, 0); P.w.scale(-1, 1); P.w.drawImage(t, 0, 0); });
 $('#opFv').onclick = () => transform(t => { P.w.translate(0, P.obj.fh); P.w.scale(1, -1); P.w.drawImage(t, 0, 0); });
-$('#opClear').onclick = () => transform(() => {});
+$('#opClear').onclick = () => {
+  if (P.float) { deleteSelection(); return; }
+  if (P.sel) { fillSelection(true); return; }       // just the selected pixels
+  transform(() => {});
+};
 
 // A quarter turn, pixel for pixel, about the frame's middle: a square frame
 // turns exactly; in a wider or taller one the turned art is centred and what
@@ -447,6 +690,8 @@ function copyToSystem(canvas) {
 async function pasteImage(blob) {
   let bmp;
   try { bmp = await createImageBitmap(blob); } catch { paintMsg('The clipboard holds an image this browser cannot read'); return; }
+  // our own selection copy, back from the system clipboard: float it in
+  if (pixelClip && pixelClip.selFrom && bmp.width === pixelClip.width && bmp.height === pixelClip.height) { pastePixels(); return; }
   const { fw, fh } = P.obj;
   const k = Math.min(1, fw / bmp.width, fh / bmp.height);
   const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
@@ -489,6 +734,15 @@ async function pasteFromButton() {
 
 function pastePixels() {
   if (!pixelClip) { paintMsg('Copy a frame first — or an image, anywhere'); return; }
+  if (pixelClip.selFrom) {
+    const { fw, fh } = P.obj;
+    // where it was taken from, kept on the frame if this one is smaller
+    const x = Math.max(0, Math.min(fw - 1, pixelClip.selFrom.x)), y = Math.max(0, Math.min(fh - 1, pixelClip.selFrom.y));
+    if (!isSelectTool()) setTool('select');
+    floatPiece(cloneCanvas(pixelClip), x, y);
+    paintMsg('Pasted — drag it into place, then Enter or click outside it to set it down');
+    return;
+  }
   const { fw, fh } = P.obj;
   const x = Math.round((fw - pixelClip.width) / 2), y = Math.round((fh - pixelClip.height) / 2);
   transform(() => P.w.drawImage(pixelClip, x, y));
@@ -557,7 +811,9 @@ pc.addEventListener('pointerdown', e => {
   pc.setPointerCapture(e.pointerId);
   const p = toPx(e);
   P.erase = P.tool === 'eraser' || e.button === 2;
+  if (isSelectTool() && e.button === 0) { selectDown(p); return; }
   if (P.tool === 'picker' || e.altKey) { pickAt(p); return; }
+  if (P.tool === 'fill' && P.sel) { fillSelection(P.erase); return; }
   if (P.tool === 'fill') { pushUndo(); if (flood(p.x, p.y)) commitPaint(); else P.undo.pop(); drawPaint(); return; }
   if (P.tool === 'outline') { pushUndo(); if (outlineAt(p.x, p.y)) commitPaint(); else P.undo.pop(); drawPaint(); return; }
   pushUndo();
@@ -569,13 +825,17 @@ pc.addEventListener('pointerdown', e => {
 pc.addEventListener('pointermove', e => {
   const p = toPx(e);
   P.hover = p;
+  if (P.moving || P.selPts) { selectMove(p); return; }
   if (P.drawing) {
     if (['line', 'rect', 'ellipse'].includes(P.tool)) shape(p, e.shiftKey);
     else { linePx(P.last.x, P.last.y, p.x, p.y, dab); P.last = p; }
   }
   drawPaint();
 });
-const endStroke = () => { if (P.drawing) { P.drawing = false; commitPaint(); drawPaint(); } };
+const endStroke = () => {
+  if (P.moving || P.selPts) { selectUp(); return; }
+  if (P.drawing) { P.drawing = false; commitPaint(); drawPaint(); }
+};
 pc.addEventListener('pointerup', endStroke);
 pc.addEventListener('pointercancel', endStroke);
 pc.addEventListener('pointerleave', () => { if (!P.drawing) { P.hover = null; drawPaint(); } });
@@ -587,11 +847,15 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey) {
     if (c === 'KeyZ') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (c === 'KeyY') { e.preventDefault(); redo(); }
-    else if (c === 'KeyC') { e.preventDefault(); copyPixels(); }
+    else if (c === 'KeyC') { e.preventDefault(); if (!copySelection(false)) copyPixels(); }
+    else if (c === 'KeyX') { e.preventDefault(); if (!copySelection(true)) paintMsg('Select part of the frame first — Select (S) or Lasso (A)'); }
     // Ctrl+V is left to the browser, which fires 'paste' with the clipboard
     return;
   }
-  const tk = { KeyB: 'pencil', KeyE: 'eraser', KeyG: 'fill', KeyI: 'picker', KeyL: 'line', KeyR: 'rect', KeyC: 'ellipse', KeyU: 'blur', KeyT: 'outline' }[c];
+  if ((e.key === 'Delete' || e.key === 'Backspace') && (P.sel || P.float)) { e.preventDefault(); deleteSelection(); return; }
+  if (e.key === 'Enter' && P.float) { e.preventDefault(); dropFloat(); return; }
+  if (e.key === 'Escape' && (P.sel || P.float)) { e.preventDefault(); e.stopPropagation(); dropFloat(); P.sel = null; drawPaint(); return; }
+  const tk = { KeyB: 'pencil', KeyE: 'eraser', KeyG: 'fill', KeyI: 'picker', KeyL: 'line', KeyR: 'rect', KeyC: 'ellipse', KeyU: 'blur', KeyT: 'outline', KeyS: 'select', KeyA: 'lasso' }[c];
   if (tk) { setTool(tk); return; }
   if (c === 'KeyM') $('#ptMirror').click();
   else if (c === 'KeyO') $('#onOn').click();
