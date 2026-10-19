@@ -131,7 +131,9 @@ function renderGoForm() {
     ${problems.length || clash.length ? `<ul class="hint probs">${[
       ...problems, ...clash.map(([code, names]) => `${code} is also ${names.filter(n => n !== o.name).join(', ')}'s code.`)
     ].map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
-    <div class="row gap" style="margin-top:12px"><button class="btn sm danger" data-g="delete">Delete this object</button></div>`;
+    <div class="row gap" style="margin-top:12px">
+      ${C && C.editor.player ? '' : `<button class="btn sm" data-g="duplicate" title="A copy of this object, with all its property values, under a new name and the next free code">⧉ Duplicate</button>`}
+      <button class="btn sm danger" data-g="delete">Delete this object</button></div>`;
   paintIcons(box);
   drawGoPreview();
 }
@@ -435,6 +437,21 @@ $('#goForm').addEventListener('click', e => {
   const play = e.target.closest('[data-play]');
   if (play) { sound.play(o.props[play.dataset.play]); return; }
   const g = e.target.dataset.g;
+  if (g === 'duplicate') {
+    // coin → coin2, or the next number free; coin2 → coin3
+    const stem = o.name.replace(/\d+$/, '');
+    let n = 2, name;
+    do name = stem + n++; while (objectByName(name));
+    markUndo();
+    const copy = { id: uid(), name, cls: o.cls, code: [], props: JSON.parse(JSON.stringify(o.props)) };
+    setVariant(copy, freeVariant(copy.cls, copy));
+    pack.objects.splice(pack.objects.indexOf(o) + 1, 0, copy);
+    currentObj = copy;
+    renderGameObjects();
+    savePack();
+    toast(`Made ${name}, a copy of ${o.name}${copy.code.length ? ' — its code is ' + copy.code.join(' ') : ''}`);
+    return;
+  }
   if (g === 'delete') {
     markUndo();
     const at = pack.objects.indexOf(o);
