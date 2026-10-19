@@ -5408,8 +5408,8 @@ class ParticleSystem extends Entity {
   // Its symbol where a level is built: a snapshot of it in the middle of a
   // run — a burst some way through its life, a stream once it has filled
   // out — never drawn larger than the game would. On the board it may spread
-  // over the 3x3 blocks round its cell (GUIDE_SPAN), its own cell darkened
-  // under it; a palette swatch fits it into the swatch. Each run is seeded,
+  // over the 3x3 blocks round its cell (GUIDE_SPAN), over whatever is
+  // there; a palette swatch fits it into the swatch. Each run is seeded,
   // so the picture holds still, and kept until the object's props change.
   static drawGuide(g, view) {
     if (view.mode === 'debug') return;
@@ -5418,12 +5418,7 @@ class ParticleSystem extends Entity {
     const s = panel ? view.size : TILE;
     const unit = panel ? view.size / TILE : 1;                 // game units to what is drawn on
     const cx = panel ? s / 2 : (view.c + 0.5) * TILE, cy = panel ? s / 2 : (view.r + 0.5) * TILE;
-    const lw = 1 / (view.px || 1);
     g.save();
-    if (!view.hasArt) {
-      g.fillStyle = 'rgba(14,12,24,0.7)';
-      g.fillRect(cx - s / 2 + lw, cy - s / 2 + lw, s - 2 * lw, s - 2 * lw);
-    }
     const span = panel ? s : TILE * GUIDE_SPAN;                  // the square it may fill
     g.beginPath();
     g.rect(cx - span / 2, cy - span / 2, span, span);
