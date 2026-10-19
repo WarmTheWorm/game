@@ -116,12 +116,23 @@ function setPitch(l, k, hz) {
 }
 
 // ---------- the sound list ----------
+// Shown as one list, or grouped by kind (js/listview.js): synths made here,
+// recorded clips, music tracks.
+const SOUND_KINDS = ['synth', 'clip', 'track'];
+const SOUND_KIND_LABEL = { synth: 'Synth', clip: 'Clip', track: 'Track' };
+const sndListView = listView('assetEditorSounds', '#sndView', '#sndList', () => renderSoundList());
+
 function renderSoundList() {
   const ids = Object.keys(pack.sounds.defs).sort();
-  $('#sndList').innerHTML = ids.map(id => {
-    const k = defKind(pack.sounds.defs[id]);
-    return `<button class="item ${id === sndSel ? 'on' : ''}" data-sid="${esc(id)}"><b>${esc(id)}</b><small>${k}</small></button>`;
-  }).join('') || '<p class="empty">No sounds yet.</p>';
+  const kindOf = id => defKind(pack.sounds.defs[id]);
+  sndListView.render(ids, {
+    group: kindOf,
+    order: k => SOUND_KINDS.indexOf(k),
+    label: k => SOUND_KIND_LABEL[k] || k,
+    picked: sndSel && pack.sounds.defs[sndSel] ? sndSel : null,
+    empty: 'No sounds yet.',
+    item: (id, grouped) => `<button class="item ${id === sndSel ? 'on' : ''}" data-sid="${esc(id)}"><b>${esc(id)}</b>${grouped ? '' : `<small>${kindOf(id)}</small>`}</button>`
+  });
 }
 
 function renderSounds() {

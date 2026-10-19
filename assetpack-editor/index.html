@@ -87,7 +87,7 @@
   <aside class="rail">
     <div class="panel">
       <div class="ph"><h2>Objects</h2><button class="btn sm" id="goAdd">+ New</button></div>
-      <div class="seg goview" id="goView" role="group" aria-label="Show the objects">
+      <div class="seg listview" id="goView" role="group" aria-label="Show the objects">
         <button type="button" data-view="list" title="Every object in one list">☰ List</button>
         <button type="button" data-view="class" title="Grouped by class, each group opened and closed on its own">▤ By class</button>
       </div>
@@ -153,6 +153,10 @@
   <aside class="rail">
     <div class="panel">
       <div class="ph"><h2>Sounds</h2><span class="grow"></span><button class="btn sm" id="sndAdd">+ New</button></div>
+      <div class="seg listview" id="sndView" role="group" aria-label="Show the sounds">
+        <button type="button" data-view="list" title="Every sound in one list">☰ List</button>
+        <button type="button" data-view="kind" title="Grouped by kind — synth, clip, track — each group opened and closed on its own">▤ By type</button>
+      </div>
       <div class="list" id="sndList"></div>
     </div>
     <div class="panel">
@@ -300,6 +304,7 @@
 <script src="../src/js/packstore.js"></script>
 <script>packStore.boot();</script>
 <script src="js/util.js"></script>
+<script src="js/listview.js"></script>
 <!-- the game's own classes: what an object can be, and the properties each
      reads. Loaded for their declarations only; nothing here runs the game. -->
 <script src="../src/js/entity.js"></script>
