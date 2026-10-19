@@ -5404,82 +5404,71 @@ class ParticleSystem extends Entity {
   static spriteOptional = true;
   static marker = { colour: '#ffb347', letter: '✶' };   // so the editor puts no stand-in under its symbol
 
-  // Its symbol where a level is built, drawn from its own props so each
-  // system reads apart at a glance: a cone the way it throws and as wide as
-  // its spread (a ring for all round), shaded from its birth colour to its
-  // death colour, a few particles in it in its own shape, colours and sizes,
-  // an arrow if gravity pulls them, and what it does placed — ≈ and its rate
-  // if it streams, ✶ and its count if it bursts.
+  // Its symbol where a level is built: a snapshot of it in the middle of a
+  // run — a burst some way through its life, a stream once it has filled
+  // out — over a dark square, fitted into the cell (never drawn larger than
+  // the game would). Each run is seeded, so the picture holds still, and
+  // kept until the object's props change.
   static drawGuide(g, view) {
     if (view.mode === 'debug') return;
-    const p = this.propsFor(view.name);
+    const shot = this.snapshot(view.name);
     const panel = view.mode === 'panel';
-    const s = panel ? view.size : TILE;                         // the cell, in what is drawn on
-    const k = panel ? view.size / TILE : 1;                     // game units to that
+    const s = panel ? view.size : TILE;
+    const unit = panel ? view.size / TILE : 1;                 // game units to what is drawn on
     const cx = panel ? s / 2 : (view.c + 0.5) * TILE, cy = panel ? s / 2 : (view.r + 0.5) * TILE;
     const lw = 1 / (view.px || 1);
-    const rgb0 = particleRgb(p.colorStart), rgb1 = particleRgb(p.colorEnd);
-    const col = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-    const mix = t => rgb0.map((v, i) => Math.round(v + (rgb1[i] - v) * t));
-    const a = p.angle * Math.PI / 180, spread = Math.min(360, Math.max(0, p.spread)) * Math.PI / 180;
-    const R = s * 0.44;
     g.save();
     if (!view.hasArt) {
-      g.fillStyle = 'rgba(20,16,32,0.55)';
+      g.fillStyle = 'rgba(14,12,24,0.7)';
       g.fillRect(cx - s / 2 + lw, cy - s / 2 + lw, s - 2 * lw, s - 2 * lw);
     }
-    // the cone
-    const grad = g.createRadialGradient(cx, cy, 0, cx, cy, R);
-    grad.addColorStop(0, col(rgb0, 0.55));
-    grad.addColorStop(1, col(rgb1, 0.12));
-    g.fillStyle = grad;
-    g.strokeStyle = col(rgb0, 0.9);
-    g.lineWidth = 1.2 * lw;
     g.beginPath();
-    if (spread >= Math.PI * 2 - 1e-3) g.arc(cx, cy, R, 0, Math.PI * 2);
-    else { g.moveTo(cx, cy); g.arc(cx, cy, R, a - spread / 2, a + spread / 2); g.closePath(); }
-    g.fill();
-    g.stroke();
-    // a few of its particles, always the same ones, at their real size
-    const shown = 6;
-    for (let i = 0; i < shown; i++) {
-      const t = (i * 0.61803) % 1;                             // how far out, so how old
-      const ang = a + ((i + 0.5) / shown - 0.5) * Math.min(spread, Math.PI * 2 - 0.3);
-      const d = R * (0.25 + 0.7 * t);
-      const x = cx + Math.cos(ang) * d, y = cy + Math.sin(ang) * d;
-      const size = Math.max(1.2 * lw, (p.sizeStart + (p.sizeEnd - p.sizeStart) * t) * k);
-      const c = mix(t);
-      g.fillStyle = g.strokeStyle = col(c, p.fade ? 1 - t * 0.6 : 1);
-      if (p.shape === 'square') g.fillRect(x - size / 2, y - size / 2, size, size);
-      else if (p.shape === 'spark') {
-        g.lineWidth = Math.max(lw, size / 2);
-        g.beginPath();
-        g.moveTo(x - Math.cos(ang) * size * 1.5, y - Math.sin(ang) * size * 1.5);
-        g.lineTo(x + Math.cos(ang) * size, y + Math.sin(ang) * size);
-        g.stroke();
-      } else { g.beginPath(); g.arc(x, y, size / 2, 0, Math.PI * 2); g.fill(); }
-    }
-    // gravity: an arrow at its side, down if they fall, up if they rise
-    if (Math.abs(p.gravity) > 0.005) {
-      const up = p.gravity < 0, gx = cx - s * 0.38, h = s * 0.16;
-      const y0 = cy + (up ? h : -h), y1 = cy + (up ? -h : h);
-      g.strokeStyle = g.fillStyle = 'rgba(255,255,255,0.75)';
-      g.lineWidth = 1.5 * lw;
-      g.beginPath(); g.moveTo(gx, y0); g.lineTo(gx, y1); g.stroke();
-      const hd = s * 0.06 * (up ? -1 : 1);
-      g.beginPath(); g.moveTo(gx - Math.abs(hd), y1 - hd); g.lineTo(gx, y1); g.lineTo(gx + Math.abs(hd), y1 - hd); g.stroke();
-    }
-    // what it does placed in a level
-    const badge = p.rate > 0 ? `≈${+p.rate.toFixed(2)}` : p.interval > 0 ? `✶${p.count}` : `·${p.count}`;
-    g.font = `bold ${Math.round(s * 0.24)}px system-ui, sans-serif`;
-    g.textAlign = 'right';
-    g.textBaseline = 'bottom';
-    g.lineWidth = 3 * lw;
-    g.strokeStyle = 'rgba(0,0,0,0.75)';
-    g.strokeText(badge, cx + s / 2 - 1.5 * lw, cy + s / 2 - lw);
-    g.fillStyle = p.rate > 0 ? '#9fe3ff' : p.interval > 0 ? '#ffd27a' : '#c9c2d8';
-    g.fillText(badge, cx + s / 2 - 1.5 * lw, cy + s / 2 - lw);
+    g.rect(cx - s / 2, cy - s / 2, s, s);
+    g.clip();
+    const k = Math.min(1, (TILE * 0.46) / shot.reach) * unit;
+    g.translate(cx, cy);
+    g.scale(k, k);
+    g.translate(-shot.cloud.x, -shot.cloud.y);
+    const art = shot.art;
+    const least = 2 / (k * (panel ? 1 : view.px || 1));          // 2 screen pixels
+    const paint = () => shot.cloud.paint(g, art && { size: art.size, draw: () => atlas.draw(art.name, 0, 0, 0) }, least);
+    // a sprite is drawn by the atlas, onto whatever the page's ctx is
+    if (art && typeof withCtx === 'function') withCtx(g, paint); else shot.cloud.paint(g, null, least);
     g.restore();
+  }
+
+  static snapshot(name) {
+    const props = this.propsFor(name);
+    const key = JSON.stringify(props);
+    const cache = this.shots || (this.shots = new Map());
+    const had = cache.get(name);
+    if (had && had.key === key) return had;
+    // a small seeded generator (mulberry32), the same pictures every time
+    let seed = 0x9e3779b9;
+    const rand = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const cloud = new ParticleCloud(props, 0, 0, rand);
+    if (props.rate > 0) {
+      // long enough that what it throws has filled out its path
+      for (let i = 0; i < Math.min(600, props.life * (1 + props.lifeJitter)); i++) { cloud.stream(); cloud.step(); }
+    } else {
+      cloud.emit(props.count);
+      for (let i = 0; i < Math.round(props.life * 0.4); i++) cloud.step();
+    }
+    // how far from where it stands the farthest particle reaches
+    let reach = 4;
+    for (const q of cloud.parts) reach = Math.max(reach, Math.abs(q.x), Math.abs(q.y));
+    reach += Math.max(props.sizeStart, props.sizeEnd) / 2;
+    const sprite = refName(props.sprite);
+    const d = sprite && atlas.def(sprite);
+    const art = d && d.frame ? { name: sprite, size: Math.max(...atlas.size(sprite)) } : null;
+    const shot = { key, cloud, reach, art };
+    cache.set(name, shot);
+    return shot;
   }
 
   // A few to start a pack with, which the asset pack creator adds to a pack
@@ -5545,7 +5534,10 @@ class ParticleSystem extends Entity {
 // Kept apart from the class so the asset pack creator can run one for its
 // preview, with no level round it.
 class ParticleCloud {
-  constructor(props, x, y) {
+  // `rand` is where its randomness comes from: Math.random in play, a seeded
+  // one for a snapshot that must come out the same every time it is drawn.
+  constructor(props, x, y, rand = Math.random) {
+    this.rand = rand;
     this.props = props;
     this.x = x;
     this.y = y;
@@ -5562,10 +5554,10 @@ class ParticleCloud {
     const p = this.props;
     const dir = p.angle * Math.PI / 180, spread = p.spread * Math.PI / 180;
     for (let i = 0; i < n && this.parts.length < PARTICLE_CAP; i++) {
-      const a = dir + (Math.random() - 0.5) * spread;
-      const v = p.speed * (1 + (Math.random() * 2 - 1) * p.speedJitter);
-      const r = p.radius * Math.sqrt(Math.random()), ra = Math.random() * Math.PI * 2;
-      const life = Math.max(1, Math.round(p.life * (1 + (Math.random() * 2 - 1) * p.lifeJitter)));
+      const a = dir + (this.rand() - 0.5) * spread;
+      const v = p.speed * (1 + (this.rand() * 2 - 1) * p.speedJitter);
+      const r = p.radius * Math.sqrt(this.rand()), ra = this.rand() * Math.PI * 2;
+      const life = Math.max(1, Math.round(p.life * (1 + (this.rand() * 2 - 1) * p.lifeJitter)));
       this.parts.push({ x: this.x + Math.cos(ra) * r, y: this.y + Math.sin(ra) * r,
                         vx: Math.cos(a) * v, vy: Math.sin(a) * v, age: 0, life });
     }
@@ -5606,15 +5598,17 @@ class ParticleCloud {
   }
 
   // On g, in its units. `art`, when the system wears a sprite, is
-  // { size: its longer side, draw(g): the frame centred on 0, 0 }.
-  paint(g, art) {
+  // { size: its longer side, draw(g): the frame centred on 0, 0 }; no
+  // particle is drawn smaller than `minSize`, for a picture shrunk to fit.
+  paint(g, art, minSize = 0) {
     const p = this.props, [r0, g0, b0] = this.rgbStart, [r1, g1, b1] = this.rgbEnd;
     g.save();
     if (p.glow) g.globalCompositeOperation = 'lighter';
     for (const q of this.parts) {
       const t = q.age / q.life;
-      const size = p.sizeStart + (p.sizeEnd - p.sizeStart) * t;
+      let size = p.sizeStart + (p.sizeEnd - p.sizeStart) * t;
       if (size <= 0) continue;
+      size = Math.max(size, minSize);
       g.globalAlpha = p.fade ? 1 - t : 1;
       if (art) {
         const k = size / art.size;

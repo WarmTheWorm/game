@@ -277,12 +277,11 @@ colour over its life. Used two ways:
   while it is near the screen; with no rate it bursts `count` there every
   `interval` frames instead (0 shows nothing).
 
-In the level editor's board and palette each one draws its own symbol from
-its props: a cone the way it throws and as wide as its spread (a ring for
-all round), shaded from its birth colour to its death colour, a few of its
-particles in its shape and sizes, an arrow if gravity pulls them down or
-up, and a badge for what it does placed — `≈rate` if it streams, `✶count`
-if it bursts on its interval, `·count` if it only bursts when named.
+In the level editor's board and palette each one shows a still of itself
+in the middle of a run — a burst some way through its life, a stream once it
+has filled out — fitted into its cell over a dark square. The run is seeded,
+so the picture holds still, and is made again when the object's props
+change.
 
 Its sprite is optional: without one each particle is drawn as `shape`. The
 asset pack creator shows it running as its preview, and gives a pack with no
