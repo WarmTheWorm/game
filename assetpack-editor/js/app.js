@@ -133,9 +133,9 @@ $('#deleteBtn').onclick = async () => {
   toast(unsaved ? `Deleted ${name}` : `Removed ${name} from this browser`);
 };
 
-// What Import's empty pack starts from: a pack on disk, as small as a pack
-// can be. Its __name__ keeps it out of assetpacks/index.json.
-const EMPTY_PACK = '/assetpacks/__EmptyPack__/';
+// What Import's empty pack starts from: a zipped pack on disk, as small as a
+// pack can be. Its __name__ keeps it out of assetpacks/index.json.
+const EMPTY_PACK = '/assetpacks/__EmptyPack__.zip';
 
 // The packs there are to read, as assetpacks/index.json lists them: a
 // folder, or a .zip ("dir": "/assetpacks/mine.zip") — not the copies Open in
@@ -184,9 +184,9 @@ $('#importBtn').onclick = async () => {
     let next;
     if (got.pick === COPY) next = structuredClone(pack);
     else {
-      // the empty pack is a folder too — a tile sheet and the worm, the least
-      // a level can be built with — or, if it can't be read, nothing at all
-      try { next = await importPack(EMPTY_PACK); }
+      // the empty pack is a zip on disk — a tile sheet and the worm, the
+      // least a level can be built with — or, if it can't be read, nothing
+      try { next = await importPack(await fetchZip(EMPTY_PACK)); }
       catch (err) { next = newPack(); toast('Could not read ' + EMPTY_PACK + ' — starting from nothing: ' + err.message, true); }
     }
     await flushPack();

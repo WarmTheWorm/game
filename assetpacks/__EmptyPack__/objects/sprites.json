@@ -1,8 +1,0 @@
-{
-  "texture": "objects.png",
-  "sprites": {
-    "cloud": {"frame":{"x":0,"y":149,"w":400,"h":201},"frames":1,"scale":0.5,"anchor":[100,50]},
-    "flag": {"frame":{"x":0,"y":0,"w":84,"h":104},"frames":6,"fps":3,"scale":0.5,"anchor":[20.5,30.5],"mask":6,"collision":{"shape":"circle","x":20.5,"y":30.5,"r":14}},
-    "worm": {"frame":{"x":0,"y":104,"w":52,"h":45},"frames":8,"scale":0.5,"anchor":[11,11],"parts":{"body":[0,4],"headLeft":6,"headRight":7,"tail":5},"collision":{"shape":"circle","x":11,"y":11,"r":11}}
-  }
-}

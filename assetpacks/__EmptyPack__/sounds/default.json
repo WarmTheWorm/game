@@ -1,4 +1,0 @@
-{
-  "_comment": "Every noise the game can make, by id. A def is either a list of layers or a recorded file. A layer is an oscillator (wave, sweep, gain, attack, decay, delay) or a burst of noise (noise: gain, decay, and from/to for the lowpass that closes over it). A recorded file names src, with loop true for a track. `shake` is how long the phone buzzes with it.",
-  "sounds": {}
-}

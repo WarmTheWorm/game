@@ -5,7 +5,7 @@
 // browser beside them). Run by `npm run build`; run it alone after adding or
 // removing a pack folder.
 //
-// A folder named __Like_This__ is the tools' own — __EmptyPack__ is what the
+// A folder named __Like_This__ is the tools' own — __EmptyPack__.zip is what the
 // creator's Import starts an empty pack from — and is not listed.
 //
 //   [{ "name": "garden", "dir": "/assetpacks/garden/", "title": "garden" },
