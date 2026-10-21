@@ -50,6 +50,13 @@ input[type=checkbox]{accent-color:var(--amber);width:auto}
 .namebox{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:3px 10px;font-family:var(--mono)}
 .namebox span{color:var(--muted);font-size:12px}
 .namebox input{background:transparent;border:0;color:var(--amber);width:16ch;padding:2px 0}
+/* no pack open: only Import is left */
+.nopack{display:none;max-width:460px;margin:12vh auto;text-align:center;padding:28px;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.nopack h2{margin:0 0 6px;font-size:18px}
+.nopack .btn{margin-top:16px}
+body.no-pack .nopack{display:block}
+body.no-pack #tabs,body.no-pack main.page{display:none!important}
 .packpick select{background:transparent;border:0;color:var(--fg);font-family:var(--mono);padding:2px 0;max-width:22ch;cursor:pointer}
 .packpick select option{background:var(--panel);color:var(--fg)}
 .tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:57px;z-index:4}

@@ -21,6 +21,13 @@
   <button class="btn" id="levelBtn" title="Open the level editor on this pack as it stands now">Open in level editor ↗</button>
 </header>
 
+<!-- shown instead of everything else while the browser keeps no pack -->
+<section class="nopack" id="noPack">
+  <h2>No packs in this browser</h2>
+  <p class="hint">Import one to start: a .zip, a folder in assetpacks/, or an empty pack.</p>
+  <button class="btn primary" id="noPackImport">Import…</button>
+</section>
+
 <nav class="tabs" id="tabs">
   <button class="tab on" data-tab="gameobjects">Objects</button>
   <button class="tab" data-tab="tiles">Tiles</button>

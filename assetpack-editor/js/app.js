@@ -46,6 +46,11 @@ async function renderPackPicker() {
   if (!sel || !pack) return;
   let list = [];
   try { list = await dbList(); } catch { /* just the open one, then */ }
+  if (noPack) {
+    sel.innerHTML = '<option>— no packs —</option>';
+    refreshTabWarnings();
+    return;
+  }
   if (!list.some(x => x.id === pack.id)) list = [...list, { id: pack.id }];
   list = list.map(x => x.id === pack.id ? { ...x, name: pack.name, dirty: pack.dirty } : x)
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -64,6 +69,30 @@ async function renderPackPicker() {
     : `Remove ${pack.name} from this browser — nothing in it is lost, it was all exported or imported`;
 }
 
+// With no pack in the browser there is nothing to show or change: the tabs
+// go, every control but Import is off, and Import is all there is to do. The
+// pack held meanwhile is a blank stand-in, never saved (storageLocked).
+let noPack = false;
+const PACK_CONTROLS = ['#packPick', '#packName', '#exportBtn', '#deleteBtn', '#levelBtn', '#undoBtn', '#redoBtn'];
+
+function setNoPack(on) {
+  noPack = on;
+  document.body.classList.toggle('no-pack', on);
+  for (const sel of PACK_CONTROLS) $(sel).disabled = on;
+  if (!on) refreshHistory();       // undo and redo say for themselves
+}
+
+function enterNoPack() {
+  clearTimeout(saveTimer);
+  pack = newPack();
+  storageLocked = true;
+  forgetOpenPack();
+  setNoPack(true);
+  renderPackPicker();
+}
+
+$('#noPackImport').onclick = () => $('#importBtn').click();
+
 // Everything that belongs to the pack that was open is let go of.
 function forgetOpenPack() {
   current = null;
@@ -78,6 +107,7 @@ async function showPack(next, { clean = false } = {}) {
   pack = next;
   forgetOpenPack();
   storageLocked = false;
+  setNoPack(false);
   sndSel = Object.keys(pack.sounds.defs)[0] || null;
   await boot(true);
   // read straight from a file, it matches that file, whatever boot tidied
@@ -103,7 +133,7 @@ $('#packPick').addEventListener('change', e => openPack(e.target.value));
 // A name no pack here has yet: garden -> garden 2.
 async function freePackName(base) {
   const names = new Set((await dbList().catch(() => [])).map(x => x.name));
-  if (pack) names.add(pack.name);
+  if (pack && !noPack) names.add(pack.name);     // not the stand-in held while there is none
   if (!names.has(base)) return base;
   let n = 2;
   while (names.has(`${base} ${n}`)) n++;
@@ -126,10 +156,12 @@ $('#deleteBtn').onclick = async () => {
   clearTimeout(saveTimer);
   while (saving) await saving;
   try { await dbDelete(id); } catch (err) { toast(`Could not ${unsaved ? 'delete' : 'remove'} it: ` + err.message, true); return; }
-  // the most recently changed of what is left, or a new empty one
+  // the most recently changed of what is left — or, with none left, nothing
+  // but Import
   const left = (await dbList().catch(() => [])).sort((a, b) => b.updated - a.updated);
   const next = left.length ? await dbLoad(left[0].id).catch(() => null) : null;
-  await showPack(next || Object.assign(newPack(), { name: await freePackName('My Pack') }));
+  if (next) await showPack(next);
+  else enterNoPack();
   toast(unsaved ? `Deleted ${name}` : `Removed ${name} from this browser`);
 };
 
@@ -172,7 +204,7 @@ $('#importBtn').onclick = async () => {
     EMPTY = 'An empty pack', OTHER = 'Another folder or .zip…';
   const list = await packFolders();
   const got = await ask('Add a pack', [
-    { key: 'pick', label: 'From', type: 'select', options: [ZIP, ...list.map(p => p.label), COPY, EMPTY, OTHER], value: ZIP },
+    { key: 'pick', label: 'From', type: 'select', options: [ZIP, ...list.map(p => p.label), ...(noPack ? [] : [COPY]), EMPTY, OTHER], value: ZIP },
     { key: 'dir', label: `Folder or .zip, for ${OTHER}`, value: '' },
     { type: 'note', label: 'It is added to the packs in this browser; the one open now is kept.' }
   ], 'Add it');
@@ -287,7 +319,8 @@ async function boot(already) {
     pack = saved && (saved.sprites || saved.objects) ? saved : newPack();
     if (!pack.id) pack.id = uid();
     sndSel = Object.keys(pack.sounds.defs)[0] || null;
-    if (!saved && !storageLocked) { writePack(); dbSetOpen(pack.id).catch(() => {}); }
+    // none kept here: only Import, until one is
+    if (!saved && !storageLocked) { storageLocked = true; setNoPack(true); }
     renderPackPicker();
   }
   // packs from before sprites and objects were apart, or before glows were
