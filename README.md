@@ -136,15 +136,15 @@ it back as a zip to unzip into `assetpacks/`.
   and looping music.
 - **Packs in the browser** — every pack is kept in the browser (IndexedDB),
   and the **pack** picker at the top opens one; a `*` after a name means it
-  has changed since it was last exported. **+ New** makes a pack — empty, from the basic pack (garden), or a copy of
-  the one open —
-  **Import…** adds one — from a `.zip`, or from an `assetpacks/<name>/` folder,
-  its atlas sliced back into per-object frames — offering to replace a pack of
-  the same name or keep both, and **⬇ Export .zip** asks where to save the open
-  one as `<name>.zip` (a browser without a Save dialog downloads it). A pack without a `*` has nothing that isn't in a file
-  somewhere, so its button says **Remove** and takes it out of the browser at
-  once; a pack with a `*` says **Delete**, in red, and asks first, since its
-  unexported changes go with it.
+  has changed since it was last exported. **Import…** adds a pack: from a
+  `.zip`, from an `assetpacks/<name>/` folder (garden is the basic one) — its
+  atlas sliced back into per-object frames, offering to replace a pack of the
+  same name or keep both — as a copy of the pack open, or empty.
+  **⬇ Export .zip** asks where to save the open one as `<name>.zip` (a
+  browser without a Save dialog downloads it). A pack without a `*` has
+  nothing that isn't in a file somewhere, so its button says **Remove** and
+  takes it out of the browser at once; a pack with a `*` says **Delete**, in
+  red, and asks first, since its unexported changes go with it.
 
 On export it packs every object's frames into one `objects.png` and writes the
 manifest, reproducing `tools/gen/pack-objects.ps1` exactly: the same atlas, to

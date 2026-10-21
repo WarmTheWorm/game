@@ -109,36 +109,6 @@ async function freePackName(base) {
   return `${base} ${n}`;
 }
 
-// A new pack starts empty, as the basic pack (assetpacks/garden: tiles,
-// sprites, objects and sounds to change), or as a copy of the one open. It is
-// kept beside the others, and the one open now is kept as it is.
-const BASIC_PACK = '/assetpacks/garden/';
-
-$('#newBtn').onclick = async () => {
-  const was = pack.name;
-  const EMPTY = 'An empty pack', BASIC = 'The basic pack (garden)', COPY = `A copy of ${was}`;
-  const got = await ask('A new pack', [
-    { key: 'from', label: 'Start from', type: 'select', options: [EMPTY, BASIC, COPY], value: EMPTY },
-    { key: 'name', label: 'Name', value: await freePackName('My Pack') },
-    { type: 'note', label: 'It is kept in this browser beside the others; the one open now is kept as it is.' }
-  ], 'Make it');
-  if (!got) return;
-  await flushPack();
-  let next;
-  if (got.from === BASIC) {
-    toast('Reading the basic pack…');
-    try { next = await importPack(BASIC_PACK); }
-    catch (err) { toast('Could not read the basic pack: ' + err.message, true); return; }
-  } else if (got.from === COPY) {
-    next = structuredClone(pack);
-  } else next = newPack();
-  // its own pack from here on: never exported, from nowhere
-  Object.assign(next, { id: uid(), dirty: true, origin: '', exported: false });
-  next.name = (got.name || '').trim() || await freePackName('My Pack');
-  await showPack(next);
-  toast(`Made ${next.name}${got.from === EMPTY ? '' : ', from ' + (got.from === COPY ? was : 'the basic pack')}`);
-};
-
 // Remove (no *) takes the pack out at once; Delete (a *) asks first, since
 // what was never exported goes with it. The copy Open in level editor saved
 // is left either way.
@@ -162,36 +132,44 @@ $('#deleteBtn').onclick = async () => {
   toast(unsaved ? `Deleted ${name}` : `Removed ${name} from this browser`);
 };
 
-// The packs there are to read: the ones kept in this browser (the pack store,
-// src/js/packstore.js — what Open in level editor saves), newest first, then
-// the folders in assetpacks/ as assetpacks/index.json lists them. Each is
-// { name, dir, label }; null if there are none to offer.
-async function knownPacks() {
-  const out = [];
-  try {
-    if (await packStore.ready()) {
-      for (const p of await packStore.list('assets')) out.push({ name: p.name, dir: packStore.url('assets', p.name), label: `${p.title} — saved in this browser` });
-    }
-  } catch { /* no stored packs to offer */ }
+// The folders there are to read, as assetpacks/index.json lists them — not
+// the copies Open in level editor keeps in this browser, which are only ever
+// a pack already here, packed. Each is { name, dir, label }.
+async function packFolders() {
   try {
     const res = await fetch('/assetpacks/index.json', { cache: 'no-store' });
-    if (res.ok) for (const p of await res.json()) out.push({ name: p.name, dir: p.dir, label: `${p.name} — assetpacks/${p.name}` });
+    if (res.ok) return (await res.json()).map(p => ({ name: p.name, dir: p.dir, label: `${p.name} — assetpacks/${p.name}` }));
   } catch { /* no folder list; the path can still be typed */ }
-  return out.length ? out : null;
+  return [];
 }
 
-// Import adds a pack to this browser: from a .zip (what Export writes), from
-// a folder in assetpacks/, or from the copies Open in level editor saved. A
-// pack of the same name already here can be replaced, or both kept.
+// Import is how a pack is added: from a .zip (what Export writes), from a
+// folder in assetpacks/ (garden is the basic one), as a copy of the pack
+// open, or empty. A pack read in of a name already here can replace it, or
+// both be kept. The one open now is kept as it is.
 $('#importBtn').onclick = async () => {
-  const ZIP = 'A .zip file on this computer…', OTHER = 'Another folder…';
-  const list = (await knownPacks()) || [];
-  const got = await ask('Import a pack', [
-    { key: 'pick', label: 'From', type: 'select', options: [ZIP, ...list.map(p => p.label), OTHER], value: ZIP },
+  const ZIP = 'A .zip file on this computer…', COPY = `A copy of ${pack.name} (the pack open)`,
+    EMPTY = 'An empty pack', OTHER = 'Another folder…';
+  const list = await packFolders();
+  const got = await ask('Add a pack', [
+    { key: 'pick', label: 'From', type: 'select', options: [ZIP, ...list.map(p => p.label), COPY, EMPTY, OTHER], value: ZIP },
     { key: 'dir', label: `Folder, for ${OTHER}`, value: '' },
     { type: 'note', label: 'It is added to the packs in this browser; the one open now is kept.' }
-  ], 'Import');
+  ], 'Add it');
   if (!got) return;
+
+  // made here rather than read: a pack of its own, never exported
+  if (got.pick === COPY || got.pick === EMPTY) {
+    const was = pack.name;
+    await flushPack();
+    const next = got.pick === COPY ? structuredClone(pack) : newPack();
+    Object.assign(next, { id: uid(), dirty: true, origin: '', exported: false });
+    next.name = await freePackName(got.pick === COPY ? `${was} copy` : 'My Pack');
+    await showPack(next);
+    toast(got.pick === COPY ? `Made ${next.name}, a copy of ${was}` : `Made ${next.name}, empty`);
+    return;
+  }
+
   let source, fallbackName = null, origin = '';
   if (got.pick === ZIP) {
     const [file] = await pickFiles('.zip,application/zip', false);
