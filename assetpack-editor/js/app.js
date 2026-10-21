@@ -39,6 +39,14 @@ $('#levelBtn').onclick = () => openInLevelEditor();
 // changed since they were last exported. New, Import and Delete add and take
 // away; Export writes the open one out as <name>.zip.
 
+// The options are only written when they differ: writing them closes the
+// list if it is open, and the picker is drawn again after every save.
+function setOptions(sel, html) {
+  if (sel.dataset.html === html) return;
+  sel.dataset.html = html;
+  sel.innerHTML = html;
+}
+
 // The picker, from the index, with the open pack's own name and state, which
 // may be ahead of what has been written.
 async function renderPackPicker() {
@@ -47,14 +55,14 @@ async function renderPackPicker() {
   let list = [];
   try { list = await dbList(); } catch { /* just the open one, then */ }
   if (noPack) {
-    sel.innerHTML = '<option>— no packs —</option>';
+    setOptions(sel, '<option>— no packs —</option>');
     refreshTabWarnings();
     return;
   }
   if (!list.some(x => x.id === pack.id)) list = [...list, { id: pack.id }];
   list = list.map(x => x.id === pack.id ? { ...x, name: pack.name, dirty: pack.dirty } : x)
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  sel.innerHTML = list.map(x => `<option value="${esc(x.id)}" ${x.id === pack.id ? 'selected' : ''}>${esc(x.name || 'untitled')}${x.dirty ? ' *' : ''}</option>`).join('');
+  setOptions(sel, list.map(x => `<option value="${esc(x.id)}" ${x.id === pack.id ? 'selected' : ''}>${esc(x.name || 'untitled')}${x.dirty ? ' *' : ''}</option>`).join(''));
   sel.title = `${list.length} pack${list.length === 1 ? '' : 's'} in this browser — * changed since last exported`;
   refreshTabWarnings();
   // A pack with nothing unexported (no *) is only taken out of the browser —

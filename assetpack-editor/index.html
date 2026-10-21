@@ -10,7 +10,9 @@
 
 <header class="top">
   <h1 class="logo">Asset<span>Pack</span></h1>
-  <label class="namebox packpick"><span>pack</span><select id="packPick" aria-label="The packs in this browser"></select></label>
+  <!-- not a <label>: a click on the select would reach the label too, which
+       clicks the select again and shuts the list it just opened -->
+  <div class="namebox packpick"><span>pack</span><select id="packPick" aria-label="The packs in this browser"></select></div>
   <label class="namebox"><span>name</span><input id="packName" value="My Pack" aria-label="Pack name"></label>
   <span class="grow"></span>
   <button class="btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>↶</button>
