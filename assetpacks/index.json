@@ -3,5 +3,10 @@
     "name": "garden",
     "dir": "/assetpacks/garden/",
     "title": "garden"
+  },
+  {
+    "name": "oferassetpack",
+    "dir": "/assetpacks/oferassetpack.zip",
+    "title": "OferAssetPack"
   }
 ]
