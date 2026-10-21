@@ -71,6 +71,7 @@ function drawPaint() {
   if (pc.width !== W || pc.height !== H) {
     pc.width = W; pc.height = H;
     pc.style.backgroundSize = `${z * 2}px ${z * 2}px`;
+    pc.style.backgroundPosition = `0 0, ${z}px ${z}px`;
   }
   pcx.imageSmoothingEnabled = false;
   pcx.clearRect(0, 0, W, H);

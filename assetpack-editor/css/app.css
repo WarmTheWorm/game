@@ -201,7 +201,11 @@ dialog#paint::backdrop{background:#0b0818cc}
 .pt-body{display:grid;grid-template-columns:220px minmax(0,1fr) 160px;gap:12px;padding:12px;height:calc(92vh - 58px)}
 .pt-tools{display:grid;gap:10px;align-content:start;overflow:auto;padding-right:4px}
 .pt-stage{border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;overflow:auto}
-#pc{image-rendering:pixelated;touch-action:none;cursor:crosshair}
+/* empty pixels as a light grey checker, a square to a pixel (sized by
+   drawPaint), so neither black nor white art is lost in it */
+#pc{image-rendering:pixelated;touch-action:none;cursor:crosshair;background-color:#b9b5c6;
+  background-image:linear-gradient(45deg,#8c8899 25%,transparent 25%,transparent 75%,#8c8899 75%),
+    linear-gradient(45deg,#8c8899 25%,transparent 25%,transparent 75%,#8c8899 75%)}
 .pt-aside{display:grid;gap:10px;align-content:start}
 #pmini{image-rendering:pixelated;border:1px solid var(--line);border-radius:8px;background:#120e21;width:100%}
 .tools{display:grid;grid-template-columns:1fr 1fr;gap:4px}
