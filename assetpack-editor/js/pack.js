@@ -470,9 +470,12 @@ function writePack() {
 // instead must not be saved over them, so nothing is written until the person
 // imports a pack or makes a new one, which say they mean to.
 let storageLocked = false;
+let warnTimer = 0;
 
 // Any change marks the pack as not exported since (the picker's *).
 function savePack() {
+  clearTimeout(warnTimer);
+  warnTimer = setTimeout(refreshTabWarnings, 150);
   if (storageLocked) return;
   if (!pack.dirty) { pack.dirty = true; renderPackPicker(); }
   clearTimeout(saveTimer);

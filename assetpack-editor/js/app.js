@@ -51,6 +51,7 @@ async function renderPackPicker() {
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   sel.innerHTML = list.map(x => `<option value="${esc(x.id)}" ${x.id === pack.id ? 'selected' : ''}>${esc(x.name || 'untitled')}${x.dirty ? ' *' : ''}</option>`).join('');
   sel.title = `${list.length} pack${list.length === 1 ? '' : 's'} in this browser — * changed since last exported`;
+  refreshTabWarnings();
   // A pack with nothing unexported (no *) is only taken out of the browser —
   // all of it is in a file somewhere — so it says Remove and goes at once. One
   // with a * has work in it that is nowhere else: it says Delete, in red, and

@@ -52,9 +52,9 @@ function listView(key, segSel, boxSel, rerender) {
     v.shown = o.picked;
     box.innerHTML = names.map(g => {
       const list = groups.get(g);
-      const bad = o.bad && list.some(o.bad);
+      const bad = o.bad ? list.filter(o.bad).length : 0;
       return `<details class="lgroup" data-group="${esc(g)}" ${v.open.has(g) ? 'open' : ''}>
-        <summary><span class="${bad ? 'warn' : ''}">${esc(o.label ? o.label(g) : g)}</span><span class="n">${list.length}</span></summary>
+        <summary><span class="${bad ? 'warn' : ''}">${esc(o.label ? o.label(g) : g)}</span>${bad ? `<span class="wbadge" title="${bad} with problems">${bad}</span>` : ''}<span class="n">${list.length}</span></summary>
         <div class="items">${list.map(x => o.item(x, true)).join('')}</div>
       </details>`;
     }).join('');

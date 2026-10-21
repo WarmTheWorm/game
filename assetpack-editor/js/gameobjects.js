@@ -19,8 +19,8 @@ function renderGameObjects() {
 const goList = listView('assetEditorObjects', '#goView', '#goList', () => renderGoList());
 
 function renderGoList() {
-  const clash = new Set(clashingCodes().flatMap(([, names]) => names));
-  const isBad = o => clash.has(o.name) || objectProblems(o).length > 0;
+  const probs = new Map(pack.objects.map(o => [o, objectProblems(o)]));
+  const isBad = o => probs.get(o).length > 0;
   // grouped by class, then by name within it — the order in the pack is left alone
   const sorted = [...pack.objects].sort((a, b) => a.cls.localeCompare(b.cls) || a.name.localeCompare(b.name));
   goList.render(sorted, {
@@ -30,7 +30,7 @@ function renderGoList() {
     empty: 'No objects yet.',
     // in a group the class goes without saying, so an item shows its code
     item: (o, grouped) => `<button class="item ${o === currentObj ? 'on' : ''}" data-goid="${o.id}">
-      <b>${spriteIcon(refName(o.props.sprite))}${esc(o.name)}</b><small class="${isBad(o) ? 'warn' : ''}">${esc(grouped ? o.code[0] || '—' : o.cls)}</small>
+      <b>${spriteIcon(refName(o.props.sprite))}${esc(o.name)}${warnBadge(probs.get(o))}</b><small class="${isBad(o) ? 'warn' : ''}">${esc(grouped ? o.code[0] || '—' : o.cls)}</small>
     </button>`
   });
   paintIcons($('#goList'));
@@ -57,7 +57,11 @@ function codeLine(o, C) {
 // One field per property, by its declared type.
 function propField(o, k, d) {
   const v = o.props[k];
-  const head = `<div class="row"><span>${esc(d.label || k)}</span><code class="pk">${esc(k)}</code></div>`;
+  // a property naming something the pack hasn't got wears the mark too
+  const prob = k === 'sprite'
+    ? (objectProblems(o).find(p => p.startsWith('its sprite')) || null)
+    : propProblem(o, k, d);
+  const head = `<div class="row"><span>${esc(d.label || k)}${warnBadge(prob && [prob])}</span><code class="pk">${esc(k)}</code></div>`;
   const hint = [d.default !== undefined && d.default !== '' ? `default ${String(d.default)}` : '', d.optional ? 'optional' : '']
     .filter(Boolean).map(t => `<span class="hint">${esc(t)}</span>`).join('');
   const options = (list, prefix) => {
@@ -119,7 +123,6 @@ function renderGoForm() {
   const C = gameClass(o.cls);
   const defs = classDefs(o.cls);
   const problems = objectProblems(o);
-  const clash = clashingCodes().filter(([, names]) => names.includes(o.name));
   $('#goTitle').textContent = `${o.cls}::${o.name}`;
   box.innerHTML = `
     <div class="insp">
@@ -137,8 +140,8 @@ function renderGoForm() {
     </div>
     <h3 class="subh">${esc(o.cls)} properties</h3>
     <div class="insp">${Object.entries(defs).map(([k, d]) => propField(o, k, d)).join('')}</div>
-    ${problems.length || clash.length ? `<ul class="hint probs">${[
-      ...problems, ...clash.map(([code, names]) => `${code} is also ${names.filter(n => n !== o.name).join(', ')}'s code.`)
+    ${problems.length ? `<ul class="hint probs">${[
+      ...problems
     ].map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
     <div class="row gap" style="margin-top:12px">
       ${C && C.editor.player ? '' : `<button class="btn sm" data-g="duplicate" title="A copy of this object, with all its property values, under a new name and the next free code">⧉ Duplicate</button>`}

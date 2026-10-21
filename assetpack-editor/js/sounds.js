@@ -131,7 +131,8 @@ function renderSoundList() {
     label: k => SOUND_KIND_LABEL[k] || k,
     picked: sndSel && pack.sounds.defs[sndSel] ? sndSel : null,
     empty: 'No sounds yet.',
-    item: (id, grouped) => `<button class="item ${id === sndSel ? 'on' : ''}" data-sid="${esc(id)}"><b>${esc(id)}</b>${grouped ? '' : `<small>${kindOf(id)}</small>`}</button>`
+    bad: id => soundProblems(id).length > 0,
+    item: (id, grouped) => `<button class="item ${id === sndSel ? 'on' : ''}" data-sid="${esc(id)}"><b>${esc(id)}${warnBadge(soundProblems(id))}</b>${grouped ? '' : `<small>${kindOf(id)}</small>`}</button>`
   });
 }
 

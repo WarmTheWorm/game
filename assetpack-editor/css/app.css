@@ -253,6 +253,10 @@ dialog#ask::backdrop{background:#0b0818cc}
 .codechip{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:7px;padding:2px 4px;background:var(--panel2);font-family:var(--mono)}
 .codechip select{font-family:var(--mono);padding:3px 4px;border:0;background:transparent}
 .item small.warn{color:var(--amber)}
+/* a missing thing: on a list item, a field, a group, a tab */
+.wbadge{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;border-radius:8px;
+  background:var(--amber);color:#1c1430;font:700 10.5px/1 var(--body);margin-inline-start:6px;cursor:help;flex:none}
+.tab .wbadge{vertical-align:2px}
 .probs{color:var(--amber)}
 .bigcode{font-size:15px;padding:3px 8px;color:var(--amber)}
 .codes .hint{flex-basis:100%;margin:4px 0 0}

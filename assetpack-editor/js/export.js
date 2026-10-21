@@ -15,13 +15,27 @@ function packProblems() {
     if (o.frames.length && !bodyFrames(o).length) bad.push(`The sprite ${o.name} has glow frames but none of its own to glow over.`);
   }
   for (const o of pack.objects) bad.push(...objectProblems(o).map(p => `${o.name}: ${p}`));
-  for (const [code, names] of clashingCodes()) bad.push(`${names.join(' and ')} both use the code ${code}.`);
   const worms = pack.objects.filter(o => o.cls === 'Worm');
   if (worms.length > 1) bad.push(`${worms.map(o => o.name).join(' and ')} are both Worm objects — the game takes one, so keep one.`);
-  for (const [id, d] of Object.entries(pack.sounds.defs)) {
-    if (d && d.src && !pack.sounds.media[d.src]) bad.push(`The sound "${id}" names ${d.src}, which is not in the pack.`);
-    if (d && !d.src && d.layers && !d.layers.length) bad.push(`The sound "${id}" has no layers left, so it would make no noise.`);
-  }
+  for (const id of Object.keys(pack.sounds.defs)) bad.push(...soundProblems(id).map(p => `The sound "${id}" ${p}`));
+  return bad;
+}
+
+// What is wrong with one sound, in words, or nothing.
+function soundProblems(id) {
+  const d = pack.sounds.defs[id];
+  if (!d) return [];
+  if (d.src && !pack.sounds.media[d.src]) return [`names ${d.src}, which is not in the pack.`];
+  if (!d.src && d.layers && !d.layers.length) return ['has no layers left, so it would make no noise.'];
+  return [];
+}
+
+// What is wrong with one sprite, in words, or nothing.
+function spriteProblems(s) {
+  const bad = [];
+  if (!s.frames.length) bad.push('it has no frames yet.');
+  else if (!bodyFrames(s).length) bad.push('it has glow frames but none of its own to glow over.');
+  if (pack.sprites.some(x => x !== s && x.name === s.name)) bad.push(`another sprite is also called "${s.name}".`);
   return bad;
 }
 
@@ -72,14 +86,53 @@ function objectProblems(o) {
   // a mark only the level editor shows draws without art if it has none
   if (!sprite && !((C.editorOnly || C.spriteOptional) && !o.props.sprite)) bad.push(`its sprite "${o.props.sprite || 'none'}" is not in the pack.`);
   for (const [k, d] of Object.entries(classDefs(o.cls))) {
-    const v = o.props[k];
-    if (d.type === 'sound' && v && !pack.sounds.defs[refName(v)]) bad.push(`${k} names ${v}, which is not one of the pack's sounds.`);
-    if (d.type === 'sprite' && k !== 'sprite' && v && !spriteByName(refName(v))) bad.push(`${k} names ${v}, which is not one of the pack's sprites.`);
-    if (d.type === 'object' && v && !pack.objects.some(x => x.name === refName(v) && (!d.class || x.cls === d.class)))
-      bad.push(`${k} names ${v}, which is not one of the pack's ${d.class || ''} objects.`);
-    if (d.type === 'part' && v && !d.optional && sprite && !sprite.parts.some(p => p.name === v)) bad.push(`${k} names the part "${v}", which ${sprite.name} hasn't got.`);
+    if (k === 'sprite') continue;
+    const p = propProblem(o, k, d);
+    if (p) bad.push(p);
+  }
+  for (const [code, names] of clashingCodes()) {
+    if (names.includes(o.name)) bad.push(`${code} is also ${names.filter(n => n !== o.name).join(', ')}'s code.`);
   }
   return bad;
+}
+
+// What is wrong with one of an object's properties — the thing it names is
+// not in the pack — or null.
+function propProblem(o, k, d) {
+  const v = o.props[k];
+  if (!v) return null;
+  if (d.type === 'sound' && !pack.sounds.defs[refName(v)]) return `${k} names ${v}, which is not one of the pack's sounds.`;
+  if (d.type === 'sprite' && !spriteByName(refName(v))) return `${k} names ${v}, which is not one of the pack's sprites.`;
+  if (d.type === 'object' && !pack.objects.some(x => x.name === refName(v) && (!d.class || x.cls === d.class)))
+    return `${k} names ${v}, which is not one of the pack's ${d.class || ''} objects.`;
+  const sprite = spriteByName(refName(o.props.sprite));
+  if (d.type === 'part' && !d.optional && sprite && !sprite.parts.some(p => p.name === v)) return `${k} names the part "${v}", which ${sprite.name} hasn't got.`;
+  return null;
+}
+
+// A small warning mark, its problems in its tooltip; nothing if there are none.
+function warnBadge(problems, count) {
+  if (!problems || !problems.length) return '';
+  const tip = problems.map(p => '• ' + p).join('\n');
+  return `<span class="wbadge" title="${esc(tip)}" aria-label="${esc(problems.length + ' problem' + (problems.length > 1 ? 's' : ''))}">${count ? problems.length : '!'}</span>`;
+}
+
+// The tabs carry a count of what is wrong on them.
+function refreshTabWarnings() {
+  if (!pack) return;
+  const n = {
+    gameobjects: pack.objects.reduce((t, o) => t + objectProblems(o).length, 0)
+      + (pack.objects.filter(o => o.cls === 'Worm').length > 1 ? 1 : 0),
+    objects: pack.sprites.reduce((t, s) => t + spriteProblems(s).length, 0),
+    sounds: Object.keys(pack.sounds.defs).reduce((t, id) => t + soundProblems(id).length, 0),
+    tiles: pack.tiles.src ? 0 : 1
+  };
+  $$('.tab').forEach(t => {
+    const old = t.querySelector('.wbadge');
+    if (old) old.remove();
+    const c = n[t.dataset.tab];
+    if (c) t.insertAdjacentHTML('beforeend', `<span class="wbadge" title="${c} problem${c > 1 ? 's' : ''} here — see the Pack tab">${c}</span>`);
+  });
 }
 
 // Both manifests are written by hand rather than stringified, so an entry

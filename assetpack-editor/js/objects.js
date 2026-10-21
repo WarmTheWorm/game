@@ -105,7 +105,7 @@ function paintIcons(root) {
 function renderObjectList() {
   $('#objList').innerHTML = pack.sprites.map(o => `
     <button class="item ${current && o.id === current.id ? 'on' : ''}" data-oid="${o.id}">
-      <b>${spriteIcon(o.name)}${esc(o.name)}</b><small>${o.frames.length} fr${usersOf(o).length ? ' · ' + usersOf(o).length + ' obj' : ''}</small>
+      <b>${spriteIcon(o.name)}${esc(o.name)}${warnBadge(spriteProblems(o))}</b><small>${o.frames.length} fr${usersOf(o).length ? ' · ' + usersOf(o).length + ' obj' : ''}</small>
     </button>`).join('') || '<p class="empty">No sprites yet.</p>';
   paintIcons($('#objList'));
 }
