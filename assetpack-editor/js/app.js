@@ -51,18 +51,17 @@ async function renderPackPicker() {
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   sel.innerHTML = list.map(x => `<option value="${esc(x.id)}" ${x.id === pack.id ? 'selected' : ''}>${esc(x.name || 'untitled')}${x.dirty ? ' *' : ''}</option>`).join('');
   sel.title = `${list.length} pack${list.length === 1 ? '' : 's'} in this browser — * changed since last exported`;
-  // a pack that also lives outside the browser — imported from a file or a
-  // folder, or exported to one — is only removed from here; one that lives
-  // nowhere else is deleted
+  // A pack with nothing unexported (no *) is only taken out of the browser —
+  // all of it is in a file somewhere — so it says Remove and goes at once. One
+  // with a * has work in it that is nowhere else: it says Delete, in red, and
+  // asks first.
   const del = $('#deleteBtn');
-  const elsewhere = hasCopyElsewhere(pack);
-  del.textContent = elsewhere ? 'Remove' : 'Delete';
-  del.title = elsewhere
-    ? `Remove ${pack.name} from this browser — ${pack.origin ? 'what it was imported from' : 'the .zip it was exported to'} is kept`
-    : `Delete ${pack.name}: it is only in this browser`;
+  del.textContent = pack.dirty ? 'Delete' : 'Remove';
+  del.classList.toggle('warn', !!pack.dirty);
+  del.title = pack.dirty
+    ? `Delete ${pack.name} — it has changes never exported from this browser`
+    : `Remove ${pack.name} from this browser — nothing in it is lost, it was all exported or imported`;
 }
-
-const hasCopyElsewhere = p => !!(p.origin || p.exported);
 
 // Everything that belongs to the pack that was open is let go of.
 function forgetOpenPack() {
@@ -123,32 +122,27 @@ $('#newBtn').onclick = async () => {
   toast(`Made ${next.name}`);
 };
 
+// Remove (no *) takes the pack out at once; Delete (a *) asks first, since
+// what was never exported goes with it. The copy Open in level editor saved
+// is left either way.
 $('#deleteBtn').onclick = async () => {
-  const name = pack.name, id = pack.id;
-  // the copy Open in level editor saved, under the same name
-  let stored = false;
-  try { stored = await packStore.ready() && (await packStore.list('assets')).some(p => p.name === slug(name)); } catch { /* none */ }
-  const YES = 'Yes, remove it too', NO = 'No, keep it';
-  const elsewhere = hasCopyElsewhere(pack);
-  const unsaved = pack.dirty ? ' Its changes since it was last exported are lost.' : '';
-  const got = await ask(elsewhere ? `Remove ${name} from this browser?` : `Delete ${name}?`, [
-    { type: 'note', label: elsewhere
-      ? `${name} goes from the packs here; ${pack.origin ? 'it can be imported again from ' + pack.origin : 'the .zip it was exported to is kept, and can be imported again'}.${unsaved}`
-      : `${name} is only in this browser, and was never exported: this deletes it for good.` },
-    ...(stored ? [{ key: 'level', label: 'The copy the level editor reads (saved by Open in level editor)', type: 'select', options: [YES, NO], value: YES }] : [])
-  ], elsewhere ? 'Remove it' : 'Delete it');
-  if (!got) return;
+  const name = pack.name, id = pack.id, unsaved = !!pack.dirty;
+  if (unsaved) {
+    const got = await ask(`Delete ${name}?`, [
+      { type: 'note', label: pack.exported || pack.origin
+        ? `${name} has changes that were never exported from this browser. They are lost for good.`
+        : `${name} was never exported from this browser. All of it is lost for good.` }
+    ], 'Delete it');
+    if (!got) return;
+  }
   clearTimeout(saveTimer);
   while (saving) await saving;
-  try {
-    await dbDelete(id);
-    if (stored && got.level === YES) await packStore.remove('assets', slug(name));
-  } catch (err) { toast('Could not delete it: ' + err.message, true); return; }
+  try { await dbDelete(id); } catch (err) { toast(`Could not ${unsaved ? 'delete' : 'remove'} it: ` + err.message, true); return; }
   // the most recently changed of what is left, or a new empty one
   const left = (await dbList().catch(() => [])).sort((a, b) => b.updated - a.updated);
   const next = left.length ? await dbLoad(left[0].id).catch(() => null) : null;
   await showPack(next || Object.assign(newPack(), { name: await freePackName('My Pack') }));
-  toast(`${elsewhere ? 'Removed' : 'Deleted'} ${name}${stored && got.level === YES ? ', and its level editor copy' : ''}`);
+  toast(unsaved ? `Deleted ${name}` : `Removed ${name} from this browser`);
 };
 
 // The packs there are to read: the ones kept in this browser (the pack store,

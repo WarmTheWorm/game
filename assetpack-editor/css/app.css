@@ -32,6 +32,8 @@ button{font:inherit;color:inherit}
 .btn.primary{background:var(--amber);color:#1c1430;border-color:var(--amber);font-weight:600}
 .btn.ghost{background:transparent}
 .btn.danger:hover{border-color:var(--pink);color:var(--pink)}
+.btn.warn{color:var(--pink);border-color:#8a3a63}
+.btn.warn:hover{border-color:var(--pink)}
 .btn.on{border-color:var(--amber);color:var(--amber)}
 .btn:disabled{opacity:.4;cursor:default}
 .btn:focus-visible,.tab:focus-visible,.item:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
