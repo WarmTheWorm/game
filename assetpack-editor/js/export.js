@@ -123,14 +123,42 @@ async function buildPackFiles() {
   return files;
 }
 
+// Where the .zip goes is asked first, in a Save dialog, straight from the
+// click: a browser only opens one while the click is fresh, and a download
+// started seconds later, once the pack is packed, counts as an automatic one
+// that Chrome may block without a word after a few. A browser without the
+// dialog (Firefox) downloads it instead. True once it is written.
 async function exportPack() {
   const problems = packProblems();
-  if (problems.length) { toast(problems[0], true); return; }
+  if (problems.length) { toast(problems[0], true); return false; }
+  const name = (slug(pack.name) || 'pack') + '.zip';
+
+  let handle = null;
+  if (window.showSaveFilePicker) {
+    try {
+      handle = await showSaveFilePicker({
+        suggestedName: name,
+        id: 'assetpack-export',           // it opens where the last export went
+        types: [{ description: 'Asset pack', accept: { 'application/zip': ['.zip'] } }]
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') return false;     // the dialog was cancelled
+      handle = null;                                    // not allowed here: download it
+    }
+  }
 
   toast('Packing…');
   const files = await buildPackFiles();
-  download(zipBlob(files), slug(pack.name) + '.zip');
-  toast(`Exported ${slug(pack.name)}.zip — ${files.length} files; unzip into assetpacks/, or Import it in another browser`);
+  const blob = zipBlob(files);
+  if (handle) {
+    const out = await handle.createWritable();
+    await out.write(blob);
+    await out.close();
+    toast(`Saved ${handle.name} — ${files.length} files; unzip into assetpacks/, or Import it in another browser`);
+  } else {
+    download(blob, name);
+    toast(`Downloaded ${name} — ${files.length} files. Nothing in Downloads? The browser may be blocking this page's downloads (the icon at the end of the address bar).`);
+  }
   return true;
 }
 

@@ -140,8 +140,8 @@ it back as a zip to unzip into `assetpacks/`.
   the one open —
   **Import…** adds one — from a `.zip`, or from an `assetpacks/<name>/` folder,
   its atlas sliced back into per-object frames — offering to replace a pack of
-  the same name or keep both, and **⬇ Export .zip** downloads the open one
-  as `<name>.zip`. A pack without a `*` has nothing that isn't in a file
+  the same name or keep both, and **⬇ Export .zip** asks where to save the open
+  one as `<name>.zip` (a browser without a Save dialog downloads it). A pack without a `*` has nothing that isn't in a file
   somewhere, so its button says **Remove** and takes it out of the browser at
   once; a pack with a `*` says **Delete**, in red, and asks first, since its
   unexported changes go with it.
