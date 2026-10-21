@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $GEN_ROOT = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 
 function Get-PackDir([string]$Pack = 'garden', [string]$Sub = '') {
-  Get-AnyPackDir (Join-Path $GEN_ROOT 'assetpacks') $Pack $Sub 'asset pack'
+  Get-AnyPackDir (Join-Path $GEN_ROOT 'assetpacks\old') $Pack $Sub 'asset pack'
 }
 
 function Get-LevelPackDir([string]$Pack = 'garden', [string]$Sub = '') {

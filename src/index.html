@@ -453,7 +453,7 @@
 <script>
   (() => {
     const asked = new URLSearchParams(location.search);
-    const assets = asked.get('assets') || '/assetpacks/garden/';
+    const assets = asked.get('assets') || '/assetpacks/old/garden/';
     window.PACK_URL = asked.get('pack') || '/levelpacks/garden/levelpack.json';
     window.OBJECTS_URL = assets + 'objects/objects.json';
     window.SOUNDS_URL = assets + 'sounds/default.json';

@@ -453,7 +453,7 @@
 <script>
   (() => {
     const asked = new URLSearchParams(location.search);
-    const assets = asked.get('assets') || '/assetpacks/garden/';
+    const assets = asked.get('assets') || '/assetpacks/old/garden/';
     window.PACK_URL = asked.get('pack') || '/levelpacks/garden/levelpack.json';
     window.OBJECTS_URL = assets + 'objects/objects.json';
     window.SOUNDS_URL = assets + 'sounds/default.json';
@@ -647,7 +647,7 @@ const packStore = (() => {
 // A level or pack may name its own manifest; it is laid over the root set
 // rather than replacing it, so a level that wants one sound changed says only
 // that, and nothing it leaves out goes quiet by accident.
-const ROOT_SOUNDS_URL = window.SOUNDS_URL || '/assetpacks/garden/sounds/default.json';
+const ROOT_SOUNDS_URL = window.SOUNDS_URL || '/assetpacks/old/garden/sounds/default.json';
 const DEFAULT_TRACK = 'theme';
 
 const SOUND_TAIL = 0.02;   // an oscillator runs this long past its envelope
@@ -909,7 +909,7 @@ const isRampHit = c => c >= '0' && c <= '3';   // a wedge, the digit is its dire
 const isBlank = ch => ch === undefined || ch === '.' || ch === ' ';
 
 const CELL_PAD = 4;            // empty margin each cell carries, in tile units
-const DEFAULT_TEXTURE = new URL(window.TILES_URL || '/assetpacks/garden/tiles/tiles.png', location.href).href;
+const DEFAULT_TEXTURE = new URL(window.TILES_URL || '/assetpacks/old/garden/tiles/tiles.png', location.href).href;
 const DEFAULT_TILE_SIZE = 64;
 
 // Every path a level names is relative to that level's own JSON file, so a
@@ -1025,7 +1025,7 @@ class Tileset {
 // Nothing about a thing's look, size or settings lives in code.
 // A page may say where its root manifest is before loading this, which is how
 // a downloaded pack points the game at its own copy.
-const ROOT_OBJECTS_URL = window.OBJECTS_URL || '/assetpacks/garden/objects/objects.json';
+const ROOT_OBJECTS_URL = window.OBJECTS_URL || '/assetpacks/old/garden/objects/objects.json';
 
 // What a pairing id looks like. A key, a door and the portal pair all wear
 // their id as a colour, filled into the object's glow mask below; index 0 is

@@ -1,12 +1,7 @@
 [
   {
     "name": "garden",
-    "dir": "/assetpacks/garden/",
+    "dir": "/assetpacks/garden.zip",
     "title": "garden"
-  },
-  {
-    "name": "oferassetpack",
-    "dir": "/assetpacks/oferassetpack.zip",
-    "title": "OferAssetPack"
   }
 ]

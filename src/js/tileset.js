@@ -33,7 +33,7 @@ const isRampHit = c => c >= '0' && c <= '3';   // a wedge, the digit is its dire
 const isBlank = ch => ch === undefined || ch === '.' || ch === ' ';
 
 const CELL_PAD = 4;            // empty margin each cell carries, in tile units
-const DEFAULT_TEXTURE = new URL(window.TILES_URL || '/assetpacks/garden/tiles/tiles.png', location.href).href;
+const DEFAULT_TEXTURE = new URL(window.TILES_URL || '/assetpacks/old/garden/tiles/tiles.png', location.href).href;
 const DEFAULT_TILE_SIZE = 64;
 
 // Every path a level names is relative to that level's own JSON file, so a

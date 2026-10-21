@@ -30,9 +30,9 @@ http-server, `python -m http.server` — on `localhost` (or https). Open them by
 URL and pass the packs as parameters:
 
 ```
-/src/index.html?pack=/levelpacks/garden/levelpack.json&assets=/assetpacks/garden/   the game
-/editor/index.html?assets=/assetpacks/garden/                                     the level editor
-/editor/index.html?assets=/assetpacks/garden/&pack=/levelpacks/test/levelpack.json   ... with a level pack open
+/src/index.html?pack=/levelpacks/garden/levelpack.json&assets=/assetpacks/old/garden/   the game
+/editor/index.html?assets=/assetpacks/old/garden/                                     the level editor
+/editor/index.html?assets=/assetpacks/old/garden/&pack=/levelpacks/test/levelpack.json   ... with a level pack open
 /assetpack-editor/                                                                 the asset pack creator
 ```
 

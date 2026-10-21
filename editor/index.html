@@ -397,7 +397,7 @@ function withCtx(target, fn) {
 // A pack stands on its own: the sheet, the objects, the backgrounds and the
 // sound sets are all in there, and nothing outside it is read.
 const EDITOR_DIR = (() => {
-  const asked = new URLSearchParams(location.search).get('assets') || '/assetpacks/garden/';
+  const asked = new URLSearchParams(location.search).get('assets') || '/assetpacks/old/garden/';
   return asked.endsWith('/') ? asked : asked + '/';
 })();
 const EDITOR_LIBRARY = EDITOR_DIR + 'assetpack.json';

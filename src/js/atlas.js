@@ -7,7 +7,7 @@
 // Nothing about a thing's look, size or settings lives in code.
 // A page may say where its root manifest is before loading this, which is how
 // a downloaded pack points the game at its own copy.
-const ROOT_OBJECTS_URL = window.OBJECTS_URL || '/assetpacks/garden/objects/objects.json';
+const ROOT_OBJECTS_URL = window.OBJECTS_URL || '/assetpacks/old/garden/objects/objects.json';
 
 // What a pairing id looks like. A key, a door and the portal pair all wear
 // their id as a colour, filled into the object's glow mask below; index 0 is

@@ -20,7 +20,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const LEVEL_PACKS = join(ROOT, 'levelpacks');
-const ASSET_PACKS = join(ROOT, 'assetpacks');
+// pack folders: assetpacks/ itself holds the zipped ones, which only the
+// creator reads
+const ASSET_PACKS = join(ROOT, 'assetpacks', 'old');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -71,12 +73,12 @@ let page;
 if (mode === 'creator') {
   page = '/assetpack-editor/index.html';
 } else if (mode === 'editor') {
-  page = `/editor/index.html?assets=${encodeURIComponent(`/assetpacks/${assetPack}/`)}`;
+  page = `/editor/index.html?assets=${encodeURIComponent(`/assetpacks/old/${assetPack}/`)}`;
 } else {
   const levelPack = await pickPack(LEVEL_PACKS, 'level pack', names[0]);
   const entry = flag('built') ? '/dist/game.html' : '/src/index.html';
   page = `${entry}?pack=${encodeURIComponent(`/levelpacks/${levelPack}/levelpack.json`)}`
-    + `&assets=${encodeURIComponent(`/assetpacks/${assetPack}/`)}`;
+    + `&assets=${encodeURIComponent(`/assetpacks/old/${assetPack}/`)}`;
 }
 
 // ---------- the server ----------
