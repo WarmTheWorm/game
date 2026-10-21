@@ -1,7 +1,7 @@
 {
   "texture": "objects.png",
   "sprites": {
-    "beetle": {"frame":{"x":0,"y":0,"w":29,"h":29},"frames":6,"fps":10,"anchor":[14.67,14.67],"collision":{"shape":"circle","x":14.67,"y":14.67,"r":12}},
+    "beetle": {"frame":{"x":0,"y":925,"w":44,"h":42},"frames":5,"fps":10,"scale":0.666667,"anchor":[14.67,14],"collision":{"shape":"circle","x":14.67,"y":14,"r":12}},
     "checkpoint": {"frame":{"x":0,"y":29,"w":54,"h":94},"frames":2,"anchor":[27,77],"parts":{"off":0,"on":1},"collision":{"shape":"circle","x":27,"y":77,"r":14}},
     "cloud": {"frame":{"x":0,"y":123,"w":200,"h":100},"frames":1,"anchor":[100,50]},
     "coin": {"frame":{"x":0,"y":223,"w":23,"h":23},"frames":6,"fps":7.5,"anchor":[11.7,11.7],"collision":{"shape":"circle","x":11.7,"y":11.7,"r":6}},
