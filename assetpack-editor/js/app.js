@@ -137,15 +137,30 @@ $('#deleteBtn').onclick = async () => {
 // can be. Its __name__ keeps it out of assetpacks/index.json.
 const EMPTY_PACK = '/assetpacks/__EmptyPack__/';
 
-// The folders there are to read, as assetpacks/index.json lists them — not
-// the copies Open in level editor keeps in this browser, which are only ever
-// a pack already here, packed. Each is { name, dir, label }.
+// The packs there are to read, as assetpacks/index.json lists them: a
+// folder, or a .zip ("dir": "/assetpacks/mine.zip") — not the copies Open in
+// level editor keeps in this browser, which are only ever a pack already
+// here, packed. Each is { name, dir, label }.
 async function packFolders() {
   try {
     const res = await fetch('/assetpacks/index.json', { cache: 'no-store' });
-    if (res.ok) return (await res.json()).map(p => ({ name: p.name, dir: p.dir, label: `${p.name} — assetpacks/${p.name}` }));
+    if (res.ok) return (await res.json()).map(p => ({
+      name: p.name, dir: p.dir,
+      label: `${p.title || p.name} — ${String(p.dir).replace(/^\//, '').replace(/\/$/, '')}`
+    }));
   } catch { /* no folder list; the path can still be typed */ }
   return [];
+}
+
+const isZipPath = dir => /\.zip$/i.test(String(dir).trim());
+
+// A .zip the page can fetch, opened as a pack's files (readZip).
+async function fetchZip(url) {
+  let res;
+  try { res = await fetch(url, { cache: 'no-store' }); }
+  catch { throw new Error(`the page can't reach ${url}`); }
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  return readZip(await res.arrayBuffer());
 }
 
 // Import is how a pack is added: from a .zip (what Export writes), from a
@@ -154,11 +169,11 @@ async function packFolders() {
 // both be kept. The one open now is kept as it is.
 $('#importBtn').onclick = async () => {
   const ZIP = 'A .zip file on this computer…', COPY = `A copy of ${pack.name} (the pack open)`,
-    EMPTY = 'An empty pack', OTHER = 'Another folder…';
+    EMPTY = 'An empty pack', OTHER = 'Another folder or .zip…';
   const list = await packFolders();
   const got = await ask('Add a pack', [
     { key: 'pick', label: 'From', type: 'select', options: [ZIP, ...list.map(p => p.label), COPY, EMPTY, OTHER], value: ZIP },
-    { key: 'dir', label: `Folder, for ${OTHER}`, value: '' },
+    { key: 'dir', label: `Folder or .zip, for ${OTHER}`, value: '' },
     { type: 'note', label: 'It is added to the packs in this browser; the one open now is kept.' }
   ], 'Add it');
   if (!got) return;
@@ -195,8 +210,15 @@ $('#importBtn').onclick = async () => {
   } else {
     source = got.pick === OTHER ? got.dir : (list.find(p => p.label === got.pick) || {}).dir;
     if (!source || !String(source).trim()) { toast('Say which folder to read', true); return; }
-    origin = packDir(source);
     toast('Reading…');
+    if (isZipPath(source)) {
+      // a zip on the server, read like one picked from this computer
+      const url = packDir(source).replace(/\/$/, '');
+      origin = url;
+      fallbackName = url.split('/').pop().replace(/\.zip$/i, '');
+      try { source = await fetchZip(url); }
+      catch (err) { toast('Could not read that zip: ' + err.message, true); return; }
+    } else origin = packDir(source);
   }
   let next;
   try { next = await importPack(source); }
