@@ -3,7 +3,8 @@
 // copies the object, sprite or sound picked there and Ctrl+V adds a copy of it
 // under the next free name — coin → coin2 — and picks it. Anywhere else on the
 // tab the keys keep their own meaning: frames on the Sprites tab, layers on
-// the Sounds tab.
+// the Sounds tab. Delete (or Backspace) there deletes the item picked, as
+// its tab's own delete button does, and Ctrl+Z brings it back.
 //
 // The copy goes on the system clipboard as text, whole, so it pastes into
 // another pack, another tab or window of the creator, another browser: a
@@ -19,6 +20,8 @@ const LIST_KINDS = {
   sounds: { list: '#sndList', kind: 'sound' }
 };
 const KIND_TAB = { object: 'Objects', sprite: 'Sprites', sound: 'Sounds' };
+// each tab's own button for deleting the item picked
+const KIND_DELETE = { object: '#goForm [data-g="delete"]', sprite: '[data-p="delete"]', sound: '#sndDel' };
 
 // The next free name from `base`, by `taken`: coin → coin2, coin2 → coin3.
 function nextName(base, taken) {
@@ -140,10 +143,31 @@ const typing = t => t && t.matches && t.matches('input,select,textarea');
 // capture, ahead of the tabs' own Ctrl+C/V), and the browser goes on to fire
 // copy or paste, which carry the clipboard.
 window.addEventListener('keydown', e => {
-  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || typing(e.target)) return;
+  if (typing(e.target) || e.altKey) return;
+  // Delete over a list deletes its item — not the frames or layer it would
+  // elsewhere on the tab
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+    const at = hotList();
+    if (!at) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const btn = $(KIND_DELETE[at.kind]);
+    if (btn && !btn.disabled) {
+      const was = at.kind === 'object' ? currentObj && currentObj.name : at.kind === 'sprite' ? current && current.name : sndSel;
+      btn.click();
+      // the list is drawn again: the focus goes to what is picked now, so
+      // Delete can go on down the list
+      const on = $(LIST_KINDS_FOCUS[at.kind]);
+      if (on) on.focus();
+      if (at.kind === 'sound' && was) toast(`Sound ${was} deleted — Ctrl+Z brings it back`);
+    } else toast(`Pick ${at.kind === 'object' ? 'an object' : 'a ' + at.kind} first`, true);
+    return;
+  }
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey) return;
   const key = e.code || 'Key' + (e.key || '').toUpperCase();
   if ((key === 'KeyC' || key === 'KeyV') && hotList()) e.stopImmediatePropagation();
 }, true);
+const LIST_KINDS_FOCUS = { object: '#goList .item.on', sprite: '#objList .item.on', sound: '#sndList .item.on' };
 
 window.addEventListener('copy', e => {
   const at = !typing(e.target) && hotList();

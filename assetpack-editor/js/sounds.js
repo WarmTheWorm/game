@@ -565,6 +565,7 @@ $('#sndMusic').onclick = async () => {
 
 $('#sndDel').onclick = () => {
   if (!sndSel) return;
+  markUndo();
   const d = pack.sounds.defs[sndSel];
   delete pack.sounds.defs[sndSel];
   // media nothing names any more is dropped with it, so the zip stays honest
