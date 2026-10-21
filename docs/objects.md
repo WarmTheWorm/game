@@ -286,9 +286,10 @@ so the picture holds still, and is made again when the object's props
 change.
 
 Its sprite is optional: without one each particle is drawn as `shape`. The
-asset pack creator shows it running as its preview, and gives a pack with no
-particle systems the five above (`ParticleSystem.presets`), wiring its
-coins, gems, rocks and enemies to them.
+asset pack creator shows it running as its preview. A pack it stored before
+particle systems existed gets the five above (`ParticleSystem.presets`) once,
+its coins, gems, rocks and enemies wired to them; a new or imported pack is
+left as it is, and systems deleted from a pack stay deleted.
 
 | Property | Type | Default | What it is |
 |---|---|---|---|

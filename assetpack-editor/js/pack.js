@@ -171,7 +171,20 @@ function migrateTreasure(p) {
 // Platforms turn at a platform stop, which the level editor places from the
 // pack's objects like anything else; a pack without one gets one, with no
 // art — the editor marks it, and the game never draws it. True if added.
+// Some steps add things a pack made before they existed lacks — a platform
+// stop, the default particle systems. Each runs once per pack: it can't tell
+// a pack too old to have them from one whose owner removed them, or never
+// wanted them, so it doesn't try again. A new or imported pack is marked done
+// from the start (newPack). True the first time, for a pack not marked.
+function onceOnly(p, step) {
+  if (!p.migrated) p.migrated = {};
+  if (p.migrated[step]) return false;
+  p.migrated[step] = true;
+  return true;
+}
+
 function migratePlatformStop(p) {
+  if (!onceOnly(p, 'platformStop')) return false;
   if (p.objects.some(o => o.cls === 'PlatformStop')) return false;
   let name = 'platformStop', n = 2;
   while (p.objects.some(o => o.name === name)) name = 'platformStop' + n++;
@@ -185,6 +198,7 @@ function migratePlatformStop(p) {
 // (ParticleSystem.presets), and its coins, gems, rocks and enemies that have
 // never had particles get the fitting ones. True if anything was added.
 function migrateParticles(p) {
+  if (!onceOnly(p, 'particles')) return false;
   if (p.objects.some(o => o.cls === 'ParticleSystem')) return false;
   const made = {};
   Object.entries(ParticleSystem.presets).forEach(([want, props], i) => {
@@ -266,6 +280,9 @@ function newPack() {
     dirty: true,                  // changed since it was last exported — never, yet
     origin: '',                   // where it was imported from, if it was: a .zip or a folder
     exported: false,              // written out as a .zip at least once
+    // the one-time additions it has had, or never needs (see onceOnly): a new
+    // or imported pack is as it is, and gets none
+    migrated: { platformStop: true, particles: true },
     name: 'My Pack',
     sprites: [],
     objects: [],
