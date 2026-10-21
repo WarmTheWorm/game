@@ -16,12 +16,19 @@ function packDir(typed) {
   return d.endsWith('/') ? d : d + '/';
 }
 
-async function importPack(dir) {
-  const base = packDir(dir);
-  const reach = async url => {
-    try { return await fetch(url); }
-    catch { throw new Error("the page can't reach the dev server — start it with npm run creator"); }
-  };
+// `source` is a folder the page can fetch from, or a zip's files (readZip),
+// read as if they were that folder — from wherever its assetpack.json is.
+async function importPack(source) {
+  const base = source instanceof Map ? zipRoot(source) : packDir(source);
+  const reach = source instanceof Map
+    ? async path => {
+      const bytes = source.get(path);
+      return bytes ? new Response(bytes) : new Response(null, { status: 404 });
+    }
+    : async url => {
+      try { return await fetch(url); }
+      catch { throw new Error("the page can't reach the dev server — start it with npm run creator"); }
+    };
   const get = async (path, what) => {
     const res = await reach(base + path);
     if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
@@ -34,12 +41,12 @@ async function importPack(dir) {
   if (!libRes.ok) {
     const level = await reach(base + 'levelpack.json');
     throw new Error(level.ok
-      ? `${base} is a level pack — read an asset pack, one of the folders in assetpacks/`
-      : `there is no asset pack at ${base}`);
+      ? `${base || 'that zip'} is a level pack — read an asset pack`
+      : source instanceof Map ? 'there is no assetpack.json in that zip' : `there is no asset pack at ${base}`);
   }
   const lib = await libRes.json();
   const next = newPack();
-  next.name = base.replace(/\/$/, '').split('/').pop() || 'Imported';
+  next.name = lib.name || base.replace(/\/$/, '').split('/').pop() || 'Imported';
 
   // tiles
   const ts = lib.tileset || {};
@@ -169,6 +176,14 @@ async function importPack(dir) {
   }
 
   return next;
+}
+
+// The folder inside a zip that holds its assetpack.json — the zip's top, or
+// the one folder the pack was zipped in — as a prefix for its other paths.
+function zipRoot(files) {
+  const lib = [...files.keys()].filter(p => p === 'assetpack.json' || p.endsWith('/assetpack.json'))
+    .sort((a, b) => a.length - b.length)[0];
+  return lib ? lib.slice(0, -'assetpack.json'.length) : '';
 }
 
 const blobDataUrl = blob => new Promise(ok => {

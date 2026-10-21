@@ -18,6 +18,14 @@ function snapshotPack() {
   return copy;
 }
 
+// Another pack opened: what could be undone belonged to the last one.
+function resetHistory() {
+  undoStack.length = 0;
+  redoStack.length = 0;
+  undoOpen = false;
+  refreshHistory();
+}
+
 // Called before anything changes the pack.
 function markUndo() {
   clearTimeout(undoTimer);

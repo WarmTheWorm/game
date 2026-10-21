@@ -30,6 +30,7 @@ function assetpackJson() {
   const sets = { dir: 'sounds/', default: 'default.json', items: [] };
   const doc = {
     _comment: 'An asset pack: everything the level editor draws with, in one folder. Made with the asset pack creator.',
+    name: pack.name,
     // the rows as the Tiles tab set them, so the level editor and the game
     // collide each row the way it was chosen there
     tileset: {
@@ -129,7 +130,8 @@ async function exportPack() {
   toast('Packing…');
   const files = await buildPackFiles();
   download(zipBlob(files), slug(pack.name) + '.zip');
-  toast(`${files.length} files — unzip into assetpacks/`);
+  toast(`Exported ${slug(pack.name)}.zip — ${files.length} files; unzip into assetpacks/, or Import it in another browser`);
+  return true;
 }
 
 // The pack as it stands, in the level editor, without a download: its files

@@ -262,6 +262,8 @@ function clashingCodes() {
 
 function newPack() {
   return {
+    id: uid(),                    // its record in this browser (js/db.js)
+    dirty: true,                  // changed since it was last exported — never, yet
     name: 'My Pack',
     sprites: [],
     objects: [],
@@ -435,7 +437,8 @@ let saveAgain = false;
 
 function writePack() {
   if (saving) { saveAgain = true; return saving; }
-  saving = dbPut(structuredClone(pack))
+  saving = dbSave(structuredClone(pack))
+    .then(() => renderPackPicker())
     .catch(err => toast('Could not save: ' + err.message, true))
     .finally(() => {
       saving = null;
@@ -444,13 +447,23 @@ function writePack() {
   return saving;
 }
 
-// Set when the stored pack could not be read at start-up: the blank one open
-// instead must not be saved over it, so nothing is written until the person
-// imports a pack or starts over, which say they mean to replace it.
+// Set when the stored packs could not be read at start-up: the blank one open
+// instead must not be saved over them, so nothing is written until the person
+// imports a pack or makes a new one, which say they mean to.
 let storageLocked = false;
 
+// Any change marks the pack as not exported since (the picker's *).
 function savePack() {
   if (storageLocked) return;
+  if (!pack.dirty) { pack.dirty = true; renderPackPicker(); }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(writePack, 400);
+}
+
+// Written now rather than on the debounce: before another pack is opened.
+async function flushPack() {
+  clearTimeout(saveTimer);
+  if (storageLocked || !pack) return;
+  await writePack();
+  while (saving) await saving;
 }

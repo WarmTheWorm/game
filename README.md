@@ -134,8 +134,14 @@ it back as a zip to unzip into `assetpacks/`.
 - **Sounds** — synthesized defs edited against the engine's own sound board, so
   what you hear is what the game plays; plus imported `.wav`/`.mp3` for clips
   and looping music.
-- **Import a pack…** reads an existing `assetpacks/<name>/` back in — the atlas
-  is sliced into per-object frames — so a pack can be opened and changed.
+- **Packs in the browser** — every pack is kept in the browser (IndexedDB),
+  and the **pack** picker at the top opens one; a `*` after a name means it
+  has changed since it was last exported. **+ New** makes an empty pack,
+  **Import…** adds one — from a `.zip`, or from an `assetpacks/<name>/` folder,
+  its atlas sliced back into per-object frames — offering to replace a pack of
+  the same name or keep both, **Delete** removes the open pack from the
+  browser (and, if you say so, the copy the level editor reads), and
+  **⬇ Export .zip** downloads it as `<name>.zip`.
 
 On export it packs every object's frames into one `objects.png` and writes the
 manifest, reproducing `tools/gen/pack-objects.ps1` exactly: the same atlas, to

@@ -10,14 +10,16 @@
 
 <header class="top">
   <h1 class="logo">Asset<span>Pack</span></h1>
+  <label class="namebox packpick"><span>pack</span><select id="packPick" aria-label="The packs in this browser"></select></label>
   <label class="namebox"><span>name</span><input id="packName" value="My Pack" aria-label="Pack name"></label>
   <span class="grow"></span>
   <button class="btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>↶</button>
   <button class="btn" id="redoBtn" title="Redo (Ctrl+Y)" disabled>↷</button>
-  <button class="btn" id="importBtn">Import a pack…</button>
-  <button class="btn" id="resetBtn">Start over</button>
+  <button class="btn" id="newBtn" title="Make an empty pack, kept in this browser beside the others">+ New</button>
+  <button class="btn" id="importBtn" title="Add a pack to this browser — from a .zip, or a folder in assetpacks/">Import…</button>
+  <button class="btn danger" id="deleteBtn" title="Remove the open pack from this browser">Delete</button>
   <button class="btn" id="levelBtn" title="Open the level editor on this pack as it stands now">Open in level editor ↗</button>
-  <button class="btn primary" id="exportBtn">⬇ Download .zip</button>
+  <button class="btn primary" id="exportBtn" title="Download the open pack as name.zip — clears its *">⬇ Export .zip</button>
 </header>
 
 <nav class="tabs" id="tabs">

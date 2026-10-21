@@ -48,6 +48,8 @@ input[type=checkbox]{accent-color:var(--amber);width:auto}
 .namebox{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:3px 10px;font-family:var(--mono)}
 .namebox span{color:var(--muted);font-size:12px}
 .namebox input{background:transparent;border:0;color:var(--amber);width:16ch;padding:2px 0}
+.packpick select{background:transparent;border:0;color:var(--fg);font-family:var(--mono);padding:2px 0;max-width:22ch;cursor:pointer}
+.packpick select option{background:var(--panel);color:var(--fg)}
 .tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:57px;z-index:4}
 .tab{appearance:none;border:0;background:transparent;color:var(--muted);padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent}
 .tab:hover{color:var(--fg)}

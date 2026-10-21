@@ -63,3 +63,39 @@ function zipBlob(files) {
   tail.v.setUint32(16, offset, true);
   return new Blob([...chunks, ...central, tail.b], { type: 'application/zip' });
 }
+
+// ---------- reading a zip ----------
+// Every file in it, by its path: stored or deflated entries (what this page
+// writes, and what Windows, macOS and most tools make), found through the
+// central directory at the end. Deflate is undone by the browser's own
+// DecompressionStream.
+async function readZip(buf) {
+  const u8 = new Uint8Array(buf), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  let end = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 22 - 65535); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { end = i; break; }
+  }
+  if (end < 0) throw new Error('that is not a zip file');
+  const count = dv.getUint16(end + 10, true);
+  let at = dv.getUint32(end + 16, true);
+  const names = new TextDecoder();
+  const out = new Map();
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(at, true) !== 0x02014b50) throw new Error('the zip is damaged');
+    const method = dv.getUint16(at + 10, true);
+    const size = dv.getUint32(at + 20, true);
+    const nameLen = dv.getUint16(at + 28, true), extraLen = dv.getUint16(at + 30, true), noteLen = dv.getUint16(at + 32, true);
+    const local = dv.getUint32(at + 42, true);
+    const name = names.decode(u8.subarray(at + 46, at + 46 + nameLen));
+    at += 46 + nameLen + extraLen + noteLen;
+    if (name.endsWith('/')) continue;                  // a folder
+    const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+    const raw = u8.subarray(start, start + size);
+    if (method === 0) out.set(name, raw.slice());
+    else if (method === 8) {
+      const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      out.set(name, new Uint8Array(await new Response(stream).arrayBuffer()));
+    } else throw new Error(`${name} is packed in a way this page can't read (method ${method})`);
+  }
+  return out;
+}
