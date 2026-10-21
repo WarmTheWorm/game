@@ -109,17 +109,34 @@ async function freePackName(base) {
   return `${base} ${n}`;
 }
 
+// A new pack starts empty, as the basic pack (assetpacks/garden: tiles,
+// sprites, objects and sounds to change), or as a copy of the one open. It is
+// kept beside the others, and the one open now is kept as it is.
+const BASIC_PACK = '/assetpacks/garden/';
+
 $('#newBtn').onclick = async () => {
+  const was = pack.name;
+  const EMPTY = 'An empty pack', BASIC = 'The basic pack (garden)', COPY = `A copy of ${was}`;
   const got = await ask('A new pack', [
+    { key: 'from', label: 'Start from', type: 'select', options: [EMPTY, BASIC, COPY], value: EMPTY },
     { key: 'name', label: 'Name', value: await freePackName('My Pack') },
-    { type: 'note', label: 'An empty pack, kept in this browser beside the others. The one open now is kept as it is.' }
+    { type: 'note', label: 'It is kept in this browser beside the others; the one open now is kept as it is.' }
   ], 'Make it');
   if (!got) return;
   await flushPack();
-  const next = newPack();
+  let next;
+  if (got.from === BASIC) {
+    toast('Reading the basic pack…');
+    try { next = await importPack(BASIC_PACK); }
+    catch (err) { toast('Could not read the basic pack: ' + err.message, true); return; }
+  } else if (got.from === COPY) {
+    next = structuredClone(pack);
+  } else next = newPack();
+  // its own pack from here on: never exported, from nowhere
+  Object.assign(next, { id: uid(), dirty: true, origin: '', exported: false });
   next.name = (got.name || '').trim() || await freePackName('My Pack');
   await showPack(next);
-  toast(`Made ${next.name}`);
+  toast(`Made ${next.name}${got.from === EMPTY ? '' : ', from ' + (got.from === COPY ? was : 'the basic pack')}`);
 };
 
 // Remove (no *) takes the pack out at once; Delete (a *) asks first, since

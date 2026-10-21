@@ -136,7 +136,8 @@ it back as a zip to unzip into `assetpacks/`.
   and looping music.
 - **Packs in the browser** — every pack is kept in the browser (IndexedDB),
   and the **pack** picker at the top opens one; a `*` after a name means it
-  has changed since it was last exported. **+ New** makes an empty pack,
+  has changed since it was last exported. **+ New** makes a pack — empty, from the basic pack (garden), or a copy of
+  the one open —
   **Import…** adds one — from a `.zip`, or from an `assetpacks/<name>/` folder,
   its atlas sliced back into per-object frames — offering to replace a pack of
   the same name or keep both, and **⬇ Export .zip** downloads the open one
