@@ -1,0 +1,6 @@
+{
+  "sprites": "sprites.json",
+  "objects": {
+    "worm": {"class":"Worm","props":{"sprite":"sprite::worm","body":"body","tail":"tail","head":"headRight","headLeft":"headLeft","segments":14,"tailScale":0.32,"speed":3,"jump":10.5}}
+  }
+}

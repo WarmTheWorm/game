@@ -5,6 +5,9 @@
 // browser beside them). Run by `npm run build`; run it alone after adding or
 // removing a pack folder.
 //
+// A folder named __Like_This__ is the tools' own — __EmptyPack__ is what the
+// creator's Import starts an empty pack from — and is not listed.
+//
 //   [{ "name": "garden", "dir": "/assetpacks/garden/", "title": "garden" }]
 import { readdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -17,6 +20,7 @@ async function index(folder, manifest) {
   const dir = join(ROOT, folder);
   const out = [];
   for (const e of (await readdir(dir, { withFileTypes: true })).filter(e => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (/^__.*__$/.test(e.name)) continue;
     const file = join(dir, e.name, manifest);
     if (!await exists(file)) continue;
     let title = e.name;

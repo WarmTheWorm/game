@@ -133,6 +133,10 @@ $('#deleteBtn').onclick = async () => {
   toast(unsaved ? `Deleted ${name}` : `Removed ${name} from this browser`);
 };
 
+// What Import's empty pack starts from: a pack on disk, as small as a pack
+// can be. Its __name__ keeps it out of assetpacks/index.json.
+const EMPTY_PACK = '/assetpacks/__EmptyPack__/';
+
 // The folders there are to read, as assetpacks/index.json lists them — not
 // the copies Open in level editor keeps in this browser, which are only ever
 // a pack already here, packed. Each is { name, dir, label }.
@@ -159,11 +163,18 @@ $('#importBtn').onclick = async () => {
   ], 'Add it');
   if (!got) return;
 
-  // made here rather than read: a pack of its own, never exported
+  // a copy, or the empty pack: a pack of its own, never exported
   if (got.pick === COPY || got.pick === EMPTY) {
     const was = pack.name;
+    let next;
+    if (got.pick === COPY) next = structuredClone(pack);
+    else {
+      // the empty pack is a folder too — a tile sheet and the worm, the least
+      // a level can be built with — or, if it can't be read, nothing at all
+      try { next = await importPack(EMPTY_PACK); }
+      catch (err) { next = newPack(); toast('Could not read ' + EMPTY_PACK + ' — starting from nothing: ' + err.message, true); }
+    }
     await flushPack();
-    const next = got.pick === COPY ? structuredClone(pack) : newPack();
     Object.assign(next, { id: uid(), dirty: true, origin: '', exported: false });
     next.name = await freePackName(got.pick === COPY ? `${was} copy` : 'My Pack');
     await showPack(next);

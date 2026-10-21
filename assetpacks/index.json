@@ -3,15 +3,5 @@
     "name": "garden",
     "dir": "/assetpacks/garden/",
     "title": "garden"
-  },
-  {
-    "name": "test1",
-    "dir": "/assetpacks/test1/",
-    "title": "test1"
-  },
-  {
-    "name": "test2",
-    "dir": "/assetpacks/test2/",
-    "title": "test2"
   }
 ]
