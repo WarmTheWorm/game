@@ -264,6 +264,8 @@ function newPack() {
   return {
     id: uid(),                    // its record in this browser (js/db.js)
     dirty: true,                  // changed since it was last exported — never, yet
+    origin: '',                   // where it was imported from, if it was: a .zip or a folder
+    exported: false,              // written out as a .zip at least once
     name: 'My Pack',
     sprites: [],
     objects: [],

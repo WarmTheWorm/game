@@ -99,6 +99,8 @@ function pickFiles(accept, multiple) {
 
 // prompt() and confirm() are not available in every host this runs in, and a
 // real dialog can ask for more than one thing at a time.
+let askSettle = null;       // how the question on screen is answered, while one is
+
 function ask(title, fields, okLabel) {
   const dlg = $('#ask');
   $('#askTitle').textContent = title;
@@ -119,13 +121,28 @@ function ask(title, fields, okLabel) {
   }).join('');
 
   return new Promise(ok => {
-    dlg.addEventListener('close', () => {
-      if (dlg.returnValue !== 'ok') return ok(null);
+    // Each question answers only for itself. The dialog keeps its last
+    // returnValue, so it is emptied first — or Esc, which closes without
+    // one, would read as the OK of the question before. And a question still
+    // waiting when another opens is settled as cancelled, so its close can't
+    // take the new one's answer.
+    if (askSettle) askSettle(null);
+    const onClose = () => {
+      if (dlg.open) return;     // a late close of the showing before; this one is still up
+      if (dlg.returnValue !== 'ok') return settle(null);
       const out = {};
       $$('#askBody [data-k]').forEach(el => { out[el.dataset.k] = el.value; });
-      ok(out);
-    }, { once: true });
-    dlg.showModal();
+      settle(out);
+    };
+    const settle = v => {
+      dlg.removeEventListener('close', onClose);
+      if (askSettle === settle) askSettle = null;
+      ok(v);
+    };
+    askSettle = settle;
+    dlg.addEventListener('close', onClose);
+    dlg.returnValue = '';
+    if (!dlg.open) dlg.showModal();
     const first = $('#askBody input,#askBody select,#askBody textarea');
     if (first) { first.focus(); if (first.select) first.select(); }
   });

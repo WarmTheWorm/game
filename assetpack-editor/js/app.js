@@ -26,6 +26,7 @@ $('#exportBtn').onclick = async () => {
     if (!await exportPack()) return;
     // what is on disk now matches it: no * until it changes again
     pack.dirty = false;
+    pack.exported = true;
     clearTimeout(saveTimer);
     if (!storageLocked) writePack();
     renderPackPicker();
@@ -50,7 +51,18 @@ async function renderPackPicker() {
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   sel.innerHTML = list.map(x => `<option value="${esc(x.id)}" ${x.id === pack.id ? 'selected' : ''}>${esc(x.name || 'untitled')}${x.dirty ? ' *' : ''}</option>`).join('');
   sel.title = `${list.length} pack${list.length === 1 ? '' : 's'} in this browser — * changed since last exported`;
+  // a pack that also lives outside the browser — imported from a file or a
+  // folder, or exported to one — is only removed from here; one that lives
+  // nowhere else is deleted
+  const del = $('#deleteBtn');
+  const elsewhere = hasCopyElsewhere(pack);
+  del.textContent = elsewhere ? 'Remove' : 'Delete';
+  del.title = elsewhere
+    ? `Remove ${pack.name} from this browser — ${pack.origin ? 'what it was imported from' : 'the .zip it was exported to'} is kept`
+    : `Delete ${pack.name}: it is only in this browser`;
 }
+
+const hasCopyElsewhere = p => !!(p.origin || p.exported);
 
 // Everything that belongs to the pack that was open is let go of.
 function forgetOpenPack() {
@@ -117,10 +129,14 @@ $('#deleteBtn').onclick = async () => {
   let stored = false;
   try { stored = await packStore.ready() && (await packStore.list('assets')).some(p => p.name === slug(name)); } catch { /* none */ }
   const YES = 'Yes, remove it too', NO = 'No, keep it';
-  const got = await ask(`Delete ${name}?`, [
-    { type: 'note', label: `This removes ${name} from this browser. It cannot be undone${pack.dirty ? ' — and it has changes that were never exported' : ''}. A .zip of it you exported is not touched.` },
+  const elsewhere = hasCopyElsewhere(pack);
+  const unsaved = pack.dirty ? ' Its changes since it was last exported are lost.' : '';
+  const got = await ask(elsewhere ? `Remove ${name} from this browser?` : `Delete ${name}?`, [
+    { type: 'note', label: elsewhere
+      ? `${name} goes from the packs here; ${pack.origin ? 'it can be imported again from ' + pack.origin : 'the .zip it was exported to is kept, and can be imported again'}.${unsaved}`
+      : `${name} is only in this browser, and was never exported: this deletes it for good.` },
     ...(stored ? [{ key: 'level', label: 'The copy the level editor reads (saved by Open in level editor)', type: 'select', options: [YES, NO], value: YES }] : [])
-  ], 'Delete it');
+  ], elsewhere ? 'Remove it' : 'Delete it');
   if (!got) return;
   clearTimeout(saveTimer);
   while (saving) await saving;
@@ -132,7 +148,7 @@ $('#deleteBtn').onclick = async () => {
   const left = (await dbList().catch(() => [])).sort((a, b) => b.updated - a.updated);
   const next = left.length ? await dbLoad(left[0].id).catch(() => null) : null;
   await showPack(next || Object.assign(newPack(), { name: await freePackName('My Pack') }));
-  toast(`Deleted ${name}${stored && got.level === YES ? ', and its level editor copy' : ''}`);
+  toast(`${elsewhere ? 'Removed' : 'Deleted'} ${name}${stored && got.level === YES ? ', and its level editor copy' : ''}`);
 };
 
 // The packs there are to read: the ones kept in this browser (the pack store,
@@ -165,7 +181,7 @@ $('#importBtn').onclick = async () => {
     { type: 'note', label: 'It is added to the packs in this browser; the one open now is kept.' }
   ], 'Import');
   if (!got) return;
-  let source, fallbackName = null;
+  let source, fallbackName = null, origin = '';
   if (got.pick === ZIP) {
     const [file] = await pickFiles('.zip,application/zip', false);
     if (!file) return;
@@ -174,15 +190,18 @@ $('#importBtn').onclick = async () => {
     catch (err) { toast('Could not read that zip: ' + err.message, true); return; }
     // garden (7).zip, as a browser names a later download, is garden
     fallbackName = file.name.replace(/\.zip$/i, '').replace(/\s*\(\d+\)$/, '').trim();
+    origin = file.name;
   } else {
     source = got.pick === OTHER ? got.dir : (list.find(p => p.label === got.pick) || {}).dir;
     if (!source || !String(source).trim()) { toast('Say which folder to read', true); return; }
+    origin = packDir(source);
     toast('Reading…');
   }
   let next;
   try { next = await importPack(source); }
   catch (err) { toast('Could not read that pack: ' + err.message, true); return; }
   if (fallbackName && (next.name === 'Imported' || !next.name)) next.name = fallbackName;
+  next.origin = origin;
 
   // the same name here already: replace it, or keep both
   const same = (await dbList().catch(() => [])).find(x => x.name === next.name);

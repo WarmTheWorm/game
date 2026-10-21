@@ -139,9 +139,11 @@ it back as a zip to unzip into `assetpacks/`.
   has changed since it was last exported. **+ New** makes an empty pack,
   **Import…** adds one — from a `.zip`, or from an `assetpacks/<name>/` folder,
   its atlas sliced back into per-object frames — offering to replace a pack of
-  the same name or keep both, **Delete** removes the open pack from the
-  browser (and, if you say so, the copy the level editor reads), and
-  **⬇ Export .zip** downloads it as `<name>.zip`.
+  the same name or keep both, and **⬇ Export .zip** downloads the open one
+  as `<name>.zip`. **Remove** takes a pack that also lives elsewhere —
+  imported from a file or folder, or exported — out of the browser; a pack
+  that was only ever here says **Delete** instead. Either can also take the
+  copy the level editor reads, if you say so.
 
 On export it packs every object's frames into one `objects.png` and writes the
 manifest, reproducing `tools/gen/pack-objects.ps1` exactly: the same atlas, to

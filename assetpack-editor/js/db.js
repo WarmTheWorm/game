@@ -41,28 +41,44 @@ async function dbOpenId() { return dbRead(DB_OPEN); }
 async function dbLoad(id) { return dbRead(packKey(id)); }
 async function dbSetOpen(id) { return dbTx('readwrite', s => { s.put(id, DB_OPEN); }); }
 
+// The index is read and written back inside the one transaction, which
+// IndexedDB runs alone: two saves close together can't each write back a
+// list that is missing the other's pack.
+function editIndex(s, change) {
+  const req = s.get(DB_INDEX);
+  req.onsuccess = () => s.put(change(req.result || []), DB_INDEX);
+}
+
 // The pack, and its line in the index, in one go.
 async function dbSave(p) {
-  const list = await dbList();
   const line = { id: p.id, name: p.name, dirty: !!p.dirty, updated: Date.now() };
-  const at = list.findIndex(x => x.id === p.id);
-  if (at >= 0) list[at] = line; else list.push(line);
-  return dbTx('readwrite', s => { s.put(p, packKey(p.id)); s.put(list, DB_INDEX); });
+  return dbTx('readwrite', s => {
+    s.put(p, packKey(p.id));
+    editIndex(s, list => [...list.filter(x => x.id !== p.id), line]);
+  });
 }
 
 async function dbDelete(id) {
-  const list = (await dbList()).filter(x => x.id !== id);
-  const open = await dbOpenId();
   return dbTx('readwrite', s => {
     s.delete(packKey(id));
-    s.put(list, DB_INDEX);
-    if (open === id) s.delete(DB_OPEN);
+    editIndex(s, list => list.filter(x => x.id !== id));
+    const open = s.get(DB_OPEN);
+    open.onsuccess = () => { if (open.result === id) s.delete(DB_OPEN); };
   });
 }
 
 // The one pack an earlier version kept becomes the first of many. Nothing is
-// lost: it is written under its new key before the old one goes.
+// lost: it is written under its new key before the old one goes. And any
+// pack stored but missing from the index — which a version that wrote the
+// index in two steps could leave — is listed again.
 async function dbMigrate() {
+  const keys = await dbTx('readonly', s => s.getAllKeys());
+  const listed = new Set((await dbList()).map(x => x.id));
+  for (const k of keys) {
+    if (typeof k !== 'string' || !k.startsWith('pack:') || listed.has(k.slice(5))) continue;
+    const lost = await dbRead(k);
+    if (lost && lost.id) await dbSave(lost);
+  }
   const old = await dbRead(DB_LEGACY);
   if (!old) return;
   if (!old.id) old.id = uid();
