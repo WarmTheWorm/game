@@ -40,6 +40,14 @@
   .top .grow { flex: 1; }
   .top button, .top > select { width: auto; margin: 0; }
 
+  /* the panel's tabs: the creator's .tabs/.tab */
+  .tabs { flex: none; display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .tab { appearance: none; border: 0; background: transparent; color: var(--muted); padding: 10px 16px; cursor: pointer;
+    border-bottom: 2px solid transparent; border-radius: 0; font-size: 14px; width: auto; }
+  .tab:hover { color: var(--fg); background: transparent; }
+  .tab.on { color: var(--amber); border-bottom-color: var(--amber); background: transparent; }
+  #panel .group[data-tab]:not(.tabOn) { display: none; }
+
   /* with none, a word where the editor would be */
   .nopackBox { display: none; flex: 1; align-items: center; justify-content: center; flex-direction: column;
     gap: 6px; color: var(--muted); text-align: center; }
@@ -259,6 +267,14 @@
   <button id="delPackBtn" class="packOnly">Remove</button>
 </header>
 
+<!-- which part of the panel is shown, as the asset pack creator's tabs -->
+<nav class="tabs packOnly" id="tabs">
+  <button class="tab" data-tab="paint">Paint</button>
+  <button class="tab" data-tab="level">Level</button>
+  <button class="tab" data-tab="background">Background</button>
+  <button class="tab" data-tab="sound">Sound</button>
+</nav>
+
 <section class="nopackBox">
   <h2>No level packs in this browser</h2>
   <p>Import one to start — <b>Import…</b> above: from levelpacks/, a .zip, or an empty one.</p>
@@ -266,7 +282,7 @@
 
 <div id="app">
   <div id="panel">
-    <div class="group">
+    <div class="group" data-tab="level">
       <label>Level</label>
       <select id="levelSelect"></select>
       <div class="row" style="margin-top:6px">
@@ -281,7 +297,7 @@
       <div class="hint">The first level in the list is where the level pack starts. Where each flag leads is set on the flag. <b>Clear</b> empties this level, <b>Delete</b> takes it out of the level pack; both ask first.</div>
     </div>
 
-    <div class="group">
+    <div class="group" data-tab="paint">
       <label>Layer</label>
       <div class="seg" id="layerSeg">
         <button data-layer="0">Back</button>
@@ -291,7 +307,7 @@
       <div class="hint">Keys <b>1 2 3</b>. The board shows all three as the game will. Only Mid collides.</div>
     </div>
 
-    <div class="group">
+    <div class="group" data-tab="paint">
       <label>Tool</label>
       <div class="seg" id="toolSeg">
         <button data-tool="paint" class="on">Paint</button>
@@ -301,21 +317,21 @@
       <div class="hint">Keys <b>P E S</b>. Drag to paint; right-drag always erases; <b>Ctrl</b>+click picks up what a cell holds. The finish is the <b>F</b> flag in the object palette. <b>Shift</b>-drag selects cells; a click inside fills them all with what is picked (a right-click empties them): <b>Ctrl+C</b> copies them, <b>Ctrl+X</b> cuts. <b>Ctrl+V</b> puts the whole copy down at the mouse — or, with cells selected, fills them with the copy repeated; <b>Ctrl+Shift+V</b> pastes the layer you are on only. With <b>Shift</b>, copy, cut and Delete also work on the current layer only. While the copy's outline follows the mouse, Ctrl+C, Ctrl+X and Delete act on the cells under it. <b>Delete</b> empties the selection, <b>Esc</b> lets it go.</div>
     </div>
 
-    <div class="group">
+    <div class="group" data-tab="paint">
       <label>Tile</label>
       <div id="palette"></div>
       <div class="field" style="margin-top:8px"><span>Colour</span><div id="tints"></div></div>
       <div class="hint">The block’s third character — which colour column the tile comes from.</div>
     </div>
 
-    <div class="group">
+    <div class="group" data-tab="paint">
       <label>Object</label>
       <div id="objPalette"></div>
       <div class="field" style="margin-top:8px"><span id="objDigitsLabel">Digit</span><div id="objDigits"></div></div>
       <div class="hint" id="objHint">Spawns from the layer it is drawn on. A door only counts on Mid. The block’s first character picks the variant, or the id that pairs a key with its door.</div>
     </div>
 
-    <div class="group">
+    <div class="group" data-tab="background">
       <label>Background</label>
       <div id="bgList"></div>
       <div class="row" style="margin-top:7px">
@@ -325,7 +341,7 @@
       <div class="hint">Per level, behind everything. Picking a sprite takes its colour and distance too. <b>Distance</b> is how much of the camera it travels with: 0 pins it to the window, 1 to the world.</div>
     </div>
 
-    <div class="group">
+    <div class="group" data-tab="sound">
       <label>Sound</label>
       <div class="field"><span>Music</span><select id="musicSelect"></select></div>
       <div class="row" style="margin-top:6px">
@@ -336,7 +352,7 @@
       <div class="hint">Both are per level and swap as she walks on. An effects set only says what it changes, so the rest of the game still sounds like itself.</div>
     </div>
 
-    <div class="group">
+    <div class="group" data-tab="level">
       <label>Map</label>
       <div class="row">
         <div class="field"><span>Columns</span><input type="number" id="colsInput" min="4" max="400" value="40"></div>
@@ -1528,6 +1544,23 @@ const endStroke = () => {
 board.addEventListener('pointerup', endStroke);
 board.addEventListener('pointercancel', endStroke);
 board.addEventListener('pointerleave', () => { hover = null; render(); updateStatus(null); });
+
+// ---------- the panel's tabs ----------
+// The panel shows one tab's groups at a time — Paint (layer, tool, tile,
+// object), Level (its levels and map size), Background, Sound — and the one
+// shown is kept in this browser, as the asset pack creator keeps its tab.
+const PANEL_TAB_KEY = 'warmWormEditorTab';
+function showPanelTab(name) {
+  if (!document.querySelector(`#tabs .tab[data-tab="${name}"]`)) name = 'paint';
+  document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
+  document.querySelectorAll('#panel .group[data-tab]').forEach(g => g.classList.toggle('tabOn', g.dataset.tab === name));
+  try { localStorage.setItem(PANEL_TAB_KEY, name); } catch (err) { /* not kept */ }
+}
+document.getElementById('tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab');
+  if (t) showPanelTab(t.dataset.tab);
+});
+showPanelTab((() => { try { return localStorage.getItem(PANEL_TAB_KEY); } catch (err) { return null; } })() || 'paint');
 
 // ---------- panning ----------
 // With the pointer on the board, holding Space turns it into a hand, and a
