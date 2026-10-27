@@ -1674,8 +1674,26 @@ const bgScroll = document.getElementById('bgScroll');
 // Each swatch is the library entry as it would actually look: its own colour
 // with its own sprite tiled over it. 'None' wears the level's colour, so it
 // doubles as a preview of the plain backdrop.
+// Each swatch's canvas is kept with its entry, so a change of colour can
+// repaint the swatches it shows through (paintBgSwatch) without building the
+// list again.
+let bgSwatches = [];      // [{ entry, canvas }]
+
+function paintBgSwatch(entry, swatch) {
+  const sctx = swatch.getContext('2d');
+  sctx.imageSmoothingEnabled = false;
+  sctx.fillStyle = entry.file ? (entry.color || levelBg.color) : levelBg.color;
+  sctx.fillRect(0, 0, swatch.width, swatch.height);
+  const img = bgImage(entry.file);
+  if (img && img.complete && img.naturalWidth) {
+    sctx.fillStyle = sctx.createPattern(img, 'repeat');
+    sctx.fillRect(0, 0, swatch.width, swatch.height);
+  }
+}
+
 function renderBgList() {
   bgList.innerHTML = '';
+  bgSwatches = [];
   const entries = [{ file: null, name: 'None' }].concat(bgLibrary);
   for (const entry of entries) {
     const tile = document.createElement('div');
@@ -1684,15 +1702,8 @@ function renderBgList() {
 
     const swatch = document.createElement('canvas');
     swatch.width = 120; swatch.height = 60;
-    const sctx = swatch.getContext('2d');
-    sctx.imageSmoothingEnabled = false;
-    sctx.fillStyle = entry.file ? (entry.color || levelBg.color) : levelBg.color;
-    sctx.fillRect(0, 0, swatch.width, swatch.height);
-    const img = bgImage(entry.file);
-    if (img && img.complete && img.naturalWidth) {
-      sctx.fillStyle = sctx.createPattern(img, 'repeat');
-      sctx.fillRect(0, 0, swatch.width, swatch.height);
-    }
+    paintBgSwatch(entry, swatch);
+    bgSwatches.push({ entry, canvas: swatch });
 
     const label = document.createElement('span');
     label.textContent = entry.name;
@@ -1722,7 +1733,19 @@ function refreshBg() {
   renderBgList();
 }
 
-bgColor.addEventListener('input', () => { levelBg.color = bgColor.value; renderBgList(); render(); });
+// A colour picker sends a change for every step of a drag, faster than the
+// screen draws: they are taken once a frame, and only the swatches the level's
+// colour shows through are repainted, not the list built again.
+let bgColorFrame = 0;
+bgColor.addEventListener('input', () => {
+  levelBg.color = bgColor.value;
+  if (bgColorFrame) return;
+  bgColorFrame = requestAnimationFrame(() => {
+    bgColorFrame = 0;
+    for (const { entry, canvas } of bgSwatches) if (!entry.file || !entry.color) paintBgSwatch(entry, canvas);
+    render();
+  });
+});
 bgColor.addEventListener('change', () => { levelBg.color = bgColor.value; save(); });
 bgScroll.addEventListener('input', () => {
   const v = parseFloat(bgScroll.value);
