@@ -65,7 +65,7 @@ body.no-pack #tabs,body.no-pack main.page{display:none!important}
 .tab.on{color:var(--amber);border-bottom-color:var(--amber)}
 
 .page{display:none}
-.page.on{display:grid;grid-template-columns:230px minmax(0,1fr) 300px;gap:16px;padding:16px;align-items:start}
+.page.on{display:grid;grid-template-columns:300px minmax(0,1fr) 300px;gap:16px;padding:16px;align-items:start}
 .page.on:has(.work.wide){grid-template-columns:minmax(0,1fr)}
 @media (max-width:1100px){.page.on{grid-template-columns:1fr}}
 .rail,.work,.side{display:grid;gap:16px;min-width:0}
@@ -286,8 +286,12 @@ dialog#ask::backdrop{background:#0b0818cc}
 .sprrow .sprpick{flex:1;min-width:0}
 /* an object's properties, Blender-style: panels of lines, label | field | ↺ */
 /* one column, no wider than a Blender properties editor */
-.ppanels{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;max-width:420px;align-content:start;
-  overflow-y:auto;padding-right:4px;overscroll-behavior:contain}
+.ppanels{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;max-width:420px;align-content:start}
+/* the object's form: all of it at the panels' width, scrolling as one in the
+   middle panel (fitted to the window by fitPropPanels) */
+#goForm{overflow-y:auto;overscroll-behavior:contain}
+#goForm>.insp,#goForm>.subh,#goForm>.probs,#goForm>.row{max-width:420px}
+#goForm>.insp{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .ppanel{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:0 0 6px;min-width:0}
 .ppanel>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 9px;font-size:12.5px;font-weight:600;user-select:none}
 .ppanel>summary::-webkit-details-marker{display:none}

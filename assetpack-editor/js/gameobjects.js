@@ -206,13 +206,13 @@ function renderGoForm() {
   drawGoPreview();
 }
 
-// The properties scroll in their own column, which runs from where it
-// starts to the bottom of the window, leaving the buttons under it in view.
+// The object's form scrolls as one in the middle panel, which runs from
+// where it starts to the bottom of the window.
 function fitPropPanels() {
-  const pp = $('#goForm .ppanels');
-  if (!pp || !pp.offsetParent) return;
-  const top = pp.getBoundingClientRect().top + window.scrollY;
-  pp.style.maxHeight = Math.max(200, window.innerHeight - top - 64) + 'px';
+  const f = $('#goForm');
+  if (!f || !f.offsetParent) return;
+  const top = f.getBoundingClientRect().top + window.scrollY;
+  f.style.maxHeight = Math.max(240, window.innerHeight - top - 18) + 'px';
 }
 addEventListener('resize', fitPropPanels);
 

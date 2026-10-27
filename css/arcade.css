@@ -50,7 +50,10 @@ input[type=color] { border: 2px solid var(--rim); border-radius: 0; padding: 1px
 
 .hint { font-size: 11px; color: var(--muted); }
 
-* { scrollbar-width: thin; scrollbar-color: var(--pink) #0f0b1d; }
+@supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: var(--pink) #0f0b1d; } }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--pink); }
+::-webkit-scrollbar-track { background: #0f0b1d; }
 
 /* ---------- the bar on top: a marquee ---------- */
 .top { background: #0f0b1d; border-bottom: 3px solid var(--pink); gap: 8px; padding: 6px 10px; }
