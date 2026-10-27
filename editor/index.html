@@ -5,54 +5,64 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Warm the Worm — Level Editor</title>
 <style>
+  /* the asset pack creator's palette and type (assetpack-editor/css/app.css) */
+  :root {
+    --bg:#17122a; --panel:#211a3a; --panel2:#2b2249; --line:#3d3263; --line2:#52457f;
+    --fg:#efe9ff; --muted:#a69cc9; --amber:#ffb547; --pink:#ff6fae; --mint:#6ff0c8; --sky:#7cc4ff;
+    --body:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    color-scheme: dark;
+  }
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%;
-    background: #15101f; color: #e8e4f0;
-    font-family: -apple-system, system-ui, sans-serif;
+    background: var(--bg); color: var(--fg);
+    font-family: var(--body);
     overflow: hidden;
   }
   body { display: flex; flex-direction: column; }
   #app { display: flex; width: 100%; flex: 1; min-height: 0; }
 
   /* ---- the top bar: everything about the level pack, as in the asset pack creator ---- */
-  .top { flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    padding: 8px 12px; background: #1d1630; border-bottom: 1px solid #332a4d; }
-  .top .logo { font-size: 15px; font-weight: 700; margin: 0 6px 0 0; white-space: nowrap; }
-  .top .logo span { color: #9a8fb5; font-weight: 500; font-size: 11px; margin-left: 6px; }
-  .namebox { display: flex; align-items: center; gap: 6px; background: #15101f; border: 1px solid #332a4d;
-    border-radius: 7px; padding: 2px 4px 2px 9px; }
-  .namebox > span { color: #9a8fb5; font-size: 11px; }
-  .namebox select, .namebox input { background: transparent; border: 0; margin: 0; padding: 3px 2px; width: auto; }
-  .namebox input { width: 15ch; }
-  .namebox select { max-width: 24ch; }
+  .top { flex: none; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .top .logo { font-family: var(--mono); font-size: 21px; font-weight: 700; color: var(--amber);
+    margin: 0 4px 0 0; line-height: 1; letter-spacing: -.03em; white-space: nowrap; }
+  .top .logo span { color: var(--pink); }
+  .namebox { display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 7px; padding: 3px 10px; font-family: var(--mono); }
+  .namebox > span { color: var(--muted); font-size: 12px; }
+  .namebox select, .namebox input[type=text] { background: transparent; border: 0; margin: 0; padding: 2px 0; width: auto; font-family: var(--mono); }
+  .namebox input[type=text] { width: 16ch; color: var(--amber); }
+  .namebox select option { background: var(--panel); color: var(--fg); }
+  .namebox select { max-width: 32ch; }
   .top .grow { flex: 1; }
   .top button, .top > select { width: auto; margin: 0; }
   .top #openPackSel { max-width: 14ch; }
   /* with none, a word where the editor would be */
   .nopackBox { display: none; flex: 1; align-items: center; justify-content: center; flex-direction: column;
-    gap: 6px; color: #c9c2d8; text-align: center; }
-  .nopackBox h2 { margin: 0; font-size: 18px; color: #e8e4f0; }
+    gap: 6px; color: var(--muted); text-align: center; }
+  .nopackBox h2 { margin: 0; font-size: 18px; color: var(--fg); }
   body.no-pack .nopackBox { display: flex; }
   body.no-pack #app { display: none !important; }
 
   /* ---- side panel ---- */
   #panel {
     width: 272px; flex: none; height: 100%; overflow-y: auto;
-    background: #1d1630; border-right: 1px solid #332a4d; padding: 12px;
+    background: var(--panel); border-right: 1px solid var(--line); padding: 12px;
   }
   #panel h1 { font-size: 15px; margin: 0 0 2px; }
-  #panel .sub { font-size: 11px; color: #9a8fb5; margin: 0 0 14px; }
+  #panel .sub { font-size: 11px; color: var(--muted); margin: 0 0 14px; }
   .group { margin-bottom: 16px; }
   .group > label { display: block; font-size: 11px; letter-spacing: .06em;
-    text-transform: uppercase; color: #9a8fb5; margin-bottom: 6px; }
+    text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
   .group > label.fold {
     display: flex; align-items: center; gap: 6px;
     cursor: pointer; user-select: none;
   }
-  .group > label.fold:hover { color: #d7cdf0; }
+  .group > label.fold:hover { color: var(--fg); }
   .group > label.fold::before {
-    content: '▾'; font-size: 9px; color: #6a5a9c;
+    content: '▾'; font-size: 9px; color: var(--line2);
     transition: transform .12s ease;
   }
   .group.shut > label.fold::before { transform: rotate(-90deg); }
@@ -61,24 +71,25 @@
   .group.shut > .groupBody { display: none; }
   .row { display: flex; gap: 6px; }
   button {
-    font: inherit; font-size: 13px; color: #e8e4f0; background: #2b2244;
-    border: 1px solid #3d3160; border-radius: 6px; padding: 7px 10px; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--fg); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; cursor: pointer;
   }
-  button:hover { background: #352a54; }
-  button.on { background: #6a4bc4; border-color: #8d6ee8; }
+  button:hover { border-color: var(--amber); }
+  button.on { background: var(--panel2); border-color: var(--amber); color: var(--amber); }
+  button:disabled { opacity: .4; cursor: default; }
   button.wide { width: 100%; }
   .seg { display: flex; gap: 0; }
   .seg button { flex: 1; border-radius: 0; border-right-width: 0; }
   .seg button:first-child { border-radius: 6px 0 0 6px; }
   .seg button:last-child { border-radius: 0 6px 6px 0; border-right-width: 1px; }
-  .hint { font-size: 11px; color: #7d7296; margin-top: 5px; line-height: 1.45; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.45; }
 
   #palette, #objPalette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
   #palette .tile, #objPalette .tile {
-    position: relative; padding: 2px; background: #241c3b;
-    border: 1px solid #3d3160; border-radius: 5px; cursor: pointer; line-height: 0;
+    position: relative; padding: 2px; background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 5px; cursor: pointer; line-height: 0;
   }
-  #palette .tile.on, #objPalette .tile.on { border-color: #b79bff; background: #3b2f63; }
+  #palette .tile.on, #objPalette .tile.on { border-color: var(--amber); background: var(--panel2); }
   #palette canvas, #objPalette canvas { width: 100%; height: auto; image-rendering: pixelated; }
   #palette .tag, #objPalette .tag {
     position: absolute; left: 2px; bottom: 1px; line-height: 1;
@@ -91,64 +102,64 @@
 
   #bgList { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
   #bgList .tile {
-    padding: 2px; background: #241c3b; border: 1px solid #3d3160;
+    padding: 2px; background: var(--panel2); border: 1px solid var(--line);
     border-radius: 5px; cursor: pointer; overflow: hidden;
   }
-  #bgList .tile:hover { border-color: #6a5a9c; }
-  #bgList .tile.on { border-color: #b79bff; background: #3b2f63; }
+  #bgList .tile:hover { border-color: var(--line2); }
+  #bgList .tile.on { border-color: var(--amber); background: var(--panel2); }
   #bgList canvas { display: block; width: 100%; height: auto; border-radius: 3px; image-rendering: pixelated; }
   #bgList span {
-    display: block; font-size: 10px; color: #9a8fb5; text-align: center;
+    display: block; font-size: 10px; color: var(--muted); text-align: center;
     padding: 3px 0 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  #bgList .tile.on span { color: #e8e4f0; }
+  #bgList .tile.on span { color: var(--fg); }
   input[type=color] {
     width: 100%; height: 31px; padding: 2px; cursor: pointer;
-    background: #241c3b; border: 1px solid #3d3160; border-radius: 6px;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
   }
 
   input[type=number] {
-    font: inherit; font-size: 13px; width: 100%; color: #e8e4f0;
-    background: #241c3b; border: 1px solid #3d3160; border-radius: 6px; padding: 6px 8px;
+    font: inherit; font-size: 13px; width: 100%; color: var(--fg);
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
   }
   input[type=text], select {
-    font: inherit; font-size: 13px; width: 100%; color: #e8e4f0;
-    background: #241c3b; border: 1px solid #3d3160; border-radius: 6px; padding: 6px 8px;
+    font: inherit; font-size: 13px; width: 100%; color: var(--fg);
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
   }
-  input:focus, select:focus { outline: none; border-color: #b79bff; }
+  input:focus, select:focus { outline: none; border-color: var(--amber); }
   textarea {
-    font: inherit; font-size: 12px; width: 100%; resize: vertical; color: #e8e4f0;
-    background: #241c3b; border: 1px solid #3d3160; border-radius: 6px; padding: 6px 8px;
+    font: inherit; font-size: 12px; width: 100%; resize: vertical; color: var(--fg);
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
   }
-  textarea:focus { outline: none; border-color: #b79bff; }
+  textarea:focus { outline: none; border-color: var(--amber); }
   #propList { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
   .propRow {
     display: flex; gap: 6px; align-items: baseline; cursor: pointer;
-    font-size: 11px; color: #9a8fb5; padding: 3px 6px;
-    background: #241c3b; border: 1px solid #3d3160; border-radius: 5px;
+    font-size: 11px; color: var(--muted); padding: 3px 6px;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 5px;
   }
-  .propRow:hover { border-color: #b79bff; }
-  .propRow.on { border-color: #b79bff; background: #3b2f63; }
-  .propRow b { flex: none; color: #d7cdf0; }
+  .propRow:hover { border-color: var(--amber); }
+  .propRow.on { border-color: var(--amber); background: var(--panel2); }
+  .propRow b { flex: none; color: var(--fg); }
   .propRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .propField + .propField { margin-top: 10px; }
-  .propField > span { display: block; font-size: 10px; color: #7d7296; margin-bottom: 3px; }
+  .propField > span { display: block; font-size: 10px; color: var(--muted); margin-bottom: 3px; }
   .field { flex: 1; }
-  .field span { display: block; font-size: 10px; color: #7d7296; margin-bottom: 3px; }
+  .field span { display: block; font-size: 10px; color: var(--muted); margin-bottom: 3px; }
 
   /* ---- canvas area ---- */
   #main { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; }
   #topbar {
     flex: none; height: 46px; display: flex; align-items: center; gap: 8px;
-    padding: 0 12px; background: #1d1630; border-bottom: 1px solid #332a4d;
+    padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line);
     white-space: nowrap; overflow-x: auto;
   }
   #topbar .spacer { flex: 1; min-width: 12px; }
   #topbar .seg { flex: none; width: 168px; }
   #topbar button { flex: none; }
-  button.go { background: #2e7d4f; border-color: #3fa868; }
-  button.go:hover { background: #368e5a; }
-  #levelMsg { font-size: 11px; color: #7d7296; overflow: hidden; text-overflow: ellipsis; }
+  button.go { background: var(--amber); border-color: var(--amber); color: #1c1430; font-weight: 600; }
+  button.go:hover { filter: brightness(1.06); }
+  #levelMsg { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
   #scroller { flex: 1; overflow: auto; background: #0d0a16; }
   #board { display: block; cursor: crosshair; }
 
@@ -159,21 +170,21 @@
     max-width: calc(100% - 28px);
     max-height: calc(100% - 104px); overflow-y: auto;
     padding: 10px 12px; background: rgba(29, 22, 48, 0.97);
-    border: 1px solid #4a3c73; border-radius: 8px;
+    border: 1px solid var(--line2); border-radius: 8px;
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
   }
   #propGroup > label {
     display: block; font-size: 11px; letter-spacing: .06em;
-    text-transform: uppercase; color: #b79bff; margin-bottom: 8px;
+    text-transform: uppercase; color: var(--amber); margin-bottom: 8px;
   }
   #status {
     flex: none; height: 30px; display: flex; align-items: center; gap: 18px;
-    padding: 0 12px; font-size: 12px; color: #9a8fb5;
-    background: #1d1630; border-top: 1px solid #332a4d;
+    padding: 0 12px; font-size: 12px; color: var(--muted);
+    background: var(--panel); border-top: 1px solid var(--line);
     white-space: nowrap; overflow-x: auto;
   }
   #status span { flex: none; }
-  #status b { color: #d7cdf0; font-weight: 600; }
+  #status b { color: var(--fg); font-weight: 600; }
 
   /* ---- confirm panel ---- */
   #askOverlay {
@@ -183,21 +194,22 @@
   }
   #askCard {
     width: 348px; max-width: calc(100% - 32px);
-    padding: 16px 18px; background: #1d1630;
-    border: 1px solid #4a3c73; border-radius: 10px;
+    padding: 16px 18px; background: var(--panel);
+    border: 1px solid var(--line2); border-radius: 10px;
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
   }
   #askCard > label {
     display: block; font-size: 11px; letter-spacing: .06em;
-    text-transform: uppercase; color: #b79bff; margin-bottom: 8px;
+    text-transform: uppercase; color: var(--amber); margin-bottom: 8px;
   }
-  #askText { font-size: 13px; line-height: 1.5; color: #d7cdf0; white-space: pre-line; }
-  button.danger { background: #8e3146; border-color: #c2546c; }
+  #askText { font-size: 13px; line-height: 1.5; color: var(--fg); white-space: pre-line; }
+  button.danger { color: var(--pink); border-color: #8a3a63; }
   /* Delete, for a level pack with changes never exported */
-  button.warn { color: #ff8fb6; border-color: #c2546c; }
+  button.warn { color: var(--pink); border-color: #8a3a63; }
+  button.warn:hover, button.danger:hover { border-color: var(--pink); }
   /* no level pack: only Import */
   body.no-pack .packOnly { display: none !important; }
-  button.danger:hover { background: #a3374f; }
+
 
   /* ---- test overlay ---- */
   #testOverlay {
@@ -205,9 +217,9 @@
   }
   #testBar {
     flex: none; height: 44px; display: flex; align-items: center; gap: 12px;
-    padding: 0 12px; background: #1d1630; border-bottom: 1px solid #332a4d;
+    padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line);
   }
-  #testMsg { font-size: 12px; color: #9a8fb5; }
+  #testMsg { font-size: 12px; color: var(--muted); }
   #testFrame { flex: 1; width: 100%; border: 0; background: #1a1024; }
   .hidden { display: none !important; }
 </style>
@@ -218,7 +230,7 @@
      Not <label>s: a click on a select in a label reaches the label too, which
      clicks the select again and shuts the list it just opened. -->
 <header class="top">
-  <h1 class="logo">🧱 Level Editor<span>Warm the Worm</span></h1>
+  <h1 class="logo">Level<span>Editor</span></h1>
   <div class="namebox packOnly"><span>level pack</span><select id="packSelect" title="The level packs in this browser — * changed since it was last exported. Every one is kept here as you work, where the game and the asset pack creator can open it too."></select></div>
   <div class="namebox packOnly"><span>name</span><input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40"></div>
   <div class="namebox packOnly"><span>asset pack</span><select id="assetSel" title="The asset pack this level pack is built with: its tiles, objects, backgrounds and sounds"></select></div>
