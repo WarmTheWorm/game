@@ -171,6 +171,13 @@
   }
   #askText { font-size: 13px; line-height: 1.5; color: #d7cdf0; white-space: pre-line; }
   button.danger { background: #8e3146; border-color: #c2546c; }
+  /* Delete, for a level pack with changes never exported */
+  button.warn { color: #ff8fb6; border-color: #c2546c; }
+  /* no level pack: only Import */
+  .nopackText { display: none; font-size: 12px; color: #c9c2d8; margin: 4px 0 2px; }
+  body.no-pack .nopackText { display: block; }
+  body.no-pack .packOnly { display: none !important; }
+  body.no-pack #panel .group:not(#packGroup), body.no-pack #main { display: none !important; }
   button.danger:hover { background: #a3374f; }
 
   /* ---- test overlay ---- */
@@ -193,21 +200,20 @@
     <h1>🧱 Level Editor</h1>
     <p class="sub">Warm the Worm — terrain</p>
 
-    <div class="group">
-      <label>Pack</label>
-      <select id="packSelect"></select>
-      <div class="row" style="margin-top:6px">
-        <button id="addPackBtn" class="wide">+ Pack</button>
-        <button id="dupPackBtn" class="wide">Duplicate</button>
-        <button id="delPackBtn" class="wide">Delete</button>
+    <div class="group" id="packGroup">
+      <label>Level pack</label>
+      <p class="nopackText">No level packs in this browser — import one to start.</p>
+      <div class="packOnly">
+        <select id="packSelect" title="The level packs in this browser — * changed since it was last exported"></select>
+        <input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40" style="margin-top:6px">
+        <div class="field" style="margin-top:6px"><span>Asset pack</span><select id="assetSel" title="The asset pack this level pack is built with: its tiles, objects, backgrounds and sounds"></select></div>
       </div>
-      <input type="text" id="packNameInput" placeholder="Pack name" maxlength="40" style="margin-top:6px">
-      <button id="downloadBtn" class="go wide" style="margin-top:6px">⬇ Download pack</button>
       <div class="row" style="margin-top:6px">
-        <button id="storeBtn" class="wide" title="Keep this pack in the browser, where the game and the other tools can open it">💾 Save in browser</button>
-        <select id="openPackSel" class="wide" title="Open a level pack kept in this browser, or one in levelpacks/"><option value="">📂 Open a pack…</option></select>
+        <select id="openPackSel" class="wide" title="Add a level pack: from levelpacks/, a .zip, a copy of the open one, or an empty one"><option value="">📥 Import…</option></select>
+        <button id="downloadBtn" class="go wide packOnly" title="Save the open level pack, with its asset pack, as a .zip — clears its *">⬇ Export .zip</button>
       </div>
-      <div class="hint">Only the pack open here is tested, downloaded or saved in the browser. The rest wait here.</div>
+      <button id="delPackBtn" class="wide packOnly" style="margin-top:6px">Remove</button>
+      <div class="hint packOnly">Every level pack is kept in this browser as you work, where the game and the asset pack creator can open it too. * — changed since it was last exported.</div>
     </div>
 
     <div class="group">
@@ -396,9 +402,21 @@ function withCtx(target, fn) {
 // assetpacks/, named by ?assets= and picked by `npm run editor -- <name>`.
 // A pack stands on its own: the sheet, the objects, the backgrounds and the
 // sound sets are all in there, and nothing outside it is read.
+// Each level pack remembers its asset pack (`assets`); the page is opened on
+// the open one's, or on ?assets= — which then becomes that level pack's.
+const DEFAULT_ASSETS = '/assetpacks/old/garden/';
+const ASKED_ASSETS = new URLSearchParams(location.search).get('assets');
 const EDITOR_DIR = (() => {
-  const asked = new URLSearchParams(location.search).get('assets') || '/assetpacks/old/garden/';
-  return asked.endsWith('/') ? asked : asked + '/';
+  let want = ASKED_ASSETS;
+  if (!want) {
+    try {
+      const kept = JSON.parse(localStorage.getItem('warmWormEditorLevel') || 'null');
+      const open = kept && Array.isArray(kept.packs) && kept.packs[kept.packIndex || 0];
+      want = open && open.assets;
+    } catch (err) { /* the default, then */ }
+  }
+  want = want || DEFAULT_ASSETS;
+  return want.endsWith('/') ? want : want + '/';
 })();
 const EDITOR_LIBRARY = EDITOR_DIR + 'assetpack.json';
 const EDITOR_TILES = EDITOR_DIR + 'tiles/tiles.png';
@@ -636,7 +654,11 @@ function blankLevel() {
 // the same way: `packs[]` holds them all and the open one is unpacked into
 // `packName`/`levels`/`current`, so everything downstream — Test, the problem
 // list, the download — only ever sees the one pack.
-let packs = [];          // [{ name, levels, current }]
+// Each also keeps the asset pack it is built with (`assets`), a sum of what
+// it held when last exported or imported (`sum` — differing, or missing, is
+// its *), and where the browser's copy of it is (`mirror`, `mirrorSum`).
+let packs = [];          // [{ name, levels, current, assets, sum, mirror, mirrorSum }]
+let noPack = false;      // none in the browser: only Import
 let packIndex = 0;
 let packName = '';
 let levels = [];
@@ -647,9 +669,20 @@ function stashLevel() {
 }
 
 function stashPack() {
+  if (noPack) return;
   stashLevel();
-  packs[packIndex] = { name: packName, levels, current };
+  packs[packIndex] = { ...packs[packIndex], name: packName, levels, current };
 }
+
+// What a level pack holds, as one number: its * is this differing from the
+// one taken when it was last exported or imported.
+function packSum(p) {
+  const text = JSON.stringify([p.name || '', p.levels, p.assets || '']);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
+}
+const packDirty = p => !p.sum || p.sum !== packSum(p);
 
 // Only the state, so boot can run its own first paint afterwards.
 function applyPack(pack) {
@@ -664,6 +697,8 @@ function openPack(i) {
   if (i === packIndex || !packs[i]) return;
   stashPack();
   packIndex = i;
+  // built with another asset pack: the page opens again on that one
+  if ((packs[i].assets || DEFAULT_ASSETS) !== EDITOR_DIR) { save(); reopenOn(packs[i].assets || DEFAULT_ASSETS); return; }
   applyPack(packs[i]);
   resize(cols, rows, true);
   refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
@@ -674,7 +709,15 @@ function blankPack() {
   blankLevel();
   const only = JSON.parse(snapshot());
   ({ cols, rows, layers, start, messages, exits, levelBg, levelMusic, levelSounds, levelName } = was);
-  return { name: '', levels: [only], current: 0 };
+  return { name: '', levels: [only], current: 0, assets: EDITOR_DIR };
+}
+
+// The page again, on another asset pack — without ?pack=, already read in.
+function reopenOn(assets) {
+  const q = new URLSearchParams(location.search);
+  q.delete('pack');
+  q.set('assets', assets);
+  location.search = q.toString();
 }
 
 function openLevel(i) {
@@ -880,7 +923,10 @@ function packJson() {
     first: PACK_LEVELS + levelFile(0),
     tileset: sheetBlock(PACK_TILES + 'tiles.png'),
     objects: { manifest: PACK_OBJECTS + 'objects.json' },
-    sounds: PACK_SOUNDS + soundDefault
+    sounds: PACK_SOUNDS + soundDefault,
+    // the rest of the asset pack it carries, as its assetpack.json said it
+    backgrounds: { dir: PACK_BACKGROUNDS, items: bgLibrary },
+    soundSets: { dir: PACK_SOUNDS, default: soundDefault, items: soundLibrary }
   }, null, 2);
 }
 
@@ -1444,6 +1490,32 @@ const levelSelect = document.getElementById('levelSelect');
 nameInput.addEventListener('input', () => { levelName = nameInput.value; refreshLevels(); save(); });
 packNameInput.addEventListener('input', () => { packName = packNameInput.value; refreshPacks(); save(); });
 
+// The asset pack the open level pack is built with: the folders the page can
+// read — in assetpacks/ and the ones the asset pack creator keeps in the
+// browser (its Open in level editor). Picking one opens the page on it.
+const assetSel = document.getElementById('assetSel');
+async function refreshAssetSel() {
+  const opts = new Map([[EDITOR_DIR, EDITOR_DIR.replace(/^\//, '').replace(/\/$/, '')]]);
+  if (!opts.has(DEFAULT_ASSETS)) opts.set(DEFAULT_ASSETS, 'garden — ' + DEFAULT_ASSETS.replace(/^\//, '').replace(/\/$/, ''));
+  try {
+    const res = await fetch('/assetpacks/index.json', { cache: 'no-store' });
+    // a zipped one can't be read here
+    if (res.ok) for (const p of await res.json()) if (String(p.dir).endsWith('/')) opts.set(p.dir, `${p.title || p.name} — ${p.dir.replace(/^\//, '').replace(/\/$/, '')}`);
+  } catch (err) { /* no list */ }
+  try {
+    if (await storeReady(1500)) for (const p of await packStore.list('assets')) opts.set(packStore.url('assets', p.name), `${p.title} — saved in this browser`);
+  } catch (err) { /* none kept */ }
+  setOptions(assetSel, [...opts].map(([dir, label]) => `<option value="${escHtml(dir)}" ${dir === EDITOR_DIR ? 'selected' : ''}>${escHtml(label)}</option>`).join(''));
+}
+assetSel.addEventListener('change', () => {
+  const want = assetSel.value;
+  if (!want || want === EDITOR_DIR || noPack) return;
+  stashPack();
+  packs[packIndex].assets = want;
+  save();
+  reopenOn(want);
+});
+
 // ---------- the background panel ----------
 const bgList = document.getElementById('bgList');
 const bgColor = document.getElementById('bgColor');
@@ -1592,17 +1664,30 @@ soundSelect.addEventListener('change', () => {
 });
 
 // ---------- the pack panel ----------
+// Written only when it differs: rewriting a select's options closes it if it
+// is open, and this runs after every change.
+function setOptions(sel, html) {
+  if (sel.dataset.html === html) return;
+  sel.dataset.html = html;
+  sel.innerHTML = html;
+}
+
 function refreshPacks() {
-  packSelect.innerHTML = '';
-  packs.forEach((p, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    const name = (i === packIndex ? packName : p.name) || `Pack ${i + 1}`;
-    const count = (i === packIndex ? levels : p.levels).length;
-    opt.textContent = `${name}  (${count} ${count === 1 ? 'level' : 'levels'})`;
-    packSelect.appendChild(opt);
-  });
+  document.body.classList.toggle('no-pack', noPack);
+  if (noPack) return;
+  setOptions(packSelect, packs.map((p, i) => {
+    const live = i === packIndex ? { ...p, name: packName, levels } : p;
+    const name = live.name || `Level pack ${i + 1}`;
+    const count = live.levels.length;
+    return `<option value="${i}" ${i === packIndex ? 'selected' : ''}>${escHtml(name)}${packDirty(live) ? ' *' : ''}  (${count} ${count === 1 ? 'level' : 'levels'})</option>`;
+  }).join(''));
   packSelect.value = packIndex;
+  // nothing unexported: it is in a file somewhere, and only leaves the
+  // browser; with a *, its changes go with it, so it asks
+  const dirty = packDirty({ ...packs[packIndex], name: packName, levels });
+  delPackBtn.textContent = dirty ? 'Delete' : 'Remove';
+  delPackBtn.classList.toggle('warn', dirty);
+  delPackBtn.title = dirty ? 'Delete this level pack — it has changes never exported' : 'Remove this level pack from the browser — nothing in it is lost';
 }
 
 function refreshLevels() {
@@ -1620,44 +1705,68 @@ function refreshLevels() {
 levelSelect.addEventListener('change', () => openLevel(+levelSelect.value));
 packSelect.addEventListener('change', () => openPack(+packSelect.value));
 
-document.getElementById('addPackBtn').addEventListener('click', () => {
+const delPackBtn = document.getElementById('delPackBtn');
+delPackBtn.addEventListener('click', async () => {
   stashPack();
-  packs.push(blankPack());
-  packIndex = packs.length - 1;
-  applyPack(packs[packIndex]);
-  resize(cols, rows, true);
-  levelMsg.textContent = '';
-  refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
-});
-
-document.getElementById('dupPackBtn').addEventListener('click', () => {
-  stashPack();
-  const copy = JSON.parse(JSON.stringify(packs[packIndex]));
-  copy.name = (copy.name || `Pack ${packIndex + 1}`) + ' copy';
-  packs.splice(packIndex + 1, 0, copy);
-  packIndex += 1;
-  applyPack(packs[packIndex]);
-  resize(cols, rows, true);
-  levelMsg.textContent = '';
-  refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
-});
-
-document.getElementById('delPackBtn').addEventListener('click', async () => {
-  if (packs.length < 2) { levelMsg.textContent = 'There is only one pack.'; return; }
-  stashPack();
-  const gone = packIndex;
-  const count = packs[gone].levels.length;
-  const ok = await ask('Delete pack',
-    `“${packName || `Pack ${gone + 1}`}” and ${count === 1 ? 'the level' : `all ${count} levels`} in it will go. This cannot be undone.`,
-    'Delete it');
-  if (!ok) return;
+  const gone = packIndex, p = packs[gone];
+  const name = p.name || `Level pack ${gone + 1}`;
+  if (packDirty(p)) {
+    const count = p.levels.length;
+    const ok = await ask('Delete level pack',
+      `“${name}” has changes that were never exported, and ${count === 1 ? 'its level goes' : `all ${count} of its levels go`} with it. This cannot be undone.`,
+      'Delete it');
+    if (!ok) return;
+  }
   packs.splice(gone, 1);
+  // the browser's copy goes too
+  if (p.mirror) storeReady(1500).then(ok => ok && packStore.remove('levels', p.mirror)).catch(() => {});
+  levelMsg.textContent = `${packDirty(p) ? 'Deleted' : 'Removed'} “${name}”.`;
+  if (!packs.length) { enterNoPack(); return; }
   packIndex = Math.min(gone, packs.length - 1);
+  if ((packs[packIndex].assets || DEFAULT_ASSETS) !== EDITOR_DIR) { save(); reopenOn(packs[packIndex].assets || DEFAULT_ASSETS); return; }
   applyPack(packs[packIndex]);
   resize(cols, rows, true);
-  levelMsg.textContent = '';
   refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
 });
+
+// None left: only Import. A blank level stands in meanwhile, never saved.
+function enterNoPack() {
+  packs = [];
+  packIndex = 0;
+  noPack = true;
+  const only = blankPack();
+  packName = '';
+  levels = only.levels;
+  current = 0;
+  applyState(levels[0]);
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ packs: [], packIndex: 0, objGlyphs: OBJECTS.map(o => o.glyph) })); } catch (err) { /* ignore */ }
+  refreshPacks(); refreshOpenPacks(); render();
+}
+
+// A level pack added: noPack ends, and it is the one open.
+// `clean`: read from a file, it matches that file — its sum is taken once
+// the editor has taken it in, which tidies a level as it reads it.
+function addPack(p, stashed = false, clean = false) {
+  if (noPack) { noPack = false; packs = []; }
+  else if (!stashed) stashPack();
+  packs.push({ assets: EDITOR_DIR, ...p });
+  packIndex = packs.length - 1;
+  if ((packs[packIndex].assets || DEFAULT_ASSETS) !== EDITOR_DIR) { save(); reopenOn(packs[packIndex].assets); return; }
+  applyPack(packs[packIndex]);
+  resize(cols, rows, true);
+  refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
+  if (clean) { packs[packIndex].sum = packSum(packs[packIndex]); save(); }
+  refreshOpenPacks();
+}
+
+// A name no level pack here has yet: garden -> garden 2.
+function freeLevelPackName(base) {
+  const names = new Set(packs.map((p, i) => i === packIndex ? packName : p.name));
+  if (!names.has(base)) return base;
+  let n = 2;
+  while (names.has(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
+}
 
 // ---------- asking first ----------
 // Drawn here rather than left to the browser, so a destructive click is
@@ -1843,7 +1952,9 @@ async function packAssets(gameOptional = false) {
     { name: PACK_OBJECTS + spritesFile, data: await grab(spritesUrl) },
     { name: PACK_OBJECTS + sprites.texture, data: await grab(new URL(sprites.texture, spritesUrl).href) }
   ];
-  for (const file of new Set(levels.map(s => s.bg && s.bg.texture).filter(Boolean))) {
+  // every background the asset pack has, not just those its levels use: the
+  // level pack carries the whole asset pack it was built with
+  for (const file of new Set([...bgLibrary.map(b => b.file), ...levels.map(s => s.bg && s.bg.texture)].filter(Boolean))) {
     files.push({ name: PACK_BACKGROUNDS + file, data: await grab(bgDir + file) });
   }
   files.push(...await packSoundFiles(grab));
@@ -1870,8 +1981,9 @@ async function levelPackFiles(gameOptional = false) {
 async function packSoundFiles(grab) {
   // the fallback track goes in whether or not a level names it, or a pack
   // whose levels all take the game's own music would play none at all
-  const tracks = new Set([PACK_DEFAULT_TRACK, ...levels.map(s => s.music).filter(Boolean)]);
-  const wanted = new Set([soundDefault, ...levels.map(s => s.sounds).filter(Boolean)]);
+  // ... and all its sound sets and tracks, so the asset pack comes whole
+  const tracks = new Set([PACK_DEFAULT_TRACK, ...musicLibrary, ...levels.map(s => s.music).filter(Boolean)]);
+  const wanted = new Set([soundDefault, ...soundLibrary.map(e => e.file), ...levels.map(s => s.sounds).filter(Boolean)]);
   const base = await soundSet(soundDefault);
   const files = [];
   const media = new Map();     // where it goes in the pack -> where to fetch it
@@ -1929,28 +2041,50 @@ async function packGame(fetchOk) {
   return [{ name: 'index.html', data: page.replace(PACK_ROOTS_MARKER, roots) }];
 }
 
+// Where the .zip goes is asked first, in a Save dialog, straight from the
+// click: a browser only opens one while the click is fresh, and a download
+// started once the pack is gathered counts as an automatic one, which Chrome
+// may block without a word. A browser without the dialog downloads it.
 document.getElementById('downloadBtn').addEventListener('click', async () => {
   stashLevel();
   const problems = packProblems();
   if (problems.length) { levelMsg.textContent = problems[0]; return; }
-  levelMsg.textContent = 'Gathering the pack…';
+  const zipName = packSlug() + '.zip';
+  let handle = null;
+  if (window.showSaveFilePicker) {
+    try {
+      handle = await showSaveFilePicker({ suggestedName: zipName, id: 'levelpack-export', types: [{ description: 'Level pack', accept: { 'application/zip': ['.zip'] } }] });
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      handle = null;
+    }
+  }
+  levelMsg.textContent = 'Gathering the level pack…';
   try {
     const files = await levelPackFiles();
-    const url = URL.createObjectURL(zipBlob(files));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = (packName || 'level-pack').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.zip';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    // the browser reads the blob after the click returns, so it cannot be let
-    // go of yet
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
-    const audio = files.filter(f => /^sounds\/(music|clips)\//.test(f.name)).map(f => f.name.split('/').pop());
-    levelMsg.textContent = `Downloaded ${files.length} files — unzip it anywhere and open index.html.`
-      + (audio.length ? ` Audio: ${audio.join(', ')}.` : ' No audio files needed.');
+    const blob = zipBlob(files);
+    if (handle) {
+      const out = await handle.createWritable();
+      await out.write(blob);
+      await out.close();
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = zipName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // the browser reads the blob after the click returns
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+    // what is on disk now matches it: no * until it changes again
+    stashPack();
+    packs[packIndex].sum = packSum(packs[packIndex]);
+    save();
+    levelMsg.textContent = `${handle ? 'Saved ' + handle.name : 'Downloaded ' + zipName} — ${files.length} files, its asset pack with it. Unzip it anywhere and open index.html.`;
   } catch (err) {
-    levelMsg.textContent = 'Could not build the pack: ' + err.message;
+    levelMsg.textContent = 'Could not build the level pack: ' + err.message;
   }
 });
 
@@ -2416,16 +2550,52 @@ document.addEventListener('keydown', e => {
 
 // ---------- keeping the work ----------
 function save() {
+  if (noPack) return;
   try {
     stashPack();
     localStorage.setItem(STORE_KEY, JSON.stringify({ packs, packIndex, objGlyphs: OBJECTS.map(o => o.glyph) }));
   } catch (err) { /* private mode, etc. */ }
+  refreshPacks();
+  scheduleMirror();
+}
+
+// The open level pack is also kept, built as its download would be, in the
+// pack store the tools share (src/js/packstore.js), so the game opens it by
+// URL — /src/index.html?pack=/__idb/levels/<name>/levelpack.json — and the
+// asset pack creator can import its art. Rebuilt a little after it stops
+// changing, and only when it has.
+let mirrorTimer = 0;
+function scheduleMirror() {
+  clearTimeout(mirrorTimer);
+  mirrorTimer = setTimeout(mirrorNow, 2500);
+}
+
+async function mirrorNow() {
+  if (noPack) return;
+  const p = packs[packIndex];
+  if (!p) return;
+  const key = packSum(p) + '|' + EDITOR_DIR;
+  if (p.mirrorSum === key) return;
+  try {
+    if (!await storeReady(3000)) return;
+    // its own slot, not another level pack's of the same name
+    const taken = new Set(packs.filter(x => x !== p).map(x => x.mirror));
+    let slot = packSlug(), n = 2;
+    while (taken.has(slot)) slot = packSlug() + '-' + n++;
+    const files = await levelPackFiles(true);
+    await packStore.put('levels', slot, files, packName || 'Level Pack');
+    if (p.mirror && p.mirror !== slot) await packStore.remove('levels', p.mirror);
+    p.mirror = slot;
+    p.mirrorSum = key;
+    localStorage.setItem(STORE_KEY, JSON.stringify({ packs, packIndex, objGlyphs: OBJECTS.map(o => o.glyph) }));
+  } catch (err) { /* kept here regardless; the copy is made again on the next change */ }
 }
 function load() {
   try {
     const s = localStorage.getItem(STORE_KEY);
     if (!s) return false;
     const data = JSON.parse(s);
+    if (Array.isArray(data.packs) && !data.packs.length) return false;   // all removed: only Import
     if (Array.isArray(data.packs) && data.packs.length) {
       packs = data.packs.filter(p => p && Array.isArray(p.levels) && p.levels.length);
       packIndex = Math.min(data.packIndex || 0, packs.length - 1);
@@ -2467,65 +2637,118 @@ document.getElementById('pasteBtn').addEventListener('click', () => {
   render(); renderProps(); refreshLevels(); updateStatus(null); save();
 });
 
-// ---------- packs kept in the browser, and packs on disk ----------
-// Save in browser puts the open pack in the pack store the tools share
-// (src/js/packstore.js), laid out as its download would be, so the game opens
-// it by URL — /src/index.html?pack=/__idb/levels/<name>/levelpack.json — and
-// so does this editor's Open a pack, which also lists levelpacks/ (from
-// levelpacks/index.json). ?pack=<url to a levelpack.json> opens one on load.
-const storeBtn = document.getElementById('storeBtn');
+// ---------- Import ----------
+// Import adds a level pack: one in levelpacks/ (from levelpacks/index.json),
+// one kept in the browser by something other than this editor, a .zip, a
+// copy of the one open, or an empty one. ?pack=<url to a levelpack.json>
+// imports one on load.
 const openPackSel = document.getElementById('openPackSel');
 const packSlug = () => (packName || 'level-pack').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'level-pack';
 const gameUrlFor = packUrl => `/src/index.html?pack=${encodeURIComponent(packUrl)}&assets=${encodeURIComponent(EDITOR_DIR)}`;
 const storeReady = ms => Promise.race([packStore.ready(), new Promise(ok => setTimeout(() => ok(false), ms))]);
 const escHtml = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-storeBtn.addEventListener('click', async () => {
-  stashLevel();
-  const problems = packProblems();
-  if (problems.length) { levelMsg.textContent = problems[0]; return; }
-  levelMsg.textContent = 'Saving the pack in the browser…';
-  try {
-    if (!await storeReady(4000)) {
-      throw new Error('the pack store needs the page served from localhost or https, where its service worker can run');
-    }
-    const files = await levelPackFiles(true);
-    const base = await packStore.put('levels', packSlug(), files, packName || 'Level Pack');
-    const play = gameUrlFor(base + 'levelpack.json');
-    levelMsg.innerHTML = `Saved in this browser as <code>${escHtml(base)}</code> — <a href="${escHtml(play)}" target="_blank" rel="noopener">play it in the game ↗</a>`;
-    refreshOpenPacks();
-  } catch (err) {
-    levelMsg.textContent = 'Could not save it in the browser: ' + err.message;
-  }
-});
-
 async function refreshOpenPacks() {
-  const opts = ['<option value="">📂 Open a pack…</option>'];
+  const opts = ['<option value="">📥 Import…</option>'];
   try {
+    const res = await fetch('/levelpacks/index.json', { cache: 'no-store' });
+    if (res.ok) for (const p of await res.json()) opts.push(`<option value="url:${escHtml(p.dir)}levelpack.json">${escHtml(p.title)} — levelpacks/${escHtml(p.name)}</option>`);
+  } catch (err) { /* no folder list */ }
+  try {
+    // the browser's copies of the level packs here are those level packs
+    const mine = new Set(packs.map(p => p.mirror).filter(Boolean));
     if (await storeReady(1500)) {
       for (const p of await packStore.list('levels')) {
-        opts.push(`<option value="${escHtml(packStore.url('levels', p.name))}levelpack.json">${escHtml(p.title)} — saved in this browser</option>`);
+        if (mine.has(p.name)) continue;
+        opts.push(`<option value="url:${escHtml(packStore.url('levels', p.name))}levelpack.json">${escHtml(p.title)} — saved in this browser</option>`);
       }
     }
   } catch (err) { /* nothing stored to offer */ }
-  try {
-    const res = await fetch('/levelpacks/index.json', { cache: 'no-store' });
-    if (res.ok) for (const p of await res.json()) opts.push(`<option value="${escHtml(p.dir)}levelpack.json">${escHtml(p.title)} — levelpacks/${escHtml(p.name)}</option>`);
-  } catch (err) { /* no folder list */ }
+  opts.push('<option value="zip">A .zip file on this computer…</option>');
+  if (!noPack) opts.push(`<option value="copy">A copy of ${escHtml(packName || 'the open level pack')}</option>`);
+  opts.push('<option value="empty">An empty level pack</option>');
   openPackSel.innerHTML = opts.join('');
 }
 
-openPackSel.addEventListener('change', () => {
-  const url = openPackSel.value;
+openPackSel.addEventListener('change', async () => {
+  const pick = openPackSel.value;
   openPackSel.value = '';
-  if (url) openLevelPack(url);
+  if (!pick) return;
+  if (pick.startsWith('url:')) { openLevelPack(pick.slice(4)); return; }
+  if (pick === 'zip') { importZip(); return; }
+  if (pick === 'copy') {
+    stashPack();
+    const copy = JSON.parse(JSON.stringify(packs[packIndex]));
+    delete copy.sum; delete copy.mirror; delete copy.mirrorSum;
+    copy.name = freeLevelPackName((packName || 'Level pack') + ' copy');
+    addPack(copy);
+    levelMsg.textContent = `Made “${copy.name}”, a copy.`;
+    return;
+  }
+  const blank = blankPack();
+  blank.name = freeLevelPackName('Level pack');
+  addPack(blank);
+  levelMsg.textContent = `Made “${blank.name}”, empty.`;
 });
+
+// A .zip of a level pack: read here, put in the pack store for a moment so it
+// can be read as any level pack is, then let go of — the copy kept is made
+// from the level pack once it is here.
+async function importZip() {
+  const file = await new Promise(ok => {
+    const i = document.createElement('input');
+    i.type = 'file';
+    i.accept = '.zip,application/zip';
+    i.onchange = () => ok(i.files[0] || null);
+    i.click();
+  });
+  if (!file) return;
+  levelMsg.textContent = 'Reading the zip…';
+  try {
+    if (!await storeReady(4000)) throw new Error('reading a zip needs the page served from localhost or https');
+    const all = await readZip(await file.arrayBuffer());
+    const lib = [...all.keys()].filter(k => k === 'levelpack.json' || k.endsWith('/levelpack.json')).sort((a, b) => a.length - b.length)[0];
+    if (!lib) throw new Error('there is no levelpack.json in it');
+    const root = lib.slice(0, -'levelpack.json'.length);
+    const files = [...all].filter(([k]) => k.startsWith(root)).map(([k, data]) => ({ name: k.slice(root.length), data }));
+    const temp = '__import-' + Date.now().toString(36);
+    await packStore.put('levels', temp, files, file.name);
+    try { await openLevelPack(packStore.url('levels', temp) + 'levelpack.json'); }
+    finally { packStore.remove('levels', temp).catch(() => {}); }
+  } catch (err) {
+    levelMsg.textContent = 'Could not read that zip: ' + err.message;
+  }
+}
+
+// Every file in a zip, by its path: stored or deflated entries, through its
+// central directory; deflate undone by the browser's DecompressionStream.
+async function readZip(buf) {
+  const u8 = new Uint8Array(buf), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  let end = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { end = i; break; }
+  if (end < 0) throw new Error('that is not a zip file');
+  let at = dv.getUint32(end + 16, true);
+  const names = new TextDecoder(), out = new Map();
+  for (let n = dv.getUint16(end + 10, true); n > 0; n--) {
+    const method = dv.getUint16(at + 10, true), size = dv.getUint32(at + 20, true);
+    const nameLen = dv.getUint16(at + 28, true), skip = dv.getUint16(at + 30, true) + dv.getUint16(at + 32, true);
+    const local = dv.getUint32(at + 42, true), name = names.decode(u8.subarray(at + 46, at + 46 + nameLen));
+    at += 46 + nameLen + skip;
+    if (name.endsWith('/')) continue;
+    const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+    const raw = u8.subarray(start, start + size);
+    if (method === 0) out.set(name, raw.slice());
+    else if (method === 8) out.set(name, new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()));
+    else throw new Error(`${name} is packed in a way this page can't read`);
+  }
+  return out;
+}
 
 // Reads a level pack — its levelpack.json and every level it reaches from its
 // first through their flags — into a new pack here, the levels in the order
 // they are reached and each flag pointing at the level it leads to.
 async function openLevelPack(url) {
-  levelMsg.textContent = 'Reading the pack…';
+  levelMsg.textContent = 'Reading the level pack…';
   try {
     const packUrl = new URL(url, location.href);
     const res = await fetch(packUrl);
@@ -2553,14 +2776,26 @@ async function openLevelPack(url) {
       exits = (datas[i].exit || []).map(e => order.indexOf(new URL(e, order[i]).href));
       read.push(JSON.parse(snapshot()));
     }
-    packs.push({ name: manifest.name || 'Level Pack', levels: read, current: 0 });
-    packIndex = packs.length - 1;
-    applyPack(packs[packIndex]);
-    resize(cols, rows, true);
-    refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
-    levelMsg.textContent = `Opened "${manifest.name || 'Level Pack'}" — ${read.length} level${read.length === 1 ? '' : 's'}.`;
+    // read straight from a file, it matches that file: no *
+    let name = manifest.name || 'Level Pack';
+    const same = noPack ? -1 : packs.findIndex((p, i) => (i === packIndex ? packName : p.name) === name);
+    if (same >= 0) {
+      const replace = await ask(`A level pack called “${name}” is here already`,
+        'Replace it with the one being imported? Cancel keeps both.', 'Replace it');
+      if (replace) {
+        const was = packs[same];
+        packs.splice(same, 1);
+        if (packIndex >= same) packIndex = Math.max(0, packIndex - 1);
+        if (was.mirror) storeReady(1500).then(ok => ok && packStore.remove('levels', was.mirror)).catch(() => {});
+        if (!packs.length) { noPack = true; }
+        else applyPack(packs[packIndex]);
+      } else name = freeLevelPackName(name);
+    }
+    addPack({ name, levels: read, current: 0, assets: EDITOR_DIR }, true, true);   // stashed before the reading took over the level drawn
+    levelMsg.textContent = `Imported "${name}" — ${read.length} level${read.length === 1 ? '' : 's'}.`;
   } catch (err) {
-    levelMsg.textContent = 'Could not open that pack: ' + err.message;
+    levelMsg.textContent = 'Could not import that level pack: ' + err.message;
+    if (noPack) applyState(levels[0]);
   }
 }
 
@@ -2699,12 +2934,21 @@ document.getElementById('stopTestBtn').addEventListener('click', () => {
 // The sheet and the object atlas are images like any other, so the first full
 // paint waits for them. The editor is usable before they land — blocks show as
 // labelled placeholders until the art arrives.
+// None kept — a first start, or all removed — leaves only Import.
 if (!load()) {
-  packs = [blankPack()];
-  packIndex = 0;
-  applyPack(packs[0]);
+  noPack = true;
+  const only = blankPack();
+  levels = only.levels;
+  current = 0;
+  applyState(levels[0]);
+} else {
+  // a level pack from before it kept its asset pack is built with this one;
+  // and ?assets= (Open in level editor) makes the open one's this one
+  for (const p of packs) if (!p.assets) p.assets = EDITOR_DIR;
+  if (ASKED_ASSETS) packs[packIndex].assets = EDITOR_DIR;
 }
 resize(cols, rows, true);
+refreshAssetSel();
 refreshPacks();
 refreshLevels();
 refreshBg();
@@ -2780,8 +3024,13 @@ const objectsReady = atlas.loadRoot(EDITOR_OBJECTS)
 // once the sheet and the objects are known, so its blocks read as them
 refreshOpenPacks();
 Promise.allSettled([libraryReady, objectsReady]).then(() => {
-  const asked = new URLSearchParams(location.search).get('pack');
-  if (asked) openLevelPack(asked);
+  const q = new URLSearchParams(location.search);
+  const asked = q.get('pack');
+  if (asked) {
+    q.delete('pack');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+    openLevelPack(asked);
+  }
 });
 </script>
 </body>

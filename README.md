@@ -44,11 +44,16 @@ kept in the browser:
 
 - the creator's **Open in level editor** saves the pack it is editing as
   `/__idb/assets/<name>/` and opens the editor on it; its **Import** offers the
-  packs saved in the browser and those in `assetpacks/`;
-- the level editor's **Save in browser** keeps the open pack as
-  `/__idb/levels/<name>/` and links to the game playing it
-  (`/src/index.html?pack=/__idb/levels/<name>/levelpack.json&assets=...`); its
-  **Open a pack…** reads one back, from the browser or from `levelpacks/`;
+  packs in `assetpacks/` and the art of the level packs;
+- the level editor keeps every level pack in the browser as you work, each
+  with the **Asset pack** it is built with, and the open one also as
+  `/__idb/levels/<name>/`, built as its download would be, which the game
+  plays (`/src/index.html?pack=/__idb/levels/<name>/levelpack.json&assets=...`).
+  Its **Import…** adds a level pack — from `levelpacks/`, a `.zip`, a copy of
+  the open one, or an empty one — and **⬇ Export .zip** saves the open one
+  with its whole asset pack. As in the creator, a `*` marks changes never
+  exported: **Remove** takes a level pack without one out at once, a red
+  **Delete** asks first; with none left, only Import is offered;
 - the game plays whatever `?pack=` and `?assets=` name.
 
 A static server cannot list folders, so the packs on disk are listed in
