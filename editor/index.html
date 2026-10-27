@@ -1529,6 +1529,61 @@ board.addEventListener('pointerup', endStroke);
 board.addEventListener('pointercancel', endStroke);
 board.addEventListener('pointerleave', () => { hover = null; render(); updateStatus(null); });
 
+// ---------- panning ----------
+// With the pointer on the board, holding Space turns it into a hand, and a
+// drag then moves the board instead of painting — as the middle button does
+// at any time. The listeners are on the way down, ahead of painting's own.
+let spaceHeld = false;   // Space is down with the pointer on the board
+let overBoard = false;
+let pan = null;          // { x, y, left, top, id } while a drag is moving the board
+const panCursor = () => { board.style.cursor = pan ? 'grabbing' : spaceHeld ? 'grab' : ''; };
+const isSpace = e => e.code === 'Space' || e.key === ' ';
+const typingIn = t => t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
+
+board.addEventListener('pointerenter', () => { overBoard = true; });
+board.addEventListener('pointerleave', () => { overBoard = false; });
+
+document.addEventListener('keydown', e => {
+  if (!isSpace(e) || typingIn(e.target) || askResolve || chooseResolve) return;
+  if (!overBoard && !pan) return;
+  // not the page's scroll, nor a click on whatever button has the focus
+  e.preventDefault();
+  if (!spaceHeld) { spaceHeld = true; panCursor(); }
+}, true);
+document.addEventListener('keyup', e => {
+  if (!isSpace(e) || !spaceHeld) return;
+  e.preventDefault();
+  spaceHeld = false;
+  panCursor();
+}, true);
+// Space let go in another window never comes back as a keyup here
+addEventListener('blur', () => { spaceHeld = false; pan = null; panCursor(); });
+
+board.addEventListener('pointerdown', e => {
+  if (!(spaceHeld && e.button === 0) && e.button !== 1) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();          // no painting, selecting or picking
+  board.setPointerCapture(e.pointerId);
+  pan = { x: e.clientX, y: e.clientY, left: scroller.scrollLeft, top: scroller.scrollTop, id: e.pointerId };
+  panCursor();
+}, true);
+board.addEventListener('pointermove', e => {
+  if (!pan || e.pointerId !== pan.id) return;
+  e.stopImmediatePropagation();
+  scroller.scrollLeft = pan.left - (e.clientX - pan.x);
+  scroller.scrollTop = pan.top - (e.clientY - pan.y);
+}, true);
+const endPan = e => {
+  if (!pan || e.pointerId !== pan.id) return;
+  e.stopImmediatePropagation();
+  pan = null;
+  panCursor();
+};
+board.addEventListener('pointerup', endPan, true);
+board.addEventListener('pointercancel', endPan, true);
+// the middle button's own scrolling, which a press would start, stays off
+board.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
+
 // ---------- panel ----------
 const statCell = document.getElementById('statCell');
 const statLayer = document.getElementById('statLayer');
