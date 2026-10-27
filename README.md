@@ -44,7 +44,7 @@ kept in the browser:
 
 - the creator's **Open in level editor** saves the pack it is editing as
   `/__idb/assets/<name>/` and opens the editor on it; its **Import** offers the
-  packs in `assetpacks/` and the art of the level packs;
+  packs `assetpacks/index.json` lists;
 - the level editor keeps every level pack in the browser as you work, each
   with the **Asset pack** it is built with, and the open one also as
   `/__idb/levels/<name>/`, built as its download would be, which the game
@@ -143,8 +143,8 @@ it back as a zip to unzip into `assetpacks/`.
   The **pack** button at the top opens a list of them — a `*` after a name
   means it has changed since it was last exported — with **+ New pack**
   (started from `assetpacks/__EmptyPack__.zip`) and **⧉ Duplicate** of the
-  one open. **Import…** adds a pack from what `assetpacks/index.json` and
-  `levelpacks/index.json` list, a folder or URL, or a `.zip` on the
+  one open. **Import…** adds a pack from what `assetpacks/index.json`
+  lists, a folder or URL, or a `.zip` on the
   computer — its atlas sliced back into per-object frames, offering to
   replace a pack of the same name or keep both.
   **⬇ Export .zip** asks where to save the open one as `<name>.zip` (a
