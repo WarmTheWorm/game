@@ -69,7 +69,15 @@ button.packpick:hover{border-color:var(--amber)}
 .tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:57px;z-index:4}
 .tab{appearance:none;border:0;background:transparent;color:var(--muted);padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent}
 .tab:hover{color:var(--fg)}
-.tabs #backBtn{margin-left:auto;align-self:center}
+.tabs #backBtn{margin-left:auto;align-self:center;flex:none}
+/* the tabs scroll when the window is too narrow for them, with an arrow at
+   each end that has more; ← Back stays put */
+.tabstrip{display:flex;gap:inherit;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none}
+.tabstrip::-webkit-scrollbar{display:none}
+.tabstrip .tab{flex:none;white-space:nowrap}
+.tabarrow{appearance:none;flex:none;align-self:center;border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;padding:2px 5px;cursor:pointer}
+.tabarrow:hover:not(:disabled){color:var(--fg)}
+.tabarrow:disabled{opacity:.3;cursor:default}
 .tab.on{color:var(--amber);border-bottom-color:var(--amber)}
 
 .page{display:none}

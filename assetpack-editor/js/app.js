@@ -14,7 +14,22 @@ function showTab(name) {
   if (name === 'backgrounds') renderBackgrounds();
   if (name === 'sounds') renderSounds();
   if (name === 'pack') renderPackTab();
+  const on = $(`.tab[data-tab="${name}"]`);
+  if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
+
+// A narrow window scrolls the tabs: the arrows show only then, each dimmed
+// once there is nothing more its way.
+function refreshTabArrows() {
+  const s = $('#tabStrip'), more = s.scrollWidth > s.clientWidth + 1;
+  $('#tabsLeft').hidden = $('#tabsRight').hidden = !more;
+  $('#tabsLeft').disabled = s.scrollLeft <= 0;
+  $('#tabsRight').disabled = s.scrollLeft >= s.scrollWidth - s.clientWidth - 1;
+}
+$('#tabsLeft').onclick = () => $('#tabStrip').scrollBy({ left: -$('#tabStrip').clientWidth * 0.7, behavior: 'smooth' });
+$('#tabsRight').onclick = () => $('#tabStrip').scrollBy({ left: $('#tabStrip').clientWidth * 0.7, behavior: 'smooth' });
+$('#tabStrip').addEventListener('scroll', refreshTabArrows, { passive: true });
+new ResizeObserver(refreshTabArrows).observe($('#tabStrip'));
 $('#tabs').addEventListener('click', e => {
   const t = e.target.closest('.tab');
   if (t) showTab(t.dataset.tab);
