@@ -166,7 +166,9 @@ body.no-pack #tabs,body.no-pack main.page{display:none!important}
 .pivotrow{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start}
 .pivotrow .hint{margin:0}
 .anchors{display:grid;grid-template-columns:repeat(3,16px);gap:3px;padding:5px;border:1px solid var(--line);border-radius:7px;background:var(--panel2)}
-.anchors button{appearance:none;width:16px;height:16px;padding:0;border:1px solid var(--line2);border-radius:50%;background:transparent;cursor:pointer}
+/* round dots, whatever size a look gives buttons */
+.anchors button{appearance:none;width:16px;height:16px;min-width:0;min-height:0;padding:0;line-height:0;box-shadow:none;border:1px solid var(--line2);border-radius:50%;background:transparent;cursor:pointer}
+.anchors button:hover:not(.on){background:transparent}
 .anchors button:hover:not(:disabled){border-color:var(--pink)}
 .anchors button.on{background:var(--pink);border-color:var(--pink)}
 .anchors button:disabled{opacity:.35;cursor:default}
