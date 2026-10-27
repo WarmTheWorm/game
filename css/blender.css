@@ -98,7 +98,7 @@ code { font-size: 11px; }
 .tab.on { color: var(--fg); background: var(--region); border-color: var(--outline); border-bottom-color: var(--region); }
 
 /* ---------- panels on a darker region ---------- */
-body { background: var(--region); }
+html, body { background: var(--region); }
 .page.on { gap: 4px; padding: 4px; }
 .rail, .work, .side { gap: 4px; }
 .panel { background: var(--panel); border: 1px solid var(--outline); border-radius: var(--radius); }
