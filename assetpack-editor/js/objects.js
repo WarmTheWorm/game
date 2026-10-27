@@ -736,6 +736,7 @@ $('#objProps').addEventListener('click', e => {
   // an object that wears this sprite, opened on the Objects tab
   const go = e.target.closest('[data-goto]');
   if (go) {
+    navJump();
     currentObj = pack.objects.find(o => o.id === go.dataset.goto) || currentObj;
     showTab('gameobjects');
     renderGameObjects();

@@ -388,6 +388,7 @@ async function newSpriteFor(o, k) {
   while (spriteByName(name)) name = base + n++;
   const s = await askNewSprite(name);
   if (!s) return;
+  navJump();
   name = s.name;
   markUndo();
   pack.sprites.push(s);
@@ -405,6 +406,7 @@ async function newSpriteFor(o, k) {
 // as a copy of the sound the property had, so it is a variant to tweak rather
 // than a blank beep, and opens on the Sounds tab. One undo takes it back.
 function newSoundFor(o, k) {
+  navJump();
   const what = k === 'sound' ? '' : k.replace(/Sound$/, '');
   const base = o.name + (what ? what[0].toUpperCase() + what.slice(1) : '');
   const id = freeId(base);
@@ -452,6 +454,7 @@ function openRef(o, k) {
   const v = o.props[k];
   if (!v) return;
   closeSpritePicker();
+  navJump();                 // ← Back comes here
   if (d.type === 'sprite') openSprite(refName(v));
   else if (d.type === 'part') openSprite(refName(o.props.sprite));
   else if (d.type === 'sound') {

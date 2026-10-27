@@ -133,6 +133,7 @@ $('#revertBtn').onclick = async () => {
 
 // Everything that belongs to the pack that was open is let go of.
 function forgetOpenPack() {
+  if (typeof navForget === 'function') navForget();
   current = null;
   currentObj = null;
   sndSel = null;

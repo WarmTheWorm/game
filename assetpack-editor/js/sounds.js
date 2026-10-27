@@ -203,6 +203,7 @@ function renderSoundUsers() {
 $('#sndUsers').addEventListener('click', e => {
   const go = e.target.closest('[data-goto]');
   if (!go) return;
+  navJump();
   currentObj = pack.objects.find(o => o.id === go.dataset.goto) || currentObj;
   showTab('gameobjects');
   renderGameObjects();
