@@ -322,6 +322,14 @@
   }
   .hidden { display: none !important; }
 </style>
+<!-- ?test=1 — the level editor's Test — plays its level straight away: the
+     start menu is never shown, not even while the game loads. -->
+<script>
+  if (new URLSearchParams(location.search).get('test') === '1') document.documentElement.classList.add('test-run');
+</script>
+<style>
+  .test-run #startScreen { display: none !important; }
+</style>
 </head>
 <body>
 <div id="wrap">

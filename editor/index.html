@@ -3016,8 +3016,9 @@ document.getElementById('testBtn').addEventListener('click', () => {
   testOverlay.classList.remove('hidden');
   testMsg.textContent = 'Loading the game…';
   // the live engine, on this editor's own asset pack — not the built page
-  // in debug mode, so the collision view and the performance panel are a click away
-  testFrame.src = `${GAME_PAGE}?assets=${encodeURIComponent(EDITOR_DIR)}&debug=1`;
+  // in debug mode, so the collision view and the performance panel are a click away,
+  // and as a test run (test=1), so it opens on the level, not its start menu
+  testFrame.src = `${GAME_PAGE}?assets=${encodeURIComponent(EDITOR_DIR)}&debug=1&test=1`;
 });
 
 testFrame.addEventListener('load', () => {
