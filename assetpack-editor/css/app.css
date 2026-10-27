@@ -308,3 +308,4 @@ dialog#ask::backdrop{background:#0b0818cc}
 /* a part in the part picker says how many frames it has, on the right */
 .spropt span{flex:1;min-width:0;text-align:left}
 .spropt small{color:var(--muted);font-size:11.5px}
+.spropt.spronew{color:var(--amber)}

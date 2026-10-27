@@ -54,6 +54,9 @@ function codeLine(o, C) {
   return `${codes}<span class="hint">${esc(C.codes.join(' '))} is ${esc(C.name)}'s.${which}${id}</span>`;
 }
 
+// The value a list's "+ New…" entry carries: never a real name.
+const NEW_ONE = '+new';      // a name no sound or sprite can have
+
 // One field per property, by its declared type.
 function propField(o, k, d) {
   const v = o.props[k];
@@ -68,7 +71,7 @@ function propField(o, k, d) {
     const vals = list.map(n => prefix + n);
     if (v && !vals.includes(v)) vals.unshift(v);            // keep what it says, even if it's gone
     // the value keeps its kind in front (sound::coin); the label is just the name
-    return ['', ...vals].map(x => `<option value="${esc(x)}" ${x === v ? 'selected' : ''}>${x ? esc(refName(x)) + (list.includes(refName(x)) ? '' : ' — missing') : '—'}</option>`).join('');
+    return ['', ...vals].map(x => `<option value="${esc(x)}" ${x === v ? 'selected' : ''}>${x ? esc(refName(x)) + (list.includes(refName(x)) ? '' : ' — missing') : '— none'}</option>`).join('');
   };
   let input;
   switch (d.type) {
@@ -78,17 +81,18 @@ function propField(o, k, d) {
     case 'color': input = `<input type="color" data-prop="${k}" value="${esc(v || '#ffffff')}">`; break;
     case 'choice': input = `<select data-prop="${k}">${(d.options || []).map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`; break;
     case 'sound':
-      input = `<div class="row gap"><select data-prop="${k}">${options(Object.keys(pack.sounds.defs), 'sound::')}</select>
-        <button class="btn sm" data-play="${k}" title="Play it" aria-label="Play">▶</button>
-        <button type="button" class="btn sm" data-newsound="${k}" title="Make a new sound for this object, starting from this one">+ New</button></div>`;
+      // its list starts with none and a new one, then the pack's sounds
+      input = `<div class="row gap"><select data-prop="${k}" title="Pick a sound — or none, or a new one made from this one">${options(Object.keys(pack.sounds.defs), 'sound::')
+        .replace('<option value="" ', `<option value="${NEW_ONE}">+ New sound…</option><option value="" `)}</select>
+        <button class="btn sm" data-play="${k}" title="Play it" aria-label="Play">▶</button></div>`;
       break;
     case 'sprite': {
       // a picker of its own rather than a <select>, which can't show the icons
       const cur = refName(v);
       const missing = v && !spriteByName(cur) ? ' — missing' : '';
       return `<div class="ctl">${head}<div class="sprrow"><div class="sprpick">
-        <button type="button" class="sprbtn" data-sprbtn="${k}" aria-haspopup="listbox" title="Pick a sprite — double-click to open this one on the Sprites tab">${spriteIcon(cur)}<span class="nm">${esc(cur || '—')}${missing}</span><span class="caret">▾</span></button>
-      </div><button type="button" class="btn sm" data-newsprite="${k}" title="Make a new sprite for this object and draw it">+ New</button></div>${hint}</div>`;
+        <button type="button" class="sprbtn" data-sprbtn="${k}" aria-haspopup="listbox" title="Pick a sprite — or none, or a new one — double-click to open this one on the Sprites tab">${spriteIcon(cur)}<span class="nm">${esc(cur || '—')}${missing}</span><span class="caret">▾</span></button>
+      </div></div>${hint}</div>`;
     }
     case 'background': input = `<select data-prop="${k}">${options(pack.backgrounds.map(b => b.name), 'background::')}</select>`; break;
     case 'object': {
@@ -269,6 +273,11 @@ $('#goForm').addEventListener('input', e => {
   const o = currentObj;
   if (!o) return;
   const k = e.target.dataset.prop;
+  if (k && e.target.value === NEW_ONE) {
+    e.target.value = o.props[k] || '';      // the list shows what it is until the new one is
+    newSoundFor(o, k);
+    return;
+  }
   if (k) {
     const d = classDefs(o.cls)[k] || {};
     let v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -383,10 +392,14 @@ function openSpritePicker(btn) {
   const list = document.createElement('div');
   list.className = 'sprlist';
   list.setAttribute('role', 'listbox');
-  list.innerHTML = pack.sprites.map(s => `
+  // first a new one and none, then the pack's sprites
+  list.innerHTML = [
+    `<button type="button" role="option" class="spropt spronew" data-newsprite="${k}"><span>+ New sprite…</span></button>`,
+    `<button type="button" role="option" class="spropt ${!cur ? 'on' : ''}" data-sprset="${k}" data-v="" aria-selected="${!cur}"><span>— none</span></button>`,
+    ...pack.sprites.map(s => `
     <button type="button" role="option" class="spropt ${s.name === cur ? 'on' : ''}" data-sprset="${k}" data-v="sprite::${esc(s.name)}"
-      aria-selected="${s.name === cur}">${spriteIcon(s.name)}<span>${esc(s.name)}</span></button>`).join('')
-    || '<p class="empty">No sprites yet — make one on the Sprites tab.</p>';
+      aria-selected="${s.name === cur}">${spriteIcon(s.name)}<span>${esc(s.name)}</span></button>`)
+  ].join('');
   btn.parentElement.appendChild(list);
   paintIcons(list);
   const focus = list.querySelector('.on') || list.querySelector('button');
@@ -437,7 +450,7 @@ $('#goForm').addEventListener('click', e => {
   const opt = e.target.closest('[data-sprset]');
   if (opt) { closeSpritePicker(); setProp(o, opt.dataset.sprset, opt.dataset.v); return; }
   const ns = e.target.closest('[data-newsprite]');
-  if (ns) { newSpriteFor(o, ns.dataset.newsprite); return; }
+  if (ns) { closeSpritePicker(); newSpriteFor(o, ns.dataset.newsprite); return; }
   const nd = e.target.closest('[data-newsound]');
   if (nd) { newSoundFor(o, nd.dataset.newsound); return; }
   const oo = e.target.closest('[data-openobj]');
