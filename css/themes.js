@@ -11,7 +11,8 @@
     { id: 'classic', label: 'Classic', file: '' },
     { id: 'blender', label: 'Blender', file: 'blender.css' },
     { id: 'nightshade', label: 'Nightshade', file: 'nightshade.css' },
-    { id: 'arcade', label: 'Arcade', file: 'arcade.css' }
+    { id: 'arcade', label: 'Arcade', file: 'arcade.css' },
+    { id: 'light', label: 'Light', file: 'light.css' }
   ];
   const KEY = 'warmWormTheme';
   const DEFAULT = 'blender';
