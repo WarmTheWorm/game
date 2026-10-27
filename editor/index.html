@@ -32,13 +32,14 @@
   .namebox { display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line);
     border-radius: 7px; padding: 3px 10px; font-family: var(--mono); }
   .namebox > span { color: var(--muted); font-size: 12px; }
+  .namebox, .namebox select, .namebox input[type=text], .namebox b { font-size: 14px; line-height: 1.5; }
   .namebox select, .namebox input[type=text] { background: transparent; border: 0; margin: 0; padding: 2px 0; width: auto; font-family: var(--mono); }
   .namebox input[type=text] { width: 16ch; color: var(--amber); }
   .namebox select option { background: var(--panel); color: var(--fg); }
   .namebox select { max-width: 32ch; }
   .top .grow { flex: 1; }
   .top button, .top > select { width: auto; margin: 0; }
-  .top #openPackSel { max-width: 14ch; }
+
   /* with none, a word where the editor would be */
   .nopackBox { display: none; flex: 1; align-items: center; justify-content: center; flex-direction: column;
     gap: 6px; color: var(--muted); text-align: center; }
@@ -186,6 +187,21 @@
   #status span { flex: none; }
   #status b { color: var(--fg); font-weight: 600; }
 
+  /* ---- choice dialog: the asset pack creator's (dialog#ask, .askform) ---- */
+  #chooseOverlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+    background: #0b0818cc; }
+  #chooseCard { display: grid; gap: 12px; padding: 16px; min-width: 320px; max-width: min(92vw, 460px);
+    background: var(--panel); border: 1px solid var(--line2); border-radius: 12px; color: var(--fg); font-size: 14px; }
+  #chooseCard h3 { margin: 0; font-size: 15px; }
+  #chooseCard .ctl { display: grid; gap: 4px; }
+  #chooseCard .ctl > span { font-size: 12.5px; color: var(--muted); }
+  #chooseCard select { font-size: 14px; }
+  #chooseCard button { width: auto; padding: 7px 12px; font-size: 14px; border-radius: 7px; }
+  #chooseNote:empty { display: none; }
+  .top #assetBtn { cursor: pointer; color: var(--fg); }
+  .top #assetBtn b { font-weight: 400; }
+  .top #assetBtn:hover { border-color: var(--amber); }
+
   /* ---- confirm panel ---- */
   #askOverlay {
     position: fixed; inset: 0; z-index: 20; display: flex;
@@ -233,16 +249,16 @@
   <h1 class="logo">Level<span>Editor</span></h1>
   <div class="namebox packOnly"><span>level pack</span><select id="packSelect" title="The level packs in this browser — * changed since it was last exported. Every one is kept here as you work, where the game and the asset pack creator can open it too."></select></div>
   <div class="namebox packOnly"><span>name</span><input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40"></div>
-  <div class="namebox packOnly"><span>asset pack</span><select id="assetSel" title="The asset pack this level pack is built with: its tiles, objects, backgrounds and sounds"></select></div>
+  <button class="namebox packOnly" id="assetBtn" title="The asset pack this level pack is built with: its tiles, objects, backgrounds and sounds — click to pick another"><span>asset pack</span><b id="assetName"></b></button>
   <span class="grow"></span>
-  <select id="openPackSel" title="Add a level pack: from levelpacks/, a .zip, a copy of the open one, or an empty one"><option value="">📥 Import…</option></select>
+  <button id="importBtn" title="Add a level pack: from levelpacks/, a .zip, a copy of the open one, or an empty one">Import…</button>
   <button id="downloadBtn" class="go packOnly" title="Save the open level pack, with its asset pack, as a .zip — clears its *">⬇ Export .zip</button>
   <button id="delPackBtn" class="packOnly">Remove</button>
 </header>
 
 <section class="nopackBox">
   <h2>No level packs in this browser</h2>
-  <p>Import one to start — <b>📥 Import…</b> above: from levelpacks/, a .zip, or an empty one.</p>
+  <p>Import one to start — <b>Import…</b> above: from levelpacks/, a .zip, or an empty one.</p>
 </section>
 
 <div id="app">
@@ -358,6 +374,19 @@
       <div class="hint" id="propHint"></div>
     </div>
   </div>
+</div>
+
+<!-- a choice, asked as the asset pack creator asks: a title, one list, OK -->
+<div id="chooseOverlay" class="hidden">
+  <form id="chooseCard">
+    <h3 id="chooseTitle"></h3>
+    <label class="ctl"><span id="chooseLabel"></span><select id="chooseSel"></select></label>
+    <p class="hint" id="chooseNote"></p>
+    <div class="row" style="justify-content:flex-end;gap:8px">
+      <button type="button" id="chooseNo">Cancel</button>
+      <button type="submit" id="chooseYes" class="go"></button>
+    </div>
+  </form>
 </div>
 
 <div id="askOverlay" class="hidden">
@@ -1524,10 +1553,13 @@ packNameInput.addEventListener('input', () => { packName = packNameInput.value; 
 // The asset pack the open level pack is built with: the folders the page can
 // read — in assetpacks/ and the ones the asset pack creator keeps in the
 // browser (its Open in level editor). Picking one opens the page on it.
-const assetSel = document.getElementById('assetSel');
-async function refreshAssetSel() {
-  const opts = new Map([[EDITOR_DIR, EDITOR_DIR.replace(/^\//, '').replace(/\/$/, '')]]);
-  if (!opts.has(DEFAULT_ASSETS)) opts.set(DEFAULT_ASSETS, 'garden — ' + DEFAULT_ASSETS.replace(/^\//, '').replace(/\/$/, ''));
+const assetName = document.getElementById('assetName');
+const assetWhere = dir => dir.replace(/^\//, '').replace(/\/$/, '');
+// the name shown for it: the last part of its folder (or the one it was saved under)
+assetName.textContent = assetWhere(EDITOR_DIR).split('/').pop();
+async function assetChoices() {
+  const opts = new Map([[EDITOR_DIR, assetWhere(EDITOR_DIR).split('/').pop() + ' — ' + assetWhere(EDITOR_DIR)]]);
+  if (!opts.has(DEFAULT_ASSETS)) opts.set(DEFAULT_ASSETS, 'garden — ' + assetWhere(DEFAULT_ASSETS));
   try {
     const res = await fetch('/assetpacks/index.json', { cache: 'no-store' });
     // a zipped one can't be read here
@@ -1536,11 +1568,14 @@ async function refreshAssetSel() {
   try {
     if (await storeReady(1500)) for (const p of await packStore.list('assets')) opts.set(packStore.url('assets', p.name), `${p.title} — saved in this browser`);
   } catch (err) { /* none kept */ }
-  setOptions(assetSel, [...opts].map(([dir, label]) => `<option value="${escHtml(dir)}" ${dir === EDITOR_DIR ? 'selected' : ''}>${escHtml(label)}</option>`).join(''));
+  return [...opts].map(([value, label]) => ({ value, label }));
 }
-assetSel.addEventListener('change', () => {
-  const want = assetSel.value;
-  if (!want || want === EDITOR_DIR || noPack) return;
+// the asset packs the page can read, like the creator's Import dialog
+document.getElementById('assetBtn').addEventListener('click', async () => {
+  if (noPack) return;
+  const want = await choose('Asset pack', 'Build this level pack with', await assetChoices(), EDITOR_DIR, 'Use it',
+    'Its tiles, objects, backgrounds and sounds. A zipped asset pack can only be read by the asset pack creator.');
+  if (!want || want === EDITOR_DIR) return;
   stashPack();
   packs[packIndex].assets = want;
   save();
@@ -1818,6 +1853,33 @@ function ask(title, message, confirmLabel) {
   askNo.focus();            // the safe one, so a stray Enter or Space cancels
   return new Promise(resolve => { askResolve = resolve; });
 }
+
+// One choice from a list: resolves to the value picked, or null.
+// options: [{ value, label }].
+let chooseResolve = null;
+function choose(title, label, options, value, okLabel, note = '') {
+  document.getElementById('chooseTitle').textContent = title;
+  document.getElementById('chooseLabel').textContent = label;
+  document.getElementById('chooseNote').textContent = note;
+  document.getElementById('chooseYes').textContent = okLabel;
+  const sel = document.getElementById('chooseSel');
+  sel.innerHTML = options.map(o => `<option value="${escHtml(o.value)}">${escHtml(o.label)}</option>`).join('');
+  if (value !== undefined && options.some(o => o.value === value)) sel.value = value;
+  document.getElementById('chooseOverlay').classList.remove('hidden');
+  sel.focus();
+  return new Promise(resolve => { chooseResolve = resolve; });
+}
+function closeChoose(answer) {
+  if (!chooseResolve) return;
+  document.getElementById('chooseOverlay').classList.add('hidden');
+  const resolve = chooseResolve;
+  chooseResolve = null;
+  resolve(answer);
+}
+document.getElementById('chooseCard').addEventListener('submit', e => { e.preventDefault(); closeChoose(document.getElementById('chooseSel').value); });
+document.getElementById('chooseNo').addEventListener('click', () => closeChoose(null));
+document.getElementById('chooseOverlay').addEventListener('mousedown', e => { if (e.target.id === 'chooseOverlay') closeChoose(null); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && chooseResolve) closeChoose(null); });
 
 function closeAsk(answer) {
   if (!askResolve) return;
@@ -2673,17 +2735,17 @@ document.getElementById('pasteBtn').addEventListener('click', () => {
 // one kept in the browser by something other than this editor, a .zip, a
 // copy of the one open, or an empty one. ?pack=<url to a levelpack.json>
 // imports one on load.
-const openPackSel = document.getElementById('openPackSel');
 const packSlug = () => (packName || 'level-pack').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'level-pack';
 const gameUrlFor = packUrl => `/src/index.html?pack=${encodeURIComponent(packUrl)}&assets=${encodeURIComponent(EDITOR_DIR)}`;
 const storeReady = ms => Promise.race([packStore.ready(), new Promise(ok => setTimeout(() => ok(false), ms))]);
 const escHtml = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-async function refreshOpenPacks() {
-  const opts = ['<option value="">📥 Import…</option>'];
+// What Import offers, as { value, label }s.
+async function importChoices() {
+  const opts = [{ value: 'zip', label: 'A .zip file on this computer…' }];
   try {
     const res = await fetch('/levelpacks/index.json', { cache: 'no-store' });
-    if (res.ok) for (const p of await res.json()) opts.push(`<option value="url:${escHtml(p.dir)}levelpack.json">${escHtml(p.title)} — levelpacks/${escHtml(p.name)}</option>`);
+    if (res.ok) for (const p of await res.json()) opts.push({ value: `url:${p.dir}levelpack.json`, label: `${p.title} — levelpacks/${p.name}` });
   } catch (err) { /* no folder list */ }
   try {
     // the browser's copies of the level packs here are those level packs
@@ -2691,19 +2753,20 @@ async function refreshOpenPacks() {
     if (await storeReady(1500)) {
       for (const p of await packStore.list('levels')) {
         if (mine.has(p.name)) continue;
-        opts.push(`<option value="url:${escHtml(packStore.url('levels', p.name))}levelpack.json">${escHtml(p.title)} — saved in this browser</option>`);
+        opts.push({ value: `url:${packStore.url('levels', p.name)}levelpack.json`, label: `${p.title} — saved in this browser` });
       }
     }
   } catch (err) { /* nothing stored to offer */ }
-  opts.push('<option value="zip">A .zip file on this computer…</option>');
-  if (!noPack) opts.push(`<option value="copy">A copy of ${escHtml(packName || 'the open level pack')}</option>`);
-  opts.push('<option value="empty">An empty level pack</option>');
-  openPackSel.innerHTML = opts.join('');
+  if (!noPack) opts.push({ value: 'copy', label: `A copy of ${packName || 'the open level pack'} (the level pack open)` });
+  opts.push({ value: 'empty', label: 'An empty level pack' });
+  return opts;
 }
+// kept for the callers from before Import was a dialog: there is no list to redraw now
+function refreshOpenPacks() {}
 
-openPackSel.addEventListener('change', async () => {
-  const pick = openPackSel.value;
-  openPackSel.value = '';
+document.getElementById('importBtn').addEventListener('click', async () => {
+  const pick = await choose('Add a level pack', 'From', await importChoices(), 'zip', 'Add it',
+    'It is added to the level packs in this browser; the one open now is kept.');
   if (!pick) return;
   if (pick.startsWith('url:')) { openLevelPack(pick.slice(4)); return; }
   if (pick === 'zip') { importZip(); return; }
@@ -2976,10 +3039,14 @@ if (!load()) {
   // a level pack from before it kept its asset pack is built with this one;
   // and ?assets= (Open in level editor) makes the open one's this one
   for (const p of packs) if (!p.assets) p.assets = EDITOR_DIR;
+  // one never named shows in the name box as it does in the picker
+  packs.forEach((p, i) => { if (!(p.name || '').trim()) p.name = `Level pack ${i + 1}`; });
+  packName = packs[packIndex].name;
+  packNameInput.value = packName;
   if (ASKED_ASSETS) packs[packIndex].assets = EDITOR_DIR;
 }
 resize(cols, rows, true);
-refreshAssetSel();
+
 refreshPacks();
 refreshLevels();
 refreshBg();
