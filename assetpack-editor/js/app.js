@@ -158,30 +158,38 @@ async function openPack(id) {
   toast(`Opened ${pack.name}`);
 }
 
-// The pack button: a dialog of the packs kept in this browser (a * on those
-// changed since last exported), then a new pack and a copy of the open one.
-$('#packPick').addEventListener('click', async () => {
+// The pack button: a list, drawn as a sprite picker's is — first a new pack
+// and a copy of the open one, then the packs kept in this browser, the open
+// one marked, a * on those changed since last exported. A click picks; a
+// click away or Esc closes it.
+$('#packPick').addEventListener('click', async e => {
+  e.stopPropagation();
+  const wrap = $('#packPick').parentElement;
+  if (wrap.querySelector('.sprlist')) { closeSpritePicker(); return; }
+  closeSpritePicker();
   const list = (await dbList().catch(() => [])).map(x => x.id === (pack && pack.id) ? { ...x, name: pack.name, dirty: pack.dirty } : x)
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  const entries = [];
-  const seen = new Set();
-  for (const x of list) {
-    let label = `${x.name || 'untitled'}${x.dirty ? ' *' : ''}${!noPack && x.id === pack.id ? '  (open)' : ''}`;
-    while (seen.has(label)) label += ' ';
-    seen.add(label);
-    entries.push({ label, act: () => openPack(x.id) });
-  }
-  const NEW = '+ New pack (empty)';
-  entries.push({ label: NEW, act: () => makePack('empty') });
-  if (!noPack) entries.push({ label: `⧉ Duplicate ${pack.name}`, act: () => makePack('copy') });
-  const open = entries.find(e => e.label.endsWith('(open)'));
-  const got = await ask('Packs in this browser', [
-    { key: 'pick', label: 'Pack', type: 'select', options: entries.map(e => e.label), value: open ? open.label : NEW },
-    { type: 'note', label: '* changed since it was last exported. A new pack starts from the empty one; a duplicate is a copy of the pack open.' }
-  ], 'Open');
-  if (!got) return;
-  const e = entries.find(x => x.label === got.pick);
-  if (e) await e.act();
+  const open = noPack ? null : pack.id;
+  const box = document.createElement('div');
+  box.className = 'sprlist';
+  box.setAttribute('role', 'listbox');
+  box.innerHTML = [
+    `<button type="button" role="option" class="spropt spronew" data-packact="new"><span>+ New pack…</span><small>empty</small></button>`,
+    noPack ? '' : `<button type="button" role="option" class="spropt spronew" data-packact="copy"><span>⧉ Duplicate ${esc(pack.name)}</span></button>`,
+    ...list.map(x => `<button type="button" role="option" class="spropt ${x.id === open ? 'on' : ''}" data-packid="${esc(x.id)}" aria-selected="${x.id === open}">
+      <span>${esc(x.name || 'untitled')}${x.dirty ? ' *' : ''}</span>${x.id === open ? '<small>open</small>' : ''}</button>`)
+  ].join('');
+  wrap.appendChild(box);
+  const focus = box.querySelector('.on') || box.querySelector('button');
+  if (focus) focus.focus();
+});
+$('#packPick').parentElement.addEventListener('click', async e => {
+  const b = e.target.closest('[data-packact],[data-packid]');
+  if (!b) return;
+  closeSpritePicker();
+  if (b.dataset.packact === 'new') await makePack('empty');
+  else if (b.dataset.packact === 'copy') await makePack('copy');
+  else await openPack(b.dataset.packid);
 });
 
 // A pack made here, not read in: an empty one (assetpacks/__EmptyPack__.zip
