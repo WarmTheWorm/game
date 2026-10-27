@@ -349,8 +349,6 @@
   <div id="main">
     <div id="topbar">
       <button id="testBtn" class="go">▶ Test level</button>
-      <button id="copyBtn">Copy JSON</button>
-      <button id="pasteBtn">Load</button>
       <span id="levelMsg"></span>
       <span class="spacer"></span>
       <button id="dimBtn">Dim the other layers</button>
@@ -968,11 +966,6 @@ function mapLines(s) {
   const text = toBlockMap();
   ({ cols, rows, layers, start } = was);
   return text.split('\n');
-}
-
-function toLevelJson() {
-  stashLevel();
-  return JSON.stringify(levelJson(current), null, 2);
 }
 
 // What a pack needs to stand on its own, beside the art fetched at download
@@ -2705,30 +2698,6 @@ function load() {
     return true;
   } catch (err) { return false; }
 }
-
-document.getElementById('copyBtn').addEventListener('click', async () => {
-  const text = toLevelJson();
-  try {
-    await navigator.clipboard.writeText(text);
-    levelMsg.textContent = 'Level JSON copied — drop it in a pack’s levels/ folder.';
-  } catch (err) {
-    window.prompt('Copy the level:', text);
-  }
-});
-
-document.getElementById('pasteBtn').addEventListener('click', () => {
-  const text = window.prompt('Paste a level file, or bare map text:');
-  if (text === null) return;
-  pushUndo();
-  const error = fromText(text);
-  if (error) { levelMsg.textContent = error; return; }
-  resize(cols, rows, true);
-  colsInput.value = cols; rowsInput.value = rows;
-  nameInput.value = levelName;
-  levelMsg.textContent = 'Loaded.';
-  propsKey = null;
-  render(); renderProps(); refreshLevels(); updateStatus(null); save();
-});
 
 // ---------- Import ----------
 // Import adds a level pack: one in levelpacks/ (from levelpacks/index.json),
