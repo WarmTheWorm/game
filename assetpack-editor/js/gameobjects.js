@@ -202,8 +202,19 @@ function renderGoForm() {
       ${C && C.editor.player ? '' : `<button class="btn sm" data-g="duplicate" title="A copy of this object, with all its property values, under a new name and the next free code">⧉ Duplicate</button>`}
       <button class="btn sm danger" data-g="delete">Delete this object</button></div>`;
   paintIcons(box);
+  fitPropPanels();
   drawGoPreview();
 }
+
+// The properties scroll in their own column, which runs from where it
+// starts to the bottom of the window, leaving the buttons under it in view.
+function fitPropPanels() {
+  const pp = $('#goForm .ppanels');
+  if (!pp || !pp.offsetParent) return;
+  const top = pp.getBoundingClientRect().top + window.scrollY;
+  pp.style.maxHeight = Math.max(200, window.innerHeight - top - 64) + 'px';
+}
+addEventListener('resize', fitPropPanels);
 
 // The sprite it wears, as the game would show it: the part a property picks
 // if it has one (a plant's bud), its first frame otherwise.

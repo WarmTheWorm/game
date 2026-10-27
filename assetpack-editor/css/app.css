@@ -286,7 +286,8 @@ dialog#ask::backdrop{background:#0b0818cc}
 .sprrow .sprpick{flex:1;min-width:0}
 /* an object's properties, Blender-style: panels of lines, label | field | ↺ */
 /* one column, no wider than a Blender properties editor */
-.ppanels{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;max-width:420px}
+.ppanels{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;max-width:420px;align-content:start;
+  overflow-y:auto;padding-right:4px;overscroll-behavior:contain}
 .ppanel{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:0 0 6px;min-width:0}
 .ppanel>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 9px;font-size:12.5px;font-weight:600;user-select:none}
 .ppanel>summary::-webkit-details-marker{display:none}
