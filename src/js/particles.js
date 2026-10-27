@@ -79,10 +79,24 @@ class ParticleSystem extends Entity {
 
   static snapshot(name) {
     const props = this.propsFor(name);
+    const sprite = refName(props.sprite);
+    const d = sprite && atlas.def(sprite);
+    const art = d && d.frame ? { name: sprite, size: Math.max(...atlas.size(sprite)) } : null;
+    const shot = this.snapshotOf(props);
+    return { ...shot, art };
+  }
+
+  // The moment of a run that shows it best, from its props alone (so the
+  // asset pack creator can draw one too): the run is played out, seeded so it
+  // is the same every time, and each frame scored by how much of the picture
+  // its particles cover — spread and brightness together, not how many there
+  // are — so a burst is caught as it opens rather than as one bright dot or
+  // a last few sparks, and a stream once it has filled its path. Kept until
+  // the props change.
+  static snapshotOf(props) {
     const key = JSON.stringify(props);
-    const cache = this.shots || (this.shots = new Map());
-    const had = cache.get(name);
-    if (had && had.key === key) return had;
+    const cache = this.shotCache || (this.shotCache = new Map());
+    if (cache.has(key)) return cache.get(key);
     // a small seeded generator (mulberry32), the same pictures every time
     let seed = 0x9e3779b9;
     const rand = () => {
@@ -92,22 +106,57 @@ class ParticleSystem extends Entity {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
     const cloud = new ParticleCloud(props, 0, 0, rand);
-    if (props.rate > 0) {
-      // long enough that what it throws has filled out its path
-      for (let i = 0; i < Math.min(600, props.life * (1 + props.lifeJitter)); i++) { cloud.stream(); cloud.step(); }
+    const life = Math.max(1, Math.round(props.life * (1 + (props.lifeJitter || 0))));
+    const streams = props.rate > 0;
+    const frames = [];                           // every frame worth judging, as copies
+    if (streams) {
+      // judged once what it throws has had a life to fill its path
+      for (let t = 0; t < life * 2.5 && t < 900; t++) {
+        cloud.stream(); cloud.step();
+        if (t >= life) frames.push(cloud.parts.map(q => ({ ...q })));
+      }
     } else {
       cloud.emit(props.count);
-      for (let i = 0; i < Math.round(props.life * 0.4); i++) cloud.step();
+      for (let t = 0; t < life && cloud.parts.length; t++) {
+        frames.push(cloud.parts.map(q => ({ ...q })));
+        cloud.step();
+      }
     }
-    // how far from where it stands the farthest particle reaches
+    // the picture is the run's whole reach, so frames are judged on one scale
     let reach = 4;
-    for (const q of cloud.parts) reach = Math.max(reach, Math.abs(q.x), Math.abs(q.y));
-    reach += Math.max(props.sizeStart, props.sizeEnd) / 2;
-    const sprite = refName(props.sprite);
-    const d = sprite && atlas.def(sprite);
-    const art = d && d.frame ? { name: sprite, size: Math.max(...atlas.size(sprite)) } : null;
-    const shot = { key, cloud, reach, art };
-    cache.set(name, shot);
+    for (const f of frames) for (const q of f) reach = Math.max(reach, Math.abs(q.x), Math.abs(q.y));
+    const G = 14, cell = (reach * 2) / G;
+    const scoreOf = parts => {
+      const cov = new Float32Array(G * G);
+      for (const q of parts) {
+        const t = q.age / q.life;
+        const size = Math.max(0, props.sizeStart + (props.sizeEnd - props.sizeStart) * t);
+        const alpha = props.fade ? 1 - t : 1;
+        if (size <= 0 || alpha <= 0) continue;
+        // a particle lights the cells its size covers
+        const r = Math.max(0, Math.floor(size / 2 / cell));
+        const cx = Math.floor((q.x + reach) / cell), cy = Math.floor((q.y + reach) / cell);
+        for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+          if (x >= 0 && y >= 0 && x < G && y < G) cov[y * G + x] += alpha;
+        }
+      }
+      let sc = 0;
+      for (const c of cov) sc += Math.min(1, c);
+      return sc;
+    };
+    let best = frames.length ? frames[0] : [], bestScore = -1;
+    for (const f of frames) {
+      const sc = scoreOf(f);
+      if (sc > bestScore) { bestScore = sc; best = f; }
+    }
+    cloud.parts = best;
+    // fitted to the frame chosen, not the whole run, so it fills its picture
+    let fit = 4;
+    for (const q of best) fit = Math.max(fit, Math.abs(q.x), Math.abs(q.y));
+    fit += Math.max(props.sizeStart, props.sizeEnd) / 2;
+    const shot = { key, cloud, reach: fit };
+    cache.set(key, shot);
+    if (cache.size > 200) cache.delete(cache.keys().next().value);
     return shot;
   }
 

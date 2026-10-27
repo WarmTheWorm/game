@@ -30,7 +30,7 @@ function renderGoList() {
     empty: 'No objects yet.',
     // in a group the class goes without saying, so an item shows its code
     item: (o, grouped) => `<button class="item ${o === currentObj ? 'on' : ''}" data-goid="${o.id}">
-      <b>${spriteIcon(refName(o.props.sprite))}${esc(o.name)}${warnBadge(probs.get(o))}</b><small class="${isBad(o) ? 'warn' : ''}">${esc(grouped ? o.code[0] || '—' : o.cls)}</small>
+      <b>${objectIcon(o)}${esc(o.name)}${warnBadge(probs.get(o))}</b><small class="${isBad(o) ? 'warn' : ''}">${esc(grouped ? o.code[0] || '—' : o.cls)}</small>
     </button>`
   });
   paintIcons($('#goList'));

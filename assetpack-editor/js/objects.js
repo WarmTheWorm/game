@@ -63,6 +63,11 @@ function insertFrame(o, partId, afterId, canvas) {
 const ICON = 24;
 const spriteIcon = name => `<canvas class="ico" width="${ICON}" height="${ICON}" data-ico="${esc(name)}" aria-hidden="true"></canvas>`;
 // One part of a sprite, by its first frame.
+// An object's icon: its sprite's, or — for a particle system wearing none —
+// a still of the effect itself (ParticleSystem.snapshotOf), drawn by paintIcons.
+const objectIcon = o => o.cls === 'ParticleSystem' && !spriteByName(refName(o.props.sprite))
+  ? `<canvas class="ico" width="${ICON}" height="${ICON}" data-pico="${esc(o.id)}" aria-hidden="true"></canvas>`
+  : spriteIcon(refName(o.props.sprite));
 const partIcon = (name, part) => `<canvas class="ico" width="${ICON}" height="${ICON}" data-ico="${esc(name)}" data-part="${esc(part)}" aria-hidden="true"></canvas>`;
 
 // The smallest box round a canvas's opaque pixels, or null if it has none.
@@ -80,6 +85,22 @@ function drawnBox(cv) {
 }
 
 function paintIcons(root) {
+  // a particle system's: its best moment, on a dark square so a glow shows
+  root.querySelectorAll('canvas[data-pico]').forEach(cv => {
+    const o = pack.objects.find(x => x.id === cv.dataset.pico);
+    const g = cv.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, ICON, ICON);
+    if (!o) return;
+    g.fillStyle = '#0f0b1d';
+    g.fillRect(0, 0, ICON, ICON);
+    const shot = ParticleSystem.snapshotOf(o.props);
+    const k = (ICON / 2 - 1) / shot.reach;
+    g.translate(ICON / 2, ICON / 2);
+    g.scale(k, k);
+    shot.cloud.paint(g, null, 2 / k);          // at least 2 pixels, or a faint one is lost
+    g.setTransform(1, 0, 0, 1, 0, 0);
+  });
   root.querySelectorAll('canvas[data-ico]').forEach(cv => {
     const g = cv.getContext('2d');
     g.clearRect(0, 0, ICON, ICON);
