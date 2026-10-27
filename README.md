@@ -139,12 +139,14 @@ it back as a zip to unzip into `assetpacks/`.
 - **Sounds** — synthesized defs edited against the engine's own sound board, so
   what you hear is what the game plays; plus imported `.wav`/`.mp3` for clips
   and looping music.
-- **Packs in the browser** — every pack is kept in the browser (IndexedDB),
-  and the **pack** picker at the top opens one; a `*` after a name means it
-  has changed since it was last exported. **Import…** adds a pack: from a
-  `.zip`, from an `assetpacks/<name>/` folder (garden is the basic one) — its
-  atlas sliced back into per-object frames, offering to replace a pack of the
-  same name or keep both — as a copy of the pack open, or empty.
+- **Packs in the browser** — every pack is kept in the browser (IndexedDB).
+  The **pack** button at the top opens a list of them — a `*` after a name
+  means it has changed since it was last exported — with **+ New pack**
+  (started from `assetpacks/__EmptyPack__.zip`) and **⧉ Duplicate** of the
+  one open. **Import…** adds a pack from what `assetpacks/index.json` and
+  `levelpacks/index.json` list, a folder or URL, or a `.zip` on the
+  computer — its atlas sliced back into per-object frames, offering to
+  replace a pack of the same name or keep both.
   **⬇ Export .zip** asks where to save the open one as `<name>.zip` (a
   browser without a Save dialog downloads it). A pack without a `*` has
   nothing that isn't in a file somewhere, so its button says **Remove** and

@@ -57,6 +57,10 @@ input[type=checkbox]{accent-color:var(--amber);width:auto}
 .nopack .btn{margin-top:16px}
 body.no-pack .nopack{display:block}
 body.no-pack #tabs,body.no-pack main.page{display:none!important}
+button.packpick{cursor:pointer;color:var(--fg);font:inherit;font-family:var(--mono)}
+button.packpick b{font-weight:400;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.packpick .caret{color:var(--muted);font-size:10px}
+button.packpick:hover{border-color:var(--amber)}
 .packpick select{background:transparent;border:0;color:var(--fg);font-family:var(--mono);padding:2px 0;max-width:22ch;cursor:pointer}
 .packpick select option{background:var(--panel);color:var(--fg)}
 .tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:57px;z-index:4}
