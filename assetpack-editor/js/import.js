@@ -35,16 +35,20 @@ async function importPack(source) {
     return what === 'json' ? res.json() : res.arrayBuffer();
   };
 
-  // say what is wrong with a folder that isn't an asset pack, not just that a
-  // file wasn't there
+  // An asset pack, or a level pack, which carries its own copy of the asset
+  // pack it was built with: its levelpack.json names the tile sheet, the
+  // objects and the sounds as an assetpack.json does (the sounds as one file),
+  // so that copy is read the same way, and its levels are left where they are.
+  // Say what is wrong with a folder that is neither, not just that a file
+  // wasn't there.
+  let lib;
   const libRes = await reach(base + 'assetpack.json');
-  if (!libRes.ok) {
+  if (libRes.ok) lib = await libRes.json();
+  else {
     const level = await reach(base + 'levelpack.json');
-    throw new Error(level.ok
-      ? `${base || 'that zip'} is a level pack — read an asset pack`
-      : source instanceof Map ? 'there is no assetpack.json in that zip' : `there is no asset pack at ${base}`);
+    if (!level.ok) throw new Error(source instanceof Map ? 'there is no assetpack.json or levelpack.json in that zip' : `there is no asset pack or level pack at ${base}`);
+    lib = assetLibOfLevelPack(await level.json());
   }
-  const lib = await libRes.json();
   const next = newPack();
   next.name = lib.name || base.replace(/\/$/, '').split('/').pop() || 'Imported';
 
@@ -178,12 +182,27 @@ async function importPack(source) {
   return next;
 }
 
+// A levelpack.json as the assetpack.json of the art it carries.
+function assetLibOfLevelPack(lp) {
+  const snd = typeof lp.sounds === 'string' ? lp.sounds : 'sounds/default.json';
+  const cut = snd.lastIndexOf('/') + 1;
+  return {
+    name: lp.name,
+    tileset: lp.tileset,
+    objects: lp.objects,
+    sounds: { dir: snd.slice(0, cut), default: snd.slice(cut) },
+    backgrounds: lp.backgrounds || { items: [] }
+  };
+}
+
 // The folder inside a zip that holds its assetpack.json — the zip's top, or
 // the one folder the pack was zipped in — as a prefix for its other paths.
 function zipRoot(files) {
-  const lib = [...files.keys()].filter(p => p === 'assetpack.json' || p.endsWith('/assetpack.json'))
-    .sort((a, b) => a.length - b.length)[0];
-  return lib ? lib.slice(0, -'assetpack.json'.length) : '';
+  for (const want of ['assetpack.json', 'levelpack.json']) {
+    const lib = [...files.keys()].filter(p => p === want || p.endsWith('/' + want)).sort((a, b) => a.length - b.length)[0];
+    if (lib) return lib.slice(0, -want.length);
+  }
+  return '';
 }
 
 const blobDataUrl = blob => new Promise(ok => {

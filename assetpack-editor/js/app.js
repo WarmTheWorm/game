@@ -180,16 +180,26 @@ const EMPTY_PACK = '/assetpacks/__EmptyPack__.zip';
 // The packs there are to read, as assetpacks/index.json lists them: a
 // folder, or a .zip ("dir": "/assetpacks/mine.zip") — not the copies Open in
 // level editor keeps in this browser, which are only ever a pack already
-// here, packed. Each is { name, dir, label }.
+// here, packed. Then the level packs, for the art each carries: on disk, as
+// levelpacks/index.json lists them, and the ones the level editor saved in
+// this browser. Each is { name, dir, label }.
 async function packFolders() {
+  const out = [];
+  const where = dir => String(dir).replace(/^\//, '').replace(/\/$/, '');
   try {
     const res = await fetch('/assetpacks/index.json', { cache: 'no-store' });
-    if (res.ok) return (await res.json()).map(p => ({
-      name: p.name, dir: p.dir,
-      label: `${p.title || p.name} — ${String(p.dir).replace(/^\//, '').replace(/\/$/, '')}`
-    }));
+    if (res.ok) for (const p of await res.json()) out.push({ name: p.name, dir: p.dir, label: `${p.title || p.name} — ${where(p.dir)}` });
   } catch { /* no folder list; the path can still be typed */ }
-  return [];
+  try {
+    const res = await fetch('/levelpacks/index.json', { cache: 'no-store' });
+    if (res.ok) for (const p of await res.json()) out.push({ name: p.name, dir: p.dir, label: `The art of level pack ${p.title || p.name} — ${where(p.dir)}` });
+  } catch { /* none on disk */ }
+  try {
+    if (await Promise.race([packStore.ready(), new Promise(ok => setTimeout(() => ok(false), 1500))])) {
+      for (const p of await packStore.list('levels')) out.push({ name: p.name, dir: packStore.url('levels', p.name), label: `The art of level pack ${p.title || p.name} — saved in this browser` });
+    }
+  } catch { /* none kept here */ }
+  return out;
 }
 
 const isZipPath = dir => /\.zip$/i.test(String(dir).trim());
