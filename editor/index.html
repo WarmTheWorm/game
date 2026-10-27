@@ -261,6 +261,7 @@
   <div class="namebox packOnly"><span>level pack</span><select id="packSelect" title="The level packs in this browser — * changed since it was last exported. Every one is kept here as you work, where the game and the asset pack creator can open it too."></select></div>
   <div class="namebox packOnly"><span>name</span><input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40"></div>
   <button class="namebox packOnly" id="assetBtn" title="The asset pack this level pack is built with: its tiles, objects, backgrounds and sounds — click to pick another"><span>asset pack</span><b id="assetName"></b></button>
+  <button id="editAssetsBtn" class="packOnly" title="Open this asset pack in the asset pack creator, to change its tiles, sprites, objects and sounds">Edit ↗</button>
   <span class="grow"></span>
   <button id="importBtn" title="Add a level pack: from levelpacks/, a .zip, a copy of the open one, or an empty one">Import…</button>
   <button id="downloadBtn" class="go packOnly" title="Save the open level pack, with its asset pack, as a .zip — clears its *">⬇ Export .zip</button>
@@ -1655,6 +1656,15 @@ async function assetChoices() {
   } catch (err) { /* none kept */ }
   return [...opts].map(([value, label]) => ({ value, label }));
 }
+// Edit ↗: the asset pack creator, on this asset pack — the pack there it came
+// from, or imported into it if it has none (its ?open=). One tab is kept for
+// the creator, as the creator keeps one for this editor.
+document.getElementById('editAssetsBtn').addEventListener('click', () => {
+  const url = `/assetpack-editor/?open=${encodeURIComponent(EDITOR_DIR)}`;
+  const tab = window.open(url, 'wtw-asset-editor');
+  if (tab) tab.focus();
+});
+
 // the asset packs the page can read, like the creator's Import dialog
 document.getElementById('assetBtn').addEventListener('click', async () => {
   if (noPack) return;

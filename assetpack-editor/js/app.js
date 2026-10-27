@@ -442,10 +442,50 @@ async function boot(already) {
   }
 }
 
+// ?open=<an asset pack's folder> — the level editor's Edit asset pack — opens
+// that pack: the one here it was imported from, or, for the copy Open in
+// level editor keeps in the browser (/__idb/assets/<name>/), the pack here of
+// that name; otherwise it is imported, as Import would.
+async function openFromLink(dir) {
+  const want = packDir(dir);
+  const list = await dbList().catch(() => []);
+  const kept = /^\/__idb\/assets\/([^/]+)\/$/.exec(want);
+  let hit = kept ? list.find(x => slug(x.name) === decodeURIComponent(kept[1])) : null;
+  if (!hit) {
+    for (const x of list) {
+      const origin = x.origin !== undefined ? x.origin : ((await dbLoad(x.id).catch(() => null)) || {}).origin;
+      if (origin === want) { hit = x; break; }
+    }
+  }
+  if (hit) {
+    if (!pack || hit.id !== pack.id || noPack) {
+      if (noPack) await showPack(await dbLoad(hit.id)); else await openPack(hit.id);
+    }
+    toast(`Opened ${hit.name} — the asset pack the level editor builds with`);
+    return;
+  }
+  toast('Reading…');
+  let next;
+  try { next = await importPack(want); }
+  catch (err) { toast('Could not read that asset pack: ' + err.message, true); return; }
+  next.origin = want;
+  if (list.some(x => x.name === next.name)) next.name = await freePackName(next.name);
+  if (!noPack) await flushPack();
+  await showPack(next, { clean: true });
+  toast(`Imported ${pack.name} from ${want} — the asset pack the level editor builds with`);
+}
+
 boot()
-  .then(() => {
+  .then(async () => {
     let tab = null;
     try { tab = localStorage.getItem(TAB_KEY); } catch { /* none kept */ }
     if (tab && $(`.tab[data-tab="${tab}"]`)) showTab(tab);
+    const q = new URLSearchParams(location.search);
+    const open = q.get('open');
+    if (open) {
+      q.delete('open');
+      history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+      await openFromLink(open);
+    }
   })
   .catch(err => toast('Could not start: ' + err.message, true));
