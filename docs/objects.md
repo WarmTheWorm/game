@@ -355,6 +355,14 @@ head radius — what she hits the tiles with — is her sprite's collision circl
    `src/js/classes.js`.
 3. On the asset pack creator's Objects tab, **+ New** now offers it.
 
+How the creator lays its properties out is the class's to say too, on each
+property: `group` (the panel it is in, panels ordered by the class's
+`editor.groups`, then its bases'), `short` (the label on its line; `label`
+becomes the tooltip), `join: true` (stacked onto the line before, as one
+joined block), `unit` (shown inside the field) and `percent: true` (a share
+shown as a percentage). A property with none of them goes in a Properties
+panel, a line of its own.
+
 Its bucket — the list the world keeps its kind in (`static bucket`) — must be
 one `loadCustomLevel` in `game.js` knows about.
 

@@ -8,9 +8,10 @@ class Lantern extends Pickup {
   static editor = {
     label: 'Lantern',
     code: '0N',   // 'T' and 'L' are spoken for, by the tileset and the door
+    groups: ['Light', 'Taken', 'Look'],
     props: {
-      radius: { type: 'int', default: 0, label: 'Light radius, in tiles (0 = full light)' },
-      pickSound: { type: 'sound', default: 'sound::lantern', label: 'Sound when taken' }
+      radius: { type: 'int', default: 0, label: 'Light radius, in tiles (0 = full light)', group: 'Light', short: 'Radius', unit: 'tiles' },
+      pickSound: { type: 'sound', default: 'sound::lantern', label: 'Sound when taken', group: 'Taken', short: 'Sound' }
     }
   };
 

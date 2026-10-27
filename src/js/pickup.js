@@ -6,8 +6,9 @@ const COIN_POP_RISE = 22;     // px
 // those that set popT also fade upward on the way out.
 class Pickup extends Entity {
   static editor = {
+    groups: ['Taken', 'Look'],
     props: {
-      takeParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when taken' }
+      takeParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when taken', group: 'Taken', short: 'Particles' }
     }
   };
 

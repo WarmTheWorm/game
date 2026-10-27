@@ -4,10 +4,11 @@ class Checkpoint extends Entity {
     label: 'Checkpoint',
     code: '0!',
     sprite: { fw: 108, fh: 186, pivot: [0.5, 0.82], note: 'off until she reaches it, on after.' },
+    groups: ['Look', 'Reached'],
     props: {
-      off: { type: 'part', default: 'off', label: 'Part before she reaches it' },
-      on: { type: 'part', default: 'on', label: 'Part once reached' },
-      sound: { type: 'sound', default: 'sound::checkpoint', label: 'Sound when reached' }
+      off: { type: 'part', default: 'off', label: 'Part before she reaches it', group: 'Look', short: 'Off' },
+      on: { type: 'part', default: 'on', label: 'Part once reached', group: 'Look', short: 'On', join: true },
+      sound: { type: 'sound', default: 'sound::checkpoint', label: 'Sound when reached', group: 'Reached', short: 'Sound' }
     }
   };
 

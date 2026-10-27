@@ -6,11 +6,12 @@ class RockSpawner extends Entity {
   static editor = {
     label: 'Falling rock',
     code: '0R',
+    groups: ['Drop', 'Look'],
     props: {
-      interval: { type: 'int', default: 140, label: 'Frames between drops' },
-      gravity: { type: 'float', default: 0.55, label: 'Gravity' },
-      maxFall: { type: 'float', default: 12, label: 'Top falling speed' },
-      breakParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when a rock breaks' }
+      interval: { type: 'int', default: 140, label: 'Frames between drops', group: 'Drop', short: 'Every', unit: 'frames' },
+      gravity: { type: 'float', default: 0.55, label: 'Gravity', group: 'Drop', short: 'Gravity' },
+      maxFall: { type: 'float', default: 12, label: 'Top falling speed', group: 'Drop', short: 'Top speed', join: true, unit: 'px / frame' },
+      breakParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when a rock breaks', group: 'Drop', short: 'Breaks into' }
     }
   };
 

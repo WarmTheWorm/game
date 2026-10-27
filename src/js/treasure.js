@@ -9,9 +9,9 @@ class Treasure extends Pickup {
     label: 'Treasure',
     code: '0C',
     props: {
-      score: { type: 'int', default: 1, label: 'Score' },
-      pickSound: { type: 'sound', default: 'sound::coin', label: 'Sound when taken' },
-      tally: { type: 'choice', options: ['coins', 'gems', 'none'], default: 'coins', label: 'Counts toward the achievements as' }
+      score: { type: 'int', default: 1, label: 'Score', group: 'Taken', short: 'Score' },
+      pickSound: { type: 'sound', default: 'sound::coin', label: 'Sound when taken', group: 'Taken', short: 'Sound' },
+      tally: { type: 'choice', options: ['coins', 'gems', 'none'], default: 'coins', label: 'Counts toward the achievements as', group: 'Taken', short: 'Counts as' }
     }
   };
 

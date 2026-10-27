@@ -17,6 +17,17 @@
 //          'object::sparkle')
 //   optional: true  — a part that may be missing, the class managing without
 //
+// How the asset pack creator lays a property out, Blender-style — each one a
+// line, label on the left, field on the right:
+//   group: 'Motion' — the panel it is in (one per name, folding away); the
+//                     class's `editor.groups` orders the panels, then its bases'
+//                     ; a property without one goes in Properties
+//   short: 'Speed'  — the label on its line; `label` is its tooltip
+//   join: true      — stacked onto the line before, as one joined block
+//                     (speed and its variation, a size's start and end)
+//   unit: 'px'      — shown inside the field, after the value
+//   percent: true   — a share, shown and typed as a percentage (0.2 is 20 %)
+//
 // The base is enough on its own for anything that just sits there: it draws
 // its sprite's current animation frame, tinted by its pairing id if it has
 // one and its sprite carries a glow mask.
@@ -86,11 +97,23 @@ class Entity {
     return (Object.hasOwn(this, 'editor') && this.editor.digit) || 'id';
   }
 
+  // The order of the property panels: the class's own `editor.groups`, then
+  // its bases' (so a lantern's Light comes before every pickup's Taken), then
+  // any other group its properties name, as they come.
+  static propGroups() {
+    const chain = [];
+    for (let C = this; C && C.prototype instanceof Object; C = Object.getPrototypeOf(C)) chain.push(C);
+    const out = [];
+    for (const C of chain) if (Object.hasOwn(C, 'editor')) for (const g of C.editor.groups || []) if (!out.includes(g)) out.push(g);
+    for (const d of Object.values(this.propDefs())) { const g = d.group || 'Properties'; if (!out.includes(g)) out.push(g); }
+    return out;
+  }
+
   // Every property this class reads, its bases' first, the sprite before all.
   static propDefs() {
     const chain = [];
     for (let C = this; C && C.prototype instanceof Object; C = Object.getPrototypeOf(C)) chain.unshift(C);
-    const out = { sprite: { type: 'sprite', default: '', label: 'Sprite' } };
+    const out = { sprite: { type: 'sprite', default: '', label: 'Sprite', group: 'Look', short: 'Sprite' } };
     for (const C of chain) if (Object.hasOwn(C, 'editor')) Object.assign(out, C.editor.props || {});
     return out;
   }

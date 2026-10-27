@@ -57,36 +57,84 @@ function codeLine(o, C) {
 // The value a list's "+ New…" entry carries: never a real name.
 const NEW_ONE = '+new';      // a name no sound or sprite can have
 
-// One field per property, by its declared type.
-function propField(o, k, d) {
+// ---------- the properties, Blender-style ----------
+// Each class says where its properties go (src/js/entity.js): a panel per
+// `group`, folding away; in each, a line per property — its `short` label on
+// the left, its field on the right, ↺ at the end once it differs from the
+// default — and the properties that `join` the one before stacked onto it as
+// one block, as Blender stacks X, Y and Z.
+const sameValue = (a, b) => (typeof a === 'number' || typeof b === 'number') ? Number(a) === Number(b) : String(a ?? '') === String(b ?? '');
+const shownValue = (d, v) => d.percent ? `${+(Number(v) * 100).toFixed(2)} %` : `${v === '' ? 'none' : refName(String(v))}${d.unit ? ' ' + d.unit : ''}`;
+
+// The panels the open fold-state is kept in, by group name, for this browser.
+const PANEL_SHUT_KEY = 'assetEditorShutPanels';
+let shutPanels = new Set();
+try { shutPanels = new Set(JSON.parse(localStorage.getItem(PANEL_SHUT_KEY) || '[]')); } catch { /* all open */ }
+
+function propPanels(o) {
+  const C = gameClass(o.cls);
+  const defs = classDefs(o.cls);
+  const groups = new Map((C ? C.propGroups() : ['Properties']).map(g => [g, []]));
+  for (const [k, d] of Object.entries(defs)) {
+    const g = d.group || 'Properties';
+    (groups.get(g) || groups.set(g, []).get(g)).push([k, d]);
+  }
+  return [...groups].filter(([, list]) => list.length).map(([g, list]) => {
+    // a line, and those joined onto it, are one block
+    const blocks = [];
+    for (const kd of list) {
+      if (kd[1].join && blocks.length) blocks[blocks.length - 1].push(kd);
+      else blocks.push([kd]);
+    }
+    return `<details class="ppanel" data-pgroup="${esc(g)}" ${shutPanels.has(g) ? '' : 'open'}><summary>${esc(g)}</summary>
+      ${blocks.map(b => `<div class="pblock${b.length > 1 ? ' joined' : ''}">${b.map(([k, d]) => propLine(o, k, d)).join('')}</div>`).join('')}
+    </details>`;
+  }).join('');
+}
+
+// One property's line: label, field, ↺.
+function propLine(o, k, d) {
   const v = o.props[k];
   // a property naming something the pack hasn't got wears the mark too
   const prob = k === 'sprite'
     ? (objectProblems(o).find(p => p.startsWith('its sprite')) || null)
     : propProblem(o, k, d);
-  const head = `<div class="row"><span>${esc(d.label || k)}${warnBadge(prob && [prob])}</span><code class="pk">${esc(k)}</code></div>`;
-  const hint = [d.default !== undefined && d.default !== '' ? `default ${String(d.default)}` : '', d.optional ? 'optional' : '']
-    .filter(Boolean).map(t => `<span class="hint">${esc(t)}</span>`).join('');
+  const hasDefault = d.default !== undefined && !(d.default === '' && ['sprite', 'part'].includes(d.type));
+  const changed = hasDefault && !sameValue(v, d.default);
+  const tip = [d.label || k, k, hasDefault ? 'default ' + shownValue(d, d.default) : '', d.optional ? 'optional' : ''].filter(Boolean).join(' · ');
+  const label = d.type === 'bool' ? '' : esc(d.short || d.label || k);
+  return `<div class="pline" title="${esc(tip)}">
+    <span class="plabel">${label}${warnBadge(prob && [prob])}</span>
+    <div class="pfield">${propField(o, k, d)}</div>
+    <button type="button" class="preset" data-reset="${k}" title="Back to the default: ${esc(hasDefault ? shownValue(d, d.default) : '')}" aria-label="Reset" ${changed ? '' : 'hidden'}>↺</button>
+  </div>`;
+}
+
+// The field alone, by the property's declared type.
+function propField(o, k, d) {
+  const v = o.props[k];
   const options = (list, prefix) => {
     const vals = list.map(n => prefix + n);
     if (v && !vals.includes(v)) vals.unshift(v);            // keep what it says, even if it's gone
     // the value keeps its kind in front (sound::coin); the label is just the name
     return ['', ...vals].map(x => `<option value="${esc(x)}" ${x === v ? 'selected' : ''}>${x ? esc(refName(x)) + (list.includes(refName(x)) ? '' : ' — missing') : '— none'}</option>`).join('');
   };
-  // Every property that names something in the pack — a sprite, a part, a
-  // sound, an object, a background — is one row: its picker, full width, then
-  // ↗ to open what it names (as a double-click on the picker does too). A
-  // sound has ▶ to hear it as well. Not in a <label>: a click on a select in
-  // one reaches the label too, which clicks the select again and shuts it.
+  // what names something: its picker full width, then ↗ to open it (as a
+  // double-click on the picker does too); a sound has ▶ to hear it as well
   const openBtn = `<button type="button" class="btn sm refopen" data-open="${k}" title="Open it" aria-label="Open it" ${v ? '' : 'disabled'}>↗</button>`;
-  const refRow = (picker, extra = '') => `<div class="ctl">${head}<div class="refrow">${picker}${extra}${openBtn}</div>${hint}</div>`;
-  let input;
+  const refRow = (picker, extra = '') => `<div class="refrow">${picker}${extra}${openBtn}</div>`;
+  // a number with its unit inside, a share as a percentage
+  const num = step => {
+    const shown = d.percent ? +(Number(v) * 100).toFixed(2) : v;
+    const unit = d.percent ? '%' : (d.unit || '');
+    return `<div class="pnum${unit ? ' hasunit' : ''}"><input type="number" step="${d.percent ? 'any' : step}" data-prop="${k}" ${d.percent ? 'data-pct="1"' : ''} value="${esc(shown)}">${unit ? `<span class="u">${esc(unit)}</span>` : ''}</div>`;
+  };
   switch (d.type) {
-    case 'int': input = `<input type="number" step="1" data-prop="${k}" value="${esc(v)}">`; break;
-    case 'float': input = `<input type="number" step="any" data-prop="${k}" value="${esc(v)}">`; break;
-    case 'bool': input = `<label class="toggle"><input type="checkbox" data-prop="${k}" ${v ? 'checked' : ''}> ${esc(d.label || k)}</label>`; break;
-    case 'color': input = `<input type="color" data-prop="${k}" value="${esc(v || '#ffffff')}">`; break;
-    case 'choice': input = `<select data-prop="${k}">${(d.options || []).map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`; break;
+    case 'int': return num(1);
+    case 'float': return num('any');
+    case 'bool': return `<label class="toggle"><input type="checkbox" data-prop="${k}" ${v ? 'checked' : ''}> ${esc(d.short || d.label || k)}</label>`;
+    case 'color': return `<input type="color" data-prop="${k}" value="${esc(v || '#ffffff')}">`;
+    case 'choice': return `<select data-prop="${k}">${(d.options || []).map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
     case 'sound':
       // its list starts with a new one and none, then the pack's sounds
       return refRow(`<select data-prop="${k}" data-ref="${k}" title="Pick a sound — or none, or a new one made from this one">${options(Object.keys(pack.sounds.defs), 'sound::')
@@ -114,9 +162,8 @@ function propField(o, k, d) {
         <button type="button" class="sprbtn" data-partbtn="${k}" data-ref="${k}" aria-haspopup="listbox" title="Pick a part">${v ? partIcon(sn, v) : ''}<span class="nm">${esc(v || '— none')}${missing}</span><span class="caret">▾</span></button>
       </div>`);
     }
-    default: input = `<input data-prop="${k}" value="${esc(v ?? '')}">`;
+    default: return `<input data-prop="${k}" value="${esc(v ?? '')}">`;
   }
-  return `<label class="ctl">${head}${input}${hint}</label>`;
 }
 
 function renderGoForm() {
@@ -147,7 +194,7 @@ function renderGoForm() {
       </div>`}
     </div>
     <h3 class="subh">${esc(o.cls)} properties</h3>
-    <div class="insp">${Object.entries(defs).map(([k, d]) => propField(o, k, d)).join('')}</div>
+    <div class="ppanels">${propPanels(o)}</div>
     ${problems.length ? `<ul class="hint probs">${[
       ...problems
     ].map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
@@ -285,9 +332,12 @@ $('#goForm').addEventListener('input', e => {
   if (k) {
     const d = classDefs(o.cls)[k] || {};
     let v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    if (d.type === 'int') { v = parseInt(v, 10); if (!Number.isFinite(v)) return; }
-    if (d.type === 'float') { v = parseFloat(v); if (!Number.isFinite(v)) return; }
+    if (e.target.dataset.pct) { v = parseFloat(v) / 100; if (!Number.isFinite(v)) return; }
+    else if (d.type === 'int') { v = parseInt(v, 10); if (!Number.isFinite(v)) return; }
+    else if (d.type === 'float') { v = parseFloat(v); if (!Number.isFinite(v)) return; }
     setProp(o, k, v);
+    const reset = e.target.closest('.pline') && e.target.closest('.pline').querySelector('[data-reset]');
+    if (reset && d.default !== undefined) reset.hidden = sameValue(o.props[k], d.default);
     return;
   }
   if (e.target.dataset.g === 'name') {
@@ -375,6 +425,14 @@ function openSprite(name) {
 
 // Double-click a sprite picker to go to the sprite it holds; a part picker
 // goes to the object's own sprite, where its parts are.
+// 'toggle' doesn't bubble, so it is caught on the way down
+$('#goForm').addEventListener('toggle', e => {
+  const d = e.target.closest && e.target.closest('.ppanel');
+  if (!d) return;
+  if (d.open) shutPanels.delete(d.dataset.pgroup); else shutPanels.add(d.dataset.pgroup);
+  try { localStorage.setItem(PANEL_SHUT_KEY, JSON.stringify([...shutPanels])); } catch { /* not kept */ }
+}, true);
+
 // What a property names, opened where it is made: a sprite (or the sprite a
 // part is of) on the Sprites tab, a sound on the Sounds tab, an object here,
 // a background on its tab.
@@ -479,6 +537,13 @@ $('#goForm').addEventListener('click', e => {
   if (ns) { closeSpritePicker(); newSpriteFor(o, ns.dataset.newsprite); return; }
   const nd = e.target.closest('[data-newsound]');
   if (nd) { newSoundFor(o, nd.dataset.newsound); return; }
+  const rs = e.target.closest('[data-reset]');
+  if (rs) {
+    const d = classDefs(o.cls)[rs.dataset.reset] || {};
+    setProp(o, rs.dataset.reset, d.default);
+    renderGoForm();
+    return;
+  }
   const op = e.target.closest('[data-open]');
   if (op) { openRef(o, op.dataset.open); return; }
   const play = e.target.closest('[data-play]');

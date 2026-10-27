@@ -10,17 +10,18 @@ class Plant extends Entity {
     code: '0V',
     // a new sprite's layout in the asset pack creator (sprite-templates.js)
     sprite: { fw: 76, fh: 224, pivot: [0.5, 0.88], note: 'bud is the plant at rest, stem stretches up to head as it lunges, and head bites — head may have frames of its own.' },
+    groups: ['Strike', 'Timing', 'Look'],
     props: {
-      reach: { type: 'int', default: 100, label: 'How high it lunges, px' },
-      trigger: { type: 'int', default: 40, label: 'How near overhead sets it off, px' },
-      rise: { type: 'int', default: 16, label: 'Frames to lunge up' },
-      hold: { type: 'int', default: 10, label: 'Frames held at the top' },
-      fall: { type: 'int', default: 20, label: 'Frames to sink back' },
-      cooldown: { type: 'int', default: 50, label: 'Frames before it can strike again' },
-      bounce: { type: 'float', default: 0.4, label: 'How far a bite throws her, as a share of a jump' },
-      bud: { type: 'part', default: 'bud', label: 'Part when resting' },
-      stem: { type: 'part', default: 'stem', label: 'Part stretched up to the head' },
-      head: { type: 'part', default: 'head', label: 'Part that bites' }
+      reach: { type: 'int', default: 100, label: 'How high it lunges, px', group: 'Strike', short: 'Reach', unit: 'px' },
+      trigger: { type: 'int', default: 40, label: 'How near overhead sets it off, px', group: 'Strike', short: 'Trigger', unit: 'px' },
+      rise: { type: 'int', default: 16, label: 'Frames to lunge up', group: 'Timing', short: 'Rise', unit: 'frames' },
+      hold: { type: 'int', default: 10, label: 'Frames held at the top', group: 'Timing', short: 'Hold', join: true, unit: 'frames' },
+      fall: { type: 'int', default: 20, label: 'Frames to sink back', group: 'Timing', short: 'Fall', join: true, unit: 'frames' },
+      cooldown: { type: 'int', default: 50, label: 'Frames before it can strike again', group: 'Timing', short: 'Cooldown', unit: 'frames' },
+      bounce: { type: 'float', default: 0.4, label: 'How far a bite throws her, as a share of a jump', group: 'Strike', short: 'Bounce', percent: true, unit: 'of a jump' },
+      bud: { type: 'part', default: 'bud', label: 'Part when resting', group: 'Look', short: 'Bud' },
+      stem: { type: 'part', default: 'stem', label: 'Part stretched up to the head', group: 'Look', short: 'Stem', join: true },
+      head: { type: 'part', default: 'head', label: 'Part that bites', group: 'Look', short: 'Head', join: true }
     }
   };
 

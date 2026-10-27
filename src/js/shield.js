@@ -7,8 +7,8 @@ class Shield extends Pickup {
     label: 'Shield',
     code: '0S',
     props: {
-      worn: { type: 'sprite', default: '', label: 'Sprite worn over her head (without one, a plain ring)' },
-      pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken' }
+      worn: { type: 'sprite', default: '', label: 'Sprite worn over her head (without one, a plain ring)', group: 'Look', short: 'Worn' },
+      pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken', group: 'Taken', short: 'Sound' }
     }
   };
 

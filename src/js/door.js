@@ -10,7 +10,7 @@ class Door extends Entity {
     label: 'Door',
     code: 'nL',   // its digit is its id
     props: {
-      openSound: { type: 'sound', default: 'sound::unlock', label: 'Sound when opened' }
+      openSound: { type: 'sound', default: 'sound::unlock', label: 'Sound when opened', group: 'Opened', short: 'Sound' }
     }
   };
 

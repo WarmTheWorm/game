@@ -16,8 +16,9 @@ class Platform extends Entity {
     label: 'Platform',
     code: 'n=',
     digit: 'direction (0 right, 1 left, 2 up, 3 down)',
+    groups: ['Motion', 'Look'],
     props: {
-      speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)' }
+      speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)', group: 'Motion', short: 'Speed' }
     }
   };
 

@@ -6,7 +6,7 @@ class Key extends Pickup {
     label: 'Key',
     code: 'nK',   // its digit is its id
     props: {
-      pickSound: { type: 'sound', default: 'sound::key', label: 'Sound when taken' }
+      pickSound: { type: 'sound', default: 'sound::key', label: 'Sound when taken', group: 'Taken', short: 'Sound' }
     }
   };
 

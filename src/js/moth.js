@@ -6,10 +6,10 @@ class Moth extends Enemy {
     label: 'Moth',
     code: '1E',
     props: {
-      speed: { type: 'float', default: 0.9, label: 'Flying speed, px a frame' },
-      range: { type: 'float', default: 3, label: 'How far it strays each way, in tiles' },
-      bob: { type: 'float', default: 14, label: 'Bob height, px' },
-      bobSpeed: { type: 'float', default: 0.05, label: 'Bob speed' }
+      speed: { type: 'float', default: 0.9, label: 'Flying speed, px a frame', group: 'Motion', short: 'Speed', unit: 'px / frame' },
+      range: { type: 'float', default: 3, label: 'How far it strays each way, in tiles', group: 'Motion', short: 'Range', unit: 'tiles' },
+      bob: { type: 'float', default: 14, label: 'Bob height, px', group: 'Motion', short: 'Bob', unit: 'px' },
+      bobSpeed: { type: 'float', default: 0.05, label: 'Bob speed', group: 'Motion', short: 'Bob speed', join: true }
     }
   };
 

@@ -6,9 +6,9 @@ class Frog extends Enemy {
     label: 'Frog',
     code: '2E',
     props: {
-      hopUp: { type: 'float', default: 8.5, label: 'Hop strength, up' },
-      hopForward: { type: 'float', default: 2.2, label: 'Hop strength, forward' },
-      pause: { type: 'int', default: 40, label: 'Frames on the ground between hops' }
+      hopUp: { type: 'float', default: 8.5, label: 'Hop strength, up', group: 'Motion', short: 'Hop up', unit: 'px / frame' },
+      hopForward: { type: 'float', default: 2.2, label: 'Hop strength, forward', group: 'Motion', short: 'Forward', join: true, unit: 'px / frame' },
+      pause: { type: 'int', default: 40, label: 'Frames on the ground between hops', group: 'Motion', short: 'Pause', unit: 'frames' }
     }
   };
 

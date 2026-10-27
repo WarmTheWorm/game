@@ -284,6 +284,32 @@ dialog#ask::backdrop{background:#0b0818cc}
 .spropt.on{box-shadow:inset 3px 0 0 var(--amber);background:var(--panel2)}
 .sprrow{display:flex;gap:6px;align-items:center}
 .sprrow .sprpick{flex:1;min-width:0}
+/* an object's properties, Blender-style: panels of lines, label | field | ↺ */
+.ppanels{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;align-items:start}
+.ppanel{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:0 0 6px;min-width:0}
+.ppanel>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 9px;font-size:12.5px;font-weight:600;user-select:none}
+.ppanel>summary::-webkit-details-marker{display:none}
+.ppanel>summary::before{content:'▾';font-size:10px;color:var(--muted);transition:transform .12s}
+.ppanel:not([open]){padding-bottom:0}
+.ppanel:not([open])>summary::before{transform:rotate(-90deg)}
+.pblock{margin:0 0 5px}
+.pline{display:grid;grid-template-columns:38% minmax(0,1fr) 18px;gap:8px;align-items:center;padding:0 6px 0 8px}
+.plabel{text-align:right;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;justify-content:flex-end;align-items:center}
+.pfield{min-width:0}
+.pfield>select,.pfield>input,.pfield>.refrow{width:100%}
+.pfield input[type=color]{height:26px;padding:1px;width:100%}
+.pnum{position:relative;display:flex}
+.pnum input{width:100%;text-align:center}
+.pnum.hasunit input{padding-right:46px;padding-left:46px}
+.pnum .u{position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:11px;pointer-events:none;white-space:nowrap}
+.pline .preset,.pline .preset:hover{appearance:none;border:0;background:none;box-shadow:none;color:var(--amber);cursor:pointer;padding:0;min-height:0;font-size:13px;line-height:1}
+.pline .preset[hidden]{display:block;visibility:hidden}
+/* joined lines: one block, no gap, corners only at its ends */
+.pblock.joined .pline+.pline{margin-top:-1px}
+.pblock.joined .pline:not(:last-child) .pfield :is(input,select,.sprbtn){border-bottom-left-radius:0;border-bottom-right-radius:0}
+.pblock.joined .pline:not(:first-child) .pfield :is(input,select,.sprbtn){border-top-left-radius:0;border-top-right-radius:0}
+.pblock.joined .pline .pfield .toggle{min-height:22px}
+
 /* a property naming something: its picker full width, then ▶ / ↗ */
 .refrow{display:flex;gap:4px;align-items:center;min-width:0}
 .refrow>select,.refrow>.sprpick{flex:1;min-width:0;width:100%}

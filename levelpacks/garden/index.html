@@ -4313,6 +4313,17 @@ requestAnimationFrame(loop);
 //          'object::sparkle')
 //   optional: true  — a part that may be missing, the class managing without
 //
+// How the asset pack creator lays a property out, Blender-style — each one a
+// line, label on the left, field on the right:
+//   group: 'Motion' — the panel it is in (one per name, folding away); the
+//                     class's `editor.groups` orders the panels, then its bases'
+//                     ; a property without one goes in Properties
+//   short: 'Speed'  — the label on its line; `label` is its tooltip
+//   join: true      — stacked onto the line before, as one joined block
+//                     (speed and its variation, a size's start and end)
+//   unit: 'px'      — shown inside the field, after the value
+//   percent: true   — a share, shown and typed as a percentage (0.2 is 20 %)
+//
 // The base is enough on its own for anything that just sits there: it draws
 // its sprite's current animation frame, tinted by its pairing id if it has
 // one and its sprite carries a glow mask.
@@ -4382,11 +4393,23 @@ class Entity {
     return (Object.hasOwn(this, 'editor') && this.editor.digit) || 'id';
   }
 
+  // The order of the property panels: the class's own `editor.groups`, then
+  // its bases' (so a lantern's Light comes before every pickup's Taken), then
+  // any other group its properties name, as they come.
+  static propGroups() {
+    const chain = [];
+    for (let C = this; C && C.prototype instanceof Object; C = Object.getPrototypeOf(C)) chain.push(C);
+    const out = [];
+    for (const C of chain) if (Object.hasOwn(C, 'editor')) for (const g of C.editor.groups || []) if (!out.includes(g)) out.push(g);
+    for (const d of Object.values(this.propDefs())) { const g = d.group || 'Properties'; if (!out.includes(g)) out.push(g); }
+    return out;
+  }
+
   // Every property this class reads, its bases' first, the sprite before all.
   static propDefs() {
     const chain = [];
     for (let C = this; C && C.prototype instanceof Object; C = Object.getPrototypeOf(C)) chain.unshift(C);
-    const out = { sprite: { type: 'sprite', default: '', label: 'Sprite' } };
+    const out = { sprite: { type: 'sprite', default: '', label: 'Sprite', group: 'Look', short: 'Sprite' } };
     for (const C of chain) if (Object.hasOwn(C, 'editor')) Object.assign(out, C.editor.props || {});
     return out;
   }
@@ -4469,11 +4492,12 @@ function hurtWarm(bounce = 0) {
 class Enemy extends Entity {
   static bucket = 'enemies';
   static editor = {
+    groups: ['Motion', 'Stomp', 'Look'],
     props: {
-      stompScore: { type: 'int', default: 1, label: 'Score for a stomp' },
-      stompSound: { type: 'sound', default: 'sound::eat', label: 'Sound when stomped' },
-      stompBounce: { type: 'float', default: 0.55, label: 'Bounce off it, as a share of a jump' },
-      stompParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when killed (stomped, or hit with the shield on)' }
+      stompScore: { type: 'int', default: 1, label: 'Score for a stomp', group: 'Stomp', short: 'Score' },
+      stompSound: { type: 'sound', default: 'sound::eat', label: 'Sound when stomped', group: 'Stomp', short: 'Sound' },
+      stompBounce: { type: 'float', default: 0.55, label: 'Bounce off it, as a share of a jump', group: 'Stomp', short: 'Bounce', percent: true, unit: 'of a jump' },
+      stompParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when killed (stomped, or hit with the shield on)', group: 'Stomp', short: 'Particles' }
     }
   };
 
@@ -4514,7 +4538,7 @@ class Beetle extends Enemy {
     label: 'Beetle',
     code: '0E',
     props: {
-      speed: { type: 'float', default: 1.1, label: 'Walking speed, px a frame' }
+      speed: { type: 'float', default: 1.1, label: 'Walking speed, px a frame', group: 'Motion', short: 'Speed', unit: 'px / frame' }
     }
   };
 
@@ -4583,10 +4607,10 @@ class Moth extends Enemy {
     label: 'Moth',
     code: '1E',
     props: {
-      speed: { type: 'float', default: 0.9, label: 'Flying speed, px a frame' },
-      range: { type: 'float', default: 3, label: 'How far it strays each way, in tiles' },
-      bob: { type: 'float', default: 14, label: 'Bob height, px' },
-      bobSpeed: { type: 'float', default: 0.05, label: 'Bob speed' }
+      speed: { type: 'float', default: 0.9, label: 'Flying speed, px a frame', group: 'Motion', short: 'Speed', unit: 'px / frame' },
+      range: { type: 'float', default: 3, label: 'How far it strays each way, in tiles', group: 'Motion', short: 'Range', unit: 'tiles' },
+      bob: { type: 'float', default: 14, label: 'Bob height, px', group: 'Motion', short: 'Bob', unit: 'px' },
+      bobSpeed: { type: 'float', default: 0.05, label: 'Bob speed', group: 'Motion', short: 'Bob speed', join: true }
     }
   };
 
@@ -4626,9 +4650,9 @@ class Frog extends Enemy {
     label: 'Frog',
     code: '2E',
     props: {
-      hopUp: { type: 'float', default: 8.5, label: 'Hop strength, up' },
-      hopForward: { type: 'float', default: 2.2, label: 'Hop strength, forward' },
-      pause: { type: 'int', default: 40, label: 'Frames on the ground between hops' }
+      hopUp: { type: 'float', default: 8.5, label: 'Hop strength, up', group: 'Motion', short: 'Hop up', unit: 'px / frame' },
+      hopForward: { type: 'float', default: 2.2, label: 'Hop strength, forward', group: 'Motion', short: 'Forward', join: true, unit: 'px / frame' },
+      pause: { type: 'int', default: 40, label: 'Frames on the ground between hops', group: 'Motion', short: 'Pause', unit: 'frames' }
     }
   };
 
@@ -4693,8 +4717,9 @@ const COIN_POP_RISE = 22;     // px
 // those that set popT also fade upward on the way out.
 class Pickup extends Entity {
   static editor = {
+    groups: ['Taken', 'Look'],
     props: {
-      takeParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when taken' }
+      takeParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when taken', group: 'Taken', short: 'Particles' }
     }
   };
 
@@ -4752,9 +4777,9 @@ class Treasure extends Pickup {
     label: 'Treasure',
     code: '0C',
     props: {
-      score: { type: 'int', default: 1, label: 'Score' },
-      pickSound: { type: 'sound', default: 'sound::coin', label: 'Sound when taken' },
-      tally: { type: 'choice', options: ['coins', 'gems', 'none'], default: 'coins', label: 'Counts toward the achievements as' }
+      score: { type: 'int', default: 1, label: 'Score', group: 'Taken', short: 'Score' },
+      pickSound: { type: 'sound', default: 'sound::coin', label: 'Sound when taken', group: 'Taken', short: 'Sound' },
+      tally: { type: 'choice', options: ['coins', 'gems', 'none'], default: 'coins', label: 'Counts toward the achievements as', group: 'Taken', short: 'Counts as' }
     }
   };
 
@@ -4782,8 +4807,8 @@ class Shield extends Pickup {
     label: 'Shield',
     code: '0S',
     props: {
-      worn: { type: 'sprite', default: '', label: 'Sprite worn over her head (without one, a plain ring)' },
-      pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken' }
+      worn: { type: 'sprite', default: '', label: 'Sprite worn over her head (without one, a plain ring)', group: 'Look', short: 'Worn' },
+      pickSound: { type: 'sound', default: 'sound::shieldUp', label: 'Sound when taken', group: 'Taken', short: 'Sound' }
     }
   };
 
@@ -4809,9 +4834,10 @@ class Lantern extends Pickup {
   static editor = {
     label: 'Lantern',
     code: '0N',   // 'T' and 'L' are spoken for, by the tileset and the door
+    groups: ['Light', 'Taken', 'Look'],
     props: {
-      radius: { type: 'int', default: 0, label: 'Light radius, in tiles (0 = full light)' },
-      pickSound: { type: 'sound', default: 'sound::lantern', label: 'Sound when taken' }
+      radius: { type: 'int', default: 0, label: 'Light radius, in tiles (0 = full light)', group: 'Light', short: 'Radius', unit: 'tiles' },
+      pickSound: { type: 'sound', default: 'sound::lantern', label: 'Sound when taken', group: 'Taken', short: 'Sound' }
     }
   };
 
@@ -4832,7 +4858,7 @@ class Key extends Pickup {
     label: 'Key',
     code: 'nK',   // its digit is its id
     props: {
-      pickSound: { type: 'sound', default: 'sound::key', label: 'Sound when taken' }
+      pickSound: { type: 'sound', default: 'sound::key', label: 'Sound when taken', group: 'Taken', short: 'Sound' }
     }
   };
 
@@ -4863,8 +4889,9 @@ class Platform extends Entity {
     label: 'Platform',
     code: 'n=',
     digit: 'direction (0 right, 1 left, 2 up, 3 down)',
+    groups: ['Motion', 'Look'],
     props: {
-      speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)' }
+      speed: { type: 'float', default: 0.04, label: 'Speed (over a 2.5-tile run; longer runs take longer)', group: 'Motion', short: 'Speed' }
     }
   };
 
@@ -5113,11 +5140,12 @@ class RockSpawner extends Entity {
   static editor = {
     label: 'Falling rock',
     code: '0R',
+    groups: ['Drop', 'Look'],
     props: {
-      interval: { type: 'int', default: 140, label: 'Frames between drops' },
-      gravity: { type: 'float', default: 0.55, label: 'Gravity' },
-      maxFall: { type: 'float', default: 12, label: 'Top falling speed' },
-      breakParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when a rock breaks' }
+      interval: { type: 'int', default: 140, label: 'Frames between drops', group: 'Drop', short: 'Every', unit: 'frames' },
+      gravity: { type: 'float', default: 0.55, label: 'Gravity', group: 'Drop', short: 'Gravity' },
+      maxFall: { type: 'float', default: 12, label: 'Top falling speed', group: 'Drop', short: 'Top speed', join: true, unit: 'px / frame' },
+      breakParticles: { type: 'object', class: 'ParticleSystem', default: '', label: 'Particles when a rock breaks', group: 'Drop', short: 'Breaks into' }
     }
   };
 
@@ -5161,17 +5189,18 @@ class Plant extends Entity {
     code: '0V',
     // a new sprite's layout in the asset pack creator (sprite-templates.js)
     sprite: { fw: 76, fh: 224, pivot: [0.5, 0.88], note: 'bud is the plant at rest, stem stretches up to head as it lunges, and head bites — head may have frames of its own.' },
+    groups: ['Strike', 'Timing', 'Look'],
     props: {
-      reach: { type: 'int', default: 100, label: 'How high it lunges, px' },
-      trigger: { type: 'int', default: 40, label: 'How near overhead sets it off, px' },
-      rise: { type: 'int', default: 16, label: 'Frames to lunge up' },
-      hold: { type: 'int', default: 10, label: 'Frames held at the top' },
-      fall: { type: 'int', default: 20, label: 'Frames to sink back' },
-      cooldown: { type: 'int', default: 50, label: 'Frames before it can strike again' },
-      bounce: { type: 'float', default: 0.4, label: 'How far a bite throws her, as a share of a jump' },
-      bud: { type: 'part', default: 'bud', label: 'Part when resting' },
-      stem: { type: 'part', default: 'stem', label: 'Part stretched up to the head' },
-      head: { type: 'part', default: 'head', label: 'Part that bites' }
+      reach: { type: 'int', default: 100, label: 'How high it lunges, px', group: 'Strike', short: 'Reach', unit: 'px' },
+      trigger: { type: 'int', default: 40, label: 'How near overhead sets it off, px', group: 'Strike', short: 'Trigger', unit: 'px' },
+      rise: { type: 'int', default: 16, label: 'Frames to lunge up', group: 'Timing', short: 'Rise', unit: 'frames' },
+      hold: { type: 'int', default: 10, label: 'Frames held at the top', group: 'Timing', short: 'Hold', join: true, unit: 'frames' },
+      fall: { type: 'int', default: 20, label: 'Frames to sink back', group: 'Timing', short: 'Fall', join: true, unit: 'frames' },
+      cooldown: { type: 'int', default: 50, label: 'Frames before it can strike again', group: 'Timing', short: 'Cooldown', unit: 'frames' },
+      bounce: { type: 'float', default: 0.4, label: 'How far a bite throws her, as a share of a jump', group: 'Strike', short: 'Bounce', percent: true, unit: 'of a jump' },
+      bud: { type: 'part', default: 'bud', label: 'Part when resting', group: 'Look', short: 'Bud' },
+      stem: { type: 'part', default: 'stem', label: 'Part stretched up to the head', group: 'Look', short: 'Stem', join: true },
+      head: { type: 'part', default: 'head', label: 'Part that bites', group: 'Look', short: 'Head', join: true }
     }
   };
 
@@ -5261,10 +5290,11 @@ class Checkpoint extends Entity {
     label: 'Checkpoint',
     code: '0!',
     sprite: { fw: 108, fh: 186, pivot: [0.5, 0.82], note: 'off until she reaches it, on after.' },
+    groups: ['Look', 'Reached'],
     props: {
-      off: { type: 'part', default: 'off', label: 'Part before she reaches it' },
-      on: { type: 'part', default: 'on', label: 'Part once reached' },
-      sound: { type: 'sound', default: 'sound::checkpoint', label: 'Sound when reached' }
+      off: { type: 'part', default: 'off', label: 'Part before she reaches it', group: 'Look', short: 'Off' },
+      on: { type: 'part', default: 'on', label: 'Part once reached', group: 'Look', short: 'On', join: true },
+      sound: { type: 'sound', default: 'sound::checkpoint', label: 'Sound when reached', group: 'Reached', short: 'Sound' }
     }
   };
 
@@ -5306,7 +5336,7 @@ class Door extends Entity {
     label: 'Door',
     code: 'nL',   // its digit is its id
     props: {
-      openSound: { type: 'sound', default: 'sound::unlock', label: 'Sound when opened' }
+      openSound: { type: 'sound', default: 'sound::unlock', label: 'Sound when opened', group: 'Opened', short: 'Sound' }
     }
   };
 
@@ -5386,26 +5416,27 @@ class ParticleSystem extends Entity {
   static editor = {
     label: 'Particle system',
     code: '0Z',
+    groups: ['Emit', 'Motion', 'Look'],
     props: {
-      count: { type: 'int', default: 16, label: 'Particles in a burst' },
-      rate: { type: 'float', default: 0, label: 'Particles a frame, placed in a level (0 = bursts instead)' },
-      interval: { type: 'int', default: 60, label: 'Frames between bursts, placed with no rate (0 = never)' },
-      speed: { type: 'float', default: 2, label: 'Speed, px a frame' },
-      speedJitter: { type: 'float', default: 0.5, label: 'Speed varies by, as a share' },
-      angle: { type: 'int', default: -90, label: 'Direction, degrees (0 right, -90 up)' },
-      spread: { type: 'int', default: 360, label: 'Spread round it, degrees' },
-      gravity: { type: 'float', default: 0.1, label: 'Gravity (negative rises)' },
-      drag: { type: 'float', default: 0.97, label: 'Speed kept each frame (1 = no drag)' },
-      life: { type: 'int', default: 30, label: 'Life, frames' },
-      lifeJitter: { type: 'float', default: 0.3, label: 'Life varies by, as a share' },
-      radius: { type: 'float', default: 0, label: 'Starts anywhere within, px' },
-      sizeStart: { type: 'float', default: 4, label: 'Size at birth, px' },
-      sizeEnd: { type: 'float', default: 0, label: 'Size at death, px' },
-      colorStart: { type: 'color', default: '#ffffff', label: 'Colour at birth' },
-      colorEnd: { type: 'color', default: '#ffffff', label: 'Colour at death' },
-      fade: { type: 'bool', default: true, label: 'Fades out' },
-      shape: { type: 'choice', options: ['circle', 'square', 'spark'], default: 'circle', label: 'Shape, without a sprite' },
-      glow: { type: 'bool', default: false, label: 'Glows (adds light)' }
+      count: { type: 'int', default: 16, label: 'Particles in a burst', group: 'Emit', short: 'Burst', unit: 'particles' },
+      rate: { type: 'float', default: 0, label: 'Particles a frame, placed in a level (0 = bursts instead)', group: 'Emit', short: 'Stream', unit: '/ frame' },
+      interval: { type: 'int', default: 60, label: 'Frames between bursts, placed with no rate (0 = never)', group: 'Emit', short: 'Every', unit: 'frames' },
+      speed: { type: 'float', default: 2, label: 'Speed, px a frame', group: 'Motion', short: 'Speed', unit: 'px / frame' },
+      speedJitter: { type: 'float', default: 0.5, label: 'Speed varies by, as a share', group: 'Motion', short: 'Variation', join: true, percent: true },
+      angle: { type: 'int', default: -90, label: 'Direction, degrees (0 right, -90 up)', group: 'Motion', short: 'Direction', unit: '°' },
+      spread: { type: 'int', default: 360, label: 'Spread round it, degrees', group: 'Motion', short: 'Spread', join: true, unit: '°' },
+      gravity: { type: 'float', default: 0.1, label: 'Gravity (negative rises)', group: 'Motion', short: 'Gravity' },
+      drag: { type: 'float', default: 0.97, label: 'Speed kept each frame (1 = no drag)', group: 'Motion', short: 'Drag', join: true },
+      life: { type: 'int', default: 30, label: 'Life, frames', group: 'Look', short: 'Life', unit: 'frames' },
+      lifeJitter: { type: 'float', default: 0.3, label: 'Life varies by, as a share', group: 'Look', short: 'Variation', join: true, percent: true },
+      radius: { type: 'float', default: 0, label: 'Starts anywhere within, px', group: 'Emit', short: 'Start within', unit: 'px' },
+      sizeStart: { type: 'float', default: 4, label: 'Size at birth, px', group: 'Look', short: 'Size start', unit: 'px' },
+      sizeEnd: { type: 'float', default: 0, label: 'Size at death, px', group: 'Look', short: 'End', join: true, unit: 'px' },
+      colorStart: { type: 'color', default: '#ffffff', label: 'Colour at birth', group: 'Look', short: 'Colour start' },
+      colorEnd: { type: 'color', default: '#ffffff', label: 'Colour at death', group: 'Look', short: 'End', join: true },
+      shape: { type: 'choice', options: ['circle', 'square', 'spark'], default: 'circle', label: 'Shape, without a sprite', group: 'Look', short: 'Shape' },
+      fade: { type: 'bool', default: true, label: 'Fades out', group: 'Look', short: 'Fades out' },
+      glow: { type: 'bool', default: false, label: 'Glows (adds light)', group: 'Look', short: 'Glows', join: true }
     }
   };
 
@@ -5720,16 +5751,17 @@ class Worm extends Entity {
       fw: 44, fh: 44, pivot: [0.5, 0.5], frames: { body: 5 },
       note: 'Her head is 22 game units across — 44 pixels — and her collision circle is what she hits the tiles with. body is its shades, head to tail; tail is the tip; head faces right, and headLeft, if drawn, left.'
     },
+    groups: ['Look', 'Body', 'Motion'],
     props: {
-      sprite: { type: 'sprite', default: 'sprite::worm', label: 'Sprite' },
-      body: { type: 'part', default: 'body', label: 'Body — its frames are the shades, head to tail' },
-      tail: { type: 'part', default: 'tail', label: 'Tail tip' },
-      head: { type: 'part', default: 'headRight', label: 'Head, facing right' },
-      headLeft: { type: 'part', default: 'headLeft', optional: true, label: 'Head facing left (without one, the right one mirrored)' },
-      segments: { type: 'int', default: 14, label: 'Body parts, head to tail' },
-      tailScale: { type: 'float', default: 0.32, label: 'Tail size, a share of the head (1 = no taper)' },
-      speed: { type: 'float', default: 3, label: 'Run speed, px a frame' },
-      jump: { type: 'float', default: 10.5, label: 'Jump speed, px a frame' }
+      sprite: { type: 'sprite', default: 'sprite::worm', label: 'Sprite', group: 'Look', short: 'Sprite' },
+      body: { type: 'part', default: 'body', label: 'Body — its frames are the shades, head to tail', group: 'Look', short: 'Body' },
+      tail: { type: 'part', default: 'tail', label: 'Tail tip', group: 'Look', short: 'Tail', join: true },
+      head: { type: 'part', default: 'headRight', label: 'Head, facing right', group: 'Look', short: 'Head', join: true },
+      headLeft: { type: 'part', default: 'headLeft', optional: true, label: 'Head facing left (without one, the right one mirrored)', group: 'Look', short: 'Head left', join: true },
+      segments: { type: 'int', default: 14, label: 'Body parts, head to tail', group: 'Body', short: 'Segments' },
+      tailScale: { type: 'float', default: 0.32, label: 'Tail size, a share of the head (1 = no taper)', group: 'Body', short: 'Tail size', percent: true, unit: 'of the head' },
+      speed: { type: 'float', default: 3, label: 'Run speed, px a frame', group: 'Motion', short: 'Run', unit: 'px / frame' },
+      jump: { type: 'float', default: 10.5, label: 'Jump speed, px a frame', group: 'Motion', short: 'Jump', join: true, unit: 'px / frame' }
     }
   };
 

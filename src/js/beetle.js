@@ -4,7 +4,7 @@ class Beetle extends Enemy {
     label: 'Beetle',
     code: '0E',
     props: {
-      speed: { type: 'float', default: 1.1, label: 'Walking speed, px a frame' }
+      speed: { type: 'float', default: 1.1, label: 'Walking speed, px a frame', group: 'Motion', short: 'Speed', unit: 'px / frame' }
     }
   };
 

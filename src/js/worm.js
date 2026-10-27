@@ -15,16 +15,17 @@ class Worm extends Entity {
       fw: 44, fh: 44, pivot: [0.5, 0.5], frames: { body: 5 },
       note: 'Her head is 22 game units across — 44 pixels — and her collision circle is what she hits the tiles with. body is its shades, head to tail; tail is the tip; head faces right, and headLeft, if drawn, left.'
     },
+    groups: ['Look', 'Body', 'Motion'],
     props: {
-      sprite: { type: 'sprite', default: 'sprite::worm', label: 'Sprite' },
-      body: { type: 'part', default: 'body', label: 'Body — its frames are the shades, head to tail' },
-      tail: { type: 'part', default: 'tail', label: 'Tail tip' },
-      head: { type: 'part', default: 'headRight', label: 'Head, facing right' },
-      headLeft: { type: 'part', default: 'headLeft', optional: true, label: 'Head facing left (without one, the right one mirrored)' },
-      segments: { type: 'int', default: 14, label: 'Body parts, head to tail' },
-      tailScale: { type: 'float', default: 0.32, label: 'Tail size, a share of the head (1 = no taper)' },
-      speed: { type: 'float', default: 3, label: 'Run speed, px a frame' },
-      jump: { type: 'float', default: 10.5, label: 'Jump speed, px a frame' }
+      sprite: { type: 'sprite', default: 'sprite::worm', label: 'Sprite', group: 'Look', short: 'Sprite' },
+      body: { type: 'part', default: 'body', label: 'Body — its frames are the shades, head to tail', group: 'Look', short: 'Body' },
+      tail: { type: 'part', default: 'tail', label: 'Tail tip', group: 'Look', short: 'Tail', join: true },
+      head: { type: 'part', default: 'headRight', label: 'Head, facing right', group: 'Look', short: 'Head', join: true },
+      headLeft: { type: 'part', default: 'headLeft', optional: true, label: 'Head facing left (without one, the right one mirrored)', group: 'Look', short: 'Head left', join: true },
+      segments: { type: 'int', default: 14, label: 'Body parts, head to tail', group: 'Body', short: 'Segments' },
+      tailScale: { type: 'float', default: 0.32, label: 'Tail size, a share of the head (1 = no taper)', group: 'Body', short: 'Tail size', percent: true, unit: 'of the head' },
+      speed: { type: 'float', default: 3, label: 'Run speed, px a frame', group: 'Motion', short: 'Run', unit: 'px / frame' },
+      jump: { type: 'float', default: 10.5, label: 'Jump speed, px a frame', group: 'Motion', short: 'Jump', join: true, unit: 'px / frame' }
     }
   };
 
