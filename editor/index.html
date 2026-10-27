@@ -12,7 +12,29 @@
     font-family: -apple-system, system-ui, sans-serif;
     overflow: hidden;
   }
-  #app { display: flex; width: 100%; height: 100%; }
+  body { display: flex; flex-direction: column; }
+  #app { display: flex; width: 100%; flex: 1; min-height: 0; }
+
+  /* ---- the top bar: everything about the level pack, as in the asset pack creator ---- */
+  .top { flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 8px 12px; background: #1d1630; border-bottom: 1px solid #332a4d; }
+  .top .logo { font-size: 15px; font-weight: 700; margin: 0 6px 0 0; white-space: nowrap; }
+  .top .logo span { color: #9a8fb5; font-weight: 500; font-size: 11px; margin-left: 6px; }
+  .namebox { display: flex; align-items: center; gap: 6px; background: #15101f; border: 1px solid #332a4d;
+    border-radius: 7px; padding: 2px 4px 2px 9px; }
+  .namebox > span { color: #9a8fb5; font-size: 11px; }
+  .namebox select, .namebox input { background: transparent; border: 0; margin: 0; padding: 3px 2px; width: auto; }
+  .namebox input { width: 15ch; }
+  .namebox select { max-width: 24ch; }
+  .top .grow { flex: 1; }
+  .top button, .top > select { width: auto; margin: 0; }
+  .top #openPackSel { max-width: 14ch; }
+  /* with none, a word where the editor would be */
+  .nopackBox { display: none; flex: 1; align-items: center; justify-content: center; flex-direction: column;
+    gap: 6px; color: #c9c2d8; text-align: center; }
+  .nopackBox h2 { margin: 0; font-size: 18px; color: #e8e4f0; }
+  body.no-pack .nopackBox { display: flex; }
+  body.no-pack #app { display: none !important; }
 
   /* ---- side panel ---- */
   #panel {
@@ -174,12 +196,7 @@
   /* Delete, for a level pack with changes never exported */
   button.warn { color: #ff8fb6; border-color: #c2546c; }
   /* no level pack: only Import */
-  .levelsIn { margin-top: 14px; padding-top: 10px; border-top: 1px solid #2c2442; }
-  .sublabel { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #9a8fb5; margin-bottom: 6px; }
-  .nopackText { display: none; font-size: 12px; color: #c9c2d8; margin: 4px 0 2px; }
-  body.no-pack .nopackText { display: block; }
   body.no-pack .packOnly { display: none !important; }
-  body.no-pack #panel .group:not(#packGroup), body.no-pack #main { display: none !important; }
   button.danger:hover { background: #a3374f; }
 
   /* ---- test overlay ---- */
@@ -197,29 +214,29 @@
 </head>
 <body>
 
+<!-- everything about the level pack, on one line, as in the asset pack creator.
+     Not <label>s: a click on a select in a label reaches the label too, which
+     clicks the select again and shuts the list it just opened. -->
+<header class="top">
+  <h1 class="logo">🧱 Level Editor<span>Warm the Worm</span></h1>
+  <div class="namebox packOnly"><span>level pack</span><select id="packSelect" title="The level packs in this browser — * changed since it was last exported. Every one is kept here as you work, where the game and the asset pack creator can open it too."></select></div>
+  <div class="namebox packOnly"><span>name</span><input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40"></div>
+  <div class="namebox packOnly"><span>asset pack</span><select id="assetSel" title="The asset pack this level pack is built with: its tiles, objects, backgrounds and sounds"></select></div>
+  <span class="grow"></span>
+  <select id="openPackSel" title="Add a level pack: from levelpacks/, a .zip, a copy of the open one, or an empty one"><option value="">📥 Import…</option></select>
+  <button id="downloadBtn" class="go packOnly" title="Save the open level pack, with its asset pack, as a .zip — clears its *">⬇ Export .zip</button>
+  <button id="delPackBtn" class="packOnly">Remove</button>
+</header>
+
+<section class="nopackBox">
+  <h2>No level packs in this browser</h2>
+  <p>Import one to start — <b>📥 Import…</b> above: from levelpacks/, a .zip, or an empty one.</p>
+</section>
+
 <div id="app">
   <div id="panel">
-    <h1>🧱 Level Editor</h1>
-    <p class="sub">Warm the Worm — terrain</p>
-
-    <div class="group" id="packGroup">
-      <label>Level pack</label>
-      <p class="nopackText">No level packs in this browser — import one to start.</p>
-      <div class="packOnly">
-        <select id="packSelect" title="The level packs in this browser — * changed since it was last exported"></select>
-        <input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40" style="margin-top:6px">
-        <div class="field" style="margin-top:6px"><span>Asset pack</span><select id="assetSel" title="The asset pack this level pack is built with: its tiles, objects, backgrounds and sounds"></select></div>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <select id="openPackSel" class="wide" title="Add a level pack: from levelpacks/, a .zip, a copy of the open one, or an empty one"><option value="">📥 Import…</option></select>
-        <button id="downloadBtn" class="go wide packOnly" title="Save the open level pack, with its asset pack, as a .zip — clears its *">⬇ Export .zip</button>
-      </div>
-      <button id="delPackBtn" class="wide packOnly" style="margin-top:6px">Remove</button>
-      <div class="hint packOnly">Every level pack is kept in this browser as you work, where the game and the asset pack creator can open it too. * — changed since it was last exported.</div>
-
-      <!-- its levels: part of the level pack, not a group of their own -->
-      <div class="packOnly levelsIn">
-      <div class="sublabel">Levels in it</div>
+    <div class="group">
+      <label>Level</label>
       <select id="levelSelect"></select>
       <div class="row" style="margin-top:6px">
         <button id="addLevelBtn" class="wide">+ Level</button>
@@ -231,7 +248,6 @@
       </div>
       <input type="text" id="nameInput" placeholder="Level name" maxlength="40" style="margin-top:6px">
       <div class="hint">The first level in the list is where the level pack starts. Where each flag leads is set on the flag. <b>Clear</b> empties this level, <b>Delete</b> takes it out of the level pack; both ask first.</div>
-      </div>
     </div>
 
     <div class="group">
