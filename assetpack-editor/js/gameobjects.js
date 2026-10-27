@@ -73,6 +73,13 @@ function propField(o, k, d) {
     // the value keeps its kind in front (sound::coin); the label is just the name
     return ['', ...vals].map(x => `<option value="${esc(x)}" ${x === v ? 'selected' : ''}>${x ? esc(refName(x)) + (list.includes(refName(x)) ? '' : ' — missing') : '— none'}</option>`).join('');
   };
+  // Every property that names something in the pack — a sprite, a part, a
+  // sound, an object, a background — is one row: its picker, full width, then
+  // ↗ to open what it names (as a double-click on the picker does too). A
+  // sound has ▶ to hear it as well. Not in a <label>: a click on a select in
+  // one reaches the label too, which clicks the select again and shuts it.
+  const openBtn = `<button type="button" class="btn sm refopen" data-open="${k}" title="Open it" aria-label="Open it" ${v ? '' : 'disabled'}>↗</button>`;
+  const refRow = (picker, extra = '') => `<div class="ctl">${head}<div class="refrow">${picker}${extra}${openBtn}</div>${hint}</div>`;
   let input;
   switch (d.type) {
     case 'int': input = `<input type="number" step="1" data-prop="${k}" value="${esc(v)}">`; break;
@@ -81,34 +88,31 @@ function propField(o, k, d) {
     case 'color': input = `<input type="color" data-prop="${k}" value="${esc(v || '#ffffff')}">`; break;
     case 'choice': input = `<select data-prop="${k}">${(d.options || []).map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`; break;
     case 'sound':
-      // its list starts with none and a new one, then the pack's sounds
-      input = `<div class="row gap"><select data-prop="${k}" title="Pick a sound — or none, or a new one made from this one">${options(Object.keys(pack.sounds.defs), 'sound::')
-        .replace('<option value="" ', `<option value="${NEW_ONE}">+ New sound…</option><option value="" `)}</select>
-        <button class="btn sm" data-play="${k}" title="Play it" aria-label="Play">▶</button></div>`;
-      break;
+      // its list starts with a new one and none, then the pack's sounds
+      return refRow(`<select data-prop="${k}" data-ref="${k}" title="Pick a sound — or none, or a new one made from this one">${options(Object.keys(pack.sounds.defs), 'sound::')
+        .replace('<option value="" ', `<option value="${NEW_ONE}">+ New sound…</option><option value="" `)}</select>`,
+        `<button type="button" class="btn sm refopen" data-play="${k}" title="Play it" aria-label="Play" ${v ? '' : 'disabled'}>▶</button>`);
     case 'sprite': {
       // a picker of its own rather than a <select>, which can't show the icons
       const cur = refName(v);
       const missing = v && !spriteByName(cur) ? ' — missing' : '';
-      return `<div class="ctl">${head}<div class="sprrow"><div class="sprpick">
-        <button type="button" class="sprbtn" data-sprbtn="${k}" aria-haspopup="listbox" title="Pick a sprite — or none, or a new one — double-click to open this one on the Sprites tab">${spriteIcon(cur)}<span class="nm">${esc(cur || '—')}${missing}</span><span class="caret">▾</span></button>
-      </div></div>${hint}</div>`;
+      return refRow(`<div class="sprpick">
+        <button type="button" class="sprbtn" data-sprbtn="${k}" data-ref="${k}" aria-haspopup="listbox" title="Pick a sprite — or none, or a new one">${spriteIcon(cur)}<span class="nm">${esc(cur || '— none')}${missing}</span><span class="caret">▾</span></button>
+      </div>`);
     }
-    case 'background': input = `<select data-prop="${k}">${options(pack.backgrounds.map(b => b.name), 'background::')}</select>`; break;
+    case 'background': return refRow(`<select data-prop="${k}" data-ref="${k}">${options(pack.backgrounds.map(b => b.name), 'background::')}</select>`);
     case 'object': {
       // another of the pack's objects, of the class the property wants
       const of = pack.objects.filter(x => x !== o && (!d.class || x.cls === d.class)).map(x => x.name).sort();
-      input = `<div class="row gap"><select data-prop="${k}">${options(of, 'object::')}</select>
-        ${v ? `<button type="button" class="btn sm" data-openobj="${esc(refName(v))}" title="Open ${esc(refName(v))}">↗</button>` : ''}</div>`;
-      break;
+      return refRow(`<select data-prop="${k}" data-ref="${k}">${options(of, 'object::')}</select>`);
     }
     case 'part': {
       // a picker like the sprite's, each part shown by its first frame
       const sn = refName(o.props.sprite), s = spriteByName(sn);
       const missing = v && !(s && s.parts.some(p => p.name === v)) ? ' — missing' : '';
-      return `<div class="ctl">${head}<div class="sprpick">
-        <button type="button" class="sprbtn" data-partbtn="${k}" aria-haspopup="listbox" title="Pick a part — double-click to open the sprite on the Sprites tab">${v ? partIcon(sn, v) : ''}<span class="nm">${esc(v || '—')}${missing}</span><span class="caret">▾</span></button>
-      </div>${hint}</div>`;
+      return refRow(`<div class="sprpick">
+        <button type="button" class="sprbtn" data-partbtn="${k}" data-ref="${k}" aria-haspopup="listbox" title="Pick a part">${v ? partIcon(sn, v) : ''}<span class="nm">${esc(v || '— none')}${missing}</span><span class="caret">▾</span></button>
+      </div>`);
     }
     default: input = `<input data-prop="${k}" value="${esc(v ?? '')}">`;
   }
@@ -264,7 +268,7 @@ function setProp(o, k, v) {
   o.props[k] = v;
   // a new sprite has other parts to choose from, and its own icon
   // a picker's button shows what it holds, so it is drawn again
-  if (d.type === 'sprite' || d.type === 'part' || d.type === 'object') renderGoForm(); else drawGoPreview();
+  if (['sprite', 'part', 'object', 'sound', 'background'].includes(d.type)) renderGoForm(); else drawGoPreview();
   renderGoList();
   savePack();
 }
@@ -371,14 +375,36 @@ function openSprite(name) {
 
 // Double-click a sprite picker to go to the sprite it holds; a part picker
 // goes to the object's own sprite, where its parts are.
+// What a property names, opened where it is made: a sprite (or the sprite a
+// part is of) on the Sprites tab, a sound on the Sounds tab, an object here,
+// a background on its tab.
+function openRef(o, k) {
+  const d = classDefs(o.cls)[k] || {};
+  const v = o.props[k];
+  if (!v) return;
+  closeSpritePicker();
+  if (d.type === 'sprite') openSprite(refName(v));
+  else if (d.type === 'part') openSprite(refName(o.props.sprite));
+  else if (d.type === 'sound') {
+    if (!pack.sounds.defs[refName(v)]) { toast(`There is no sound called ${refName(v)}`, true); return; }
+    sndSel = refName(v);
+    laySel = 0;
+    showTab('sounds');
+  } else if (d.type === 'object') {
+    const to = objectByName(refName(v));
+    if (!to) { toast(`There is no object called ${refName(v)}`, true); return; }
+    currentObj = to;
+    renderGameObjects();
+  } else if (d.type === 'background') showTab('backgrounds');
+}
+
+// a double-click on any picker opens what it names, as its ↗ does
 $('#goForm').addEventListener('dblclick', e => {
   const o = currentObj;
-  if (!o) return;
-  const sb = e.target.closest('[data-sprbtn]');
-  if (sb) openSprite(refName(o.props[sb.dataset.sprbtn]));
-  else if (e.target.closest('[data-partbtn]')) openSprite(refName(o.props.sprite));
-  else return;
+  const r = o && e.target.closest('[data-ref]');
+  if (!r) return;
   e.preventDefault();
+  openRef(o, r.dataset.ref);
 });
 
 // The sprite picker's list: every sprite with its icon, the current one marked.
@@ -453,12 +479,8 @@ $('#goForm').addEventListener('click', e => {
   if (ns) { closeSpritePicker(); newSpriteFor(o, ns.dataset.newsprite); return; }
   const nd = e.target.closest('[data-newsound]');
   if (nd) { newSoundFor(o, nd.dataset.newsound); return; }
-  const oo = e.target.closest('[data-openobj]');
-  if (oo) {
-    currentObj = objectByName(oo.dataset.openobj) || currentObj;
-    renderGameObjects();
-    return;
-  }
+  const op = e.target.closest('[data-open]');
+  if (op) { openRef(o, op.dataset.open); return; }
   const play = e.target.closest('[data-play]');
   if (play) { sound.play(o.props[play.dataset.play]); return; }
   const g = e.target.dataset.g;
