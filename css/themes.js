@@ -10,6 +10,7 @@
   const THEMES = [
     { id: 'classic', label: 'Classic', file: '' },
     { id: 'blender', label: 'Blender', file: 'blender.css' },
+    { id: 'nightshade', label: 'Nightshade', file: 'nightshade.css' },
     { id: 'arcade', label: 'Arcade', file: 'arcade.css' }
   ];
   const KEY = 'warmWormTheme';

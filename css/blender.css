@@ -1,19 +1,29 @@
-/* ---------- Blender's look, in the tools' own colours ----------
+/* ---------- Blender: its shape and its own colours ----------
    Loaded last by the asset pack creator and the level editor, over their own
-   styles: the palette stays theirs (--bg, --panel, --line, --fg, --muted,
-   --amber, --pink), and this gives it Blender's shape — small type and
-   widgets, raised buttons over recessed fields, panels with a header strip on
-   a darker region, active toggles filled with the accent, workspace tabs. */
+   styles (picked in css/themes.js). It gives them Blender's shape — small
+   type and widgets, raised buttons over recessed fields, panels with a header
+   strip on a darker region, active toggles filled with the accent, workspace
+   tabs — and Blender's default dark theme: greys, and its blue for whatever
+   is active or picked. The tools' palette is set to those colours, so their
+   own styles take them too. css/nightshade.css is the same shape in the
+   tools' purple. */
 :root {
-  /* the shades Blender's widgets sit in, between the palette's panel and line */
-  --region: #140f25;                 /* the darkest: behind the panels */
-  --widget: #3a2f5e;                 /* a button's face */
-  --widget-hi: #463a70;              /* ... under the pointer */
-  --widget-lo: #2f264d;              /* ... pressed */
-  --field: #120d22;                  /* a text or number field, sunk in */
-  --outline: #0b0816;                /* every widget's dark rim */
-  --accent-fill: rgba(255, 181, 71, .22);   /* amber, as Blender fills its blue */
-  --accent-rim: rgba(255, 181, 71, .55);
+  /* the tools' palette, as Blender's greys: the pages' styles read these */
+  --bg: #1d1d1d; --panel: #303030; --panel2: #3d3d3d; --line: #242424; --line2: #5a5a5a;
+  --fg: #e6e6e6; --muted: #9a9a9a;
+  --amber: #71a6ff;                  /* the accent is Blender's blue; as text, a lighter one */
+  --pink: #e86464;                   /* what warns: Blender's red */
+  --mint: #74c98a; --sky: #8cc4ff;
+  /* the shades its widgets sit in */
+  --region: #1d1d1d;                 /* the darkest: behind the panels */
+  --widget: #545454;                 /* a button's face */
+  --widget-hi: #636363;              /* ... under the pointer */
+  --widget-lo: #474747;              /* ... pressed */
+  --field: #1f1f1f;                  /* a text or number field, sunk in */
+  --outline: #191919;                /* every widget's dark rim */
+  --accent-fill: #4772b3;            /* Blender's blue, filling a pressed toggle */
+  --accent-rim: #5680c2;
+  --accent-text: #ffffff;
   --radius: 4px;
   --h: 22px;                         /* a widget's height */
 }
@@ -32,10 +42,10 @@ button, .btn {
 button:hover, .btn:hover { background-color: var(--widget-hi); border-color: var(--outline); }
 button:active, .btn:active { background: var(--widget-lo); box-shadow: inset 0 1px 2px #0008; }
 /* on: filled with the accent, as Blender fills a pressed toggle */
-button.on, .btn.on { background: var(--accent-fill); border-color: var(--accent-rim); color: var(--amber); box-shadow: none; }
-/* the one to press: solid amber */
-button.go, .btn.primary { background: var(--amber); color: #1c1430; border-color: #b97d22; font-weight: 600; box-shadow: inset 0 1px 0 #ffffff55; }
-button.go:hover, .btn.primary:hover { background: #ffc265; }
+button.on, .btn.on { background: var(--accent-fill); border-color: var(--accent-rim); color: var(--accent-text); box-shadow: none; }
+/* the one to press: solid blue, as Blender's highlighted buttons */
+button.go, .btn.primary { background: var(--accent-fill); color: var(--accent-text); border-color: #2d4e80; font-weight: 600; box-shadow: inset 0 1px 0 #ffffff33; }
+button.go:hover, .btn.primary:hover { background: var(--accent-rim); }
 button.danger, button.warn, .btn.warn { color: var(--pink); }
 button.danger:hover, button.warn:hover, .btn.warn:hover, .btn.danger:hover { color: var(--pink); border-color: var(--pink); }
 .btn.sm { min-height: 20px; padding: 2px 8px; font-size: 11.5px; }
@@ -53,7 +63,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 select {
   font-size: 12px; min-height: var(--h); padding: 2px 22px 2px 8px; color: var(--fg);
   appearance: none; -webkit-appearance: none; cursor: pointer;
-  background: var(--widget) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23a69cc9'/%3E%3C/svg%3E") no-repeat right 8px center;
+  background: var(--widget) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23b0b0b0'/%3E%3C/svg%3E") no-repeat right 8px center;
   border: 1px solid var(--outline); border-radius: var(--radius); box-shadow: inset 0 1px 0 #ffffff0d;
 }
 select:hover { background-color: var(--widget-hi); }
@@ -68,7 +78,7 @@ input[type=color] { min-height: var(--h); height: var(--h); padding: 1px; border
   background: linear-gradient(#ffffff0a, #00000010) var(--widget); border: 1px solid var(--outline); color: var(--fg); }
 .seg button:first-child { margin-left: 0; border-radius: var(--radius) 0 0 var(--radius); }
 .seg button:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
-.seg button.on { position: relative; z-index: 1; background: var(--accent-fill); border-color: var(--accent-rim); color: var(--amber); }
+.seg button.on { position: relative; z-index: 1; background: var(--accent-fill); border-color: var(--accent-rim); color: var(--accent-text); }
 
 .hint { font-size: 11px; color: var(--muted); line-height: 1.4; }
 code { font-size: 11px; }
@@ -136,6 +146,7 @@ html, body { background: var(--region); }
 .item { padding: 2px 8px; min-height: 22px; border-radius: 3px; background: transparent; border: 0; box-shadow: none; }
 .item:hover { background: var(--widget-lo); }
 .item.on { background: var(--accent-fill); box-shadow: none; }
+.item.on b, .item.on small { color: var(--accent-text); }
 .item b { font-size: 12px; }
 .item small { font-size: 11px; }
 .lgroup > summary { padding: 3px 6px; border-radius: 3px; font-size: 11.5px; }
@@ -147,3 +158,11 @@ dialog#ask, #chooseCard, #askCard { border-radius: 6px; border-color: var(--outl
 .askform h3, #chooseCard h3 { font-size: 13px; }
 #chooseCard button { min-height: var(--h); padding: 3px 12px; font-size: 12px; border-radius: var(--radius); }
 #chooseCard select { font-size: 12px; }
+
+/* ---------- Blender's greys reach a few colours the pages write out ---------- */
+.logo, .top .logo { color: var(--fg); }
+.logo span, .top .logo span { color: var(--amber); }
+.namebox input, .namebox input[type=text] { color: var(--fg); }
+.tab.on { color: var(--fg); }
+.ph h2::before { color: var(--muted); }
+.checker, .frame, .stage, .pt-stage, .sheetwrap, .bgprev { background-color: #232323; }
