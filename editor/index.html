@@ -264,6 +264,7 @@
   <span class="grow"></span>
   <button id="importBtn" title="Add a level pack: from levelpacks/, a .zip, a copy of the open one, or an empty one">Import…</button>
   <button id="downloadBtn" class="go packOnly" title="Save the open level pack, with its asset pack, as a .zip — clears its *">⬇ Export .zip</button>
+  <button id="revertBtn" class="packOnly" title="Put the open level pack back as it was when it was last exported or imported" disabled>⟲ Revert</button>
   <button id="delPackBtn" class="packOnly">Remove</button>
 </header>
 
@@ -1861,6 +1862,7 @@ function refreshPacks() {
   delPackBtn.textContent = dirty ? 'Delete' : 'Remove';
   delPackBtn.classList.toggle('warn', dirty);
   delPackBtn.title = dirty ? 'Delete this level pack — it has changes never exported' : 'Remove this level pack from the browser — nothing in it is lost';
+  document.getElementById('revertBtn').disabled = !(dirty && packs[packIndex].base);
 }
 
 function refreshLevels() {
@@ -1928,9 +1930,38 @@ function addPack(p, stashed = false, clean = false) {
   applyPack(packs[packIndex]);
   resize(cols, rows, true);
   refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
-  if (clean) { packs[packIndex].sum = packSum(packs[packIndex]); save(); }
+  if (clean) { keepBase(packs[packIndex]); save(); }
   refreshOpenPacks();
 }
+
+// The level pack as it is now is the one Revert goes back to: it has just
+// been exported, or imported — its * gone. What it holds is kept beside it
+// (`base`), and its sum taken.
+function keepBase(p) {
+  p.base = JSON.parse(JSON.stringify({ name: p.name, levels: p.levels, assets: p.assets }));
+  p.sum = packSum(p);
+}
+
+// Back to how the open level pack was when it was last exported or imported,
+// all that changed since let go of — asked first, since it cannot be undone.
+document.getElementById('revertBtn').addEventListener('click', async () => {
+  stashPack();
+  const p = packs[packIndex];
+  if (!p.base || !packDirty(p)) return;
+  const ok = await ask('Revert level pack',
+    `“${p.name}” goes back to how it was when it was last exported or imported. Everything changed since is lost, and Undo can't bring it back.`,
+    'Revert');
+  if (!ok) return;
+  const was = JSON.parse(JSON.stringify(p.base));
+  packs[packIndex] = { ...p, ...was, current: Math.min(p.current || 0, was.levels.length - 1) };
+  undoStack.length = 0;      // what could be undone belonged to what was let go of
+  // built with another asset pack then: the page opens again on that one
+  if ((was.assets || DEFAULT_ASSETS) !== EDITOR_DIR) { save(); reopenOn(was.assets || DEFAULT_ASSETS); return; }
+  applyPack(packs[packIndex]);
+  resize(cols, rows, true);
+  refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
+  levelMsg.textContent = `“${p.name}” is back as it was.`;
+});
 
 // A name no level pack here has yet: garden -> garden 2.
 function freeLevelPackName(base) {
@@ -2280,7 +2311,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
     }
     // what is on disk now matches it: no * until it changes again
     stashPack();
-    packs[packIndex].sum = packSum(packs[packIndex]);
+    keepBase(packs[packIndex]);
     save();
     levelMsg.textContent = `${handle ? 'Saved ' + handle.name : 'Downloaded ' + zipName} — ${files.length} files, its asset pack with it. Unzip it anywhere and open index.html.`;
   } catch (err) {
@@ -2856,7 +2887,7 @@ document.getElementById('importBtn').addEventListener('click', async () => {
   if (pick === 'copy') {
     stashPack();
     const copy = JSON.parse(JSON.stringify(packs[packIndex]));
-    delete copy.sum; delete copy.mirror; delete copy.mirrorSum;
+    delete copy.sum; delete copy.mirror; delete copy.mirrorSum; delete copy.base;
     copy.name = freeLevelPackName((packName || 'Level pack') + ' copy');
     addPack(copy);
     levelMsg.textContent = `Made “${copy.name}”, a copy.`;

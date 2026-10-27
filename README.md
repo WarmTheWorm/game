@@ -149,7 +149,8 @@ it back as a zip to unzip into `assetpacks/`.
   browser without a Save dialog downloads it). A pack without a `*` has
   nothing that isn't in a file somewhere, so its button says **Remove** and
   takes it out of the browser at once; a pack with a `*` says **Delete**, in
-  red, and asks first, since its unexported changes go with it.
+  red, and asks first, since its unexported changes go with it. **⟲ Revert** puts a pack with a `*` back
+  exactly as it was when it was last exported or imported.
 
 On export it packs every object's frames into one `objects.png` and writes the
 manifest, reproducing `tools/gen/pack-objects.ps1` exactly: the same atlas, to

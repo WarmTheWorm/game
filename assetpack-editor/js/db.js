@@ -11,6 +11,9 @@ const DB_INDEX = 'index';
 const DB_OPEN = 'open';
 const DB_LEGACY = 'current';       // the one pack an earlier version kept
 const packKey = id => 'pack:' + id;
+// A pack as it was when its * last went — imported, or exported — which
+// Revert puts back: kept beside it, whole, until the next such moment.
+const baseKey = id => 'base:' + id;
 
 function openDB() {
   return new Promise((ok, fail) => {
@@ -58,9 +61,13 @@ async function dbSave(p) {
   });
 }
 
+async function dbSaveBase(id, p) { return dbTx('readwrite', s => { s.put(p, baseKey(id)); }); }
+async function dbLoadBase(id) { return dbRead(baseKey(id)); }
+
 async function dbDelete(id) {
   return dbTx('readwrite', s => {
     s.delete(packKey(id));
+    s.delete(baseKey(id));
     editIndex(s, list => list.filter(x => x.id !== id));
     const open = s.get(DB_OPEN);
     open.onsuccess = () => { if (open.result === id) s.delete(DB_OPEN); };

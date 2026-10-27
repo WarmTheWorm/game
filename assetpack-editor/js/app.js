@@ -28,7 +28,7 @@ $('#exportBtn').onclick = async () => {
     pack.dirty = false;
     pack.exported = true;
     clearTimeout(saveTimer);
-    if (!storageLocked) writePack();
+    if (!storageLocked) { writePack(); await keepBase(); }
     renderPackPicker();
   } catch (err) { toast(err.message, true); }
 };
@@ -69,6 +69,7 @@ async function renderPackPicker() {
   // all of it is in a file somewhere — so it says Remove and goes at once. One
   // with a * has work in it that is nowhere else: it says Delete, in red, and
   // asks first.
+  $('#revertBtn').disabled = !(pack.dirty && pack.hasBase);
   const del = $('#deleteBtn');
   del.textContent = pack.dirty ? 'Delete' : 'Remove';
   del.classList.toggle('warn', !!pack.dirty);
@@ -81,7 +82,7 @@ async function renderPackPicker() {
 // go, every control but Import is off, and Import is all there is to do. The
 // pack held meanwhile is a blank stand-in, never saved (storageLocked).
 let noPack = false;
-const PACK_CONTROLS = ['#packPick', '#packName', '#exportBtn', '#deleteBtn', '#levelBtn', '#undoBtn', '#redoBtn'];
+const PACK_CONTROLS = ['#packPick', '#packName', '#exportBtn', '#revertBtn', '#deleteBtn', '#levelBtn', '#undoBtn', '#redoBtn'];
 
 function setNoPack(on) {
   noPack = on;
@@ -101,6 +102,35 @@ function enterNoPack() {
 
 $('#noPackImport').onclick = () => $('#importBtn').click();
 
+// The pack as it is now is the one Revert goes back to: it has just been
+// exported, or imported (its * gone).
+async function keepBase() {
+  const base = structuredClone(pack);
+  base.dirty = false;
+  delete base.hasBase;
+  try { await dbSaveBase(pack.id, base); pack.hasBase = true; await writePack(); }
+  catch (err) { toast('Could not keep a copy to revert to: ' + err.message, true); }
+}
+
+// Back to how the pack was when it was last exported or imported, all that
+// was changed since let go of — asked first, since it cannot be undone.
+$('#revertBtn').onclick = async () => {
+  if (!pack.dirty || !pack.hasBase) return;
+  const got = await ask(`Revert ${pack.name}?`, [
+    { type: 'note', label: `${pack.name} goes back to how it was when it was last ${pack.exported ? 'exported' : 'imported'}. Everything changed since is lost, and Undo can't bring it back.` }
+  ], 'Revert');
+  if (!got) return;
+  let base = null;
+  try { base = await dbLoadBase(pack.id); } catch (err) { toast('Could not read it: ' + err.message, true); return; }
+  if (!base) { toast('There is no copy of it to go back to', true); pack.hasBase = false; renderPackPicker(); return; }
+  clearTimeout(saveTimer);
+  while (saving) await saving;
+  const name = pack.name;
+  base.hasBase = true;
+  await showPack(base, { clean: true, keep: true });
+  toast(`${name} is back as it was`);
+};
+
 // Everything that belongs to the pack that was open is let go of.
 function forgetOpenPack() {
   current = null;
@@ -111,7 +141,7 @@ function forgetOpenPack() {
 }
 
 // `next` becomes the open pack: written, remembered as open, shown.
-async function showPack(next, { clean = false } = {}) {
+async function showPack(next, { clean = false, keep = false } = {}) {
   pack = next;
   forgetOpenPack();
   storageLocked = false;
@@ -122,6 +152,7 @@ async function showPack(next, { clean = false } = {}) {
   if (clean) pack.dirty = false;
   clearTimeout(saveTimer);
   await writePack();
+  if (clean && !keep) await keepBase();
   await dbSetOpen(pack.id).catch(() => {});
   renderPackPicker();
 }
@@ -240,7 +271,7 @@ $('#importBtn').onclick = async () => {
       catch (err) { next = newPack(); toast('Could not read ' + EMPTY_PACK + ' — starting from nothing: ' + err.message, true); }
     }
     await flushPack();
-    Object.assign(next, { id: uid(), dirty: true, origin: '', exported: false });
+    Object.assign(next, { id: uid(), dirty: true, origin: '', exported: false, hasBase: false });
     next.name = await freePackName(got.pick === COPY ? `${was} copy` : 'My Pack');
     await showPack(next);
     toast(got.pick === COPY ? `Made ${next.name}, a copy of ${was}` : `Made ${next.name}, empty`);
