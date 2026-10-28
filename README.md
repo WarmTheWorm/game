@@ -142,8 +142,8 @@ it back as a zip to unzip into `assetpacks/`.
 - **Packs in the browser** — every pack is kept in the browser (IndexedDB).
   The **pack** button at the top opens a list of them — a `*` after a name
   means it has changed since it was last exported — with **+ New pack**
-  (started from `assetpacks/__EmptyPack__.zip`) and **⧉ Duplicate** of the
-  one open. **Import…** adds a pack from what `assetpacks/index.json`
+  (started from `assetpacks/__EmptyPack__.zip`), **⧉ Duplicate** of the
+  one open and **✎ Rename** — or double-click the button to rename in place. **Import…** adds a pack from what `assetpacks/index.json`
   lists, a folder or URL, or a `.zip` on the
   computer — its atlas sliced back into per-object frames, offering to
   replace a pack of the same name or keep both.

@@ -64,6 +64,8 @@ button.packpick:hover{border-color:var(--amber)}
 /* its list, as a sprite picker's: a new one and a copy first, then the packs */
 .packwrap .sprlist{right:auto;min-width:260px;max-width:360px}
 .packwrap .spropt small{margin-left:auto}
+.packwrap [hidden]{display:none}
+.packrename input{width:20ch}
 .packpick select{background:transparent;border:0;color:var(--fg);font-family:var(--mono);padding:2px 0;max-width:22ch;cursor:pointer}
 .packpick select option{background:var(--panel);color:var(--fg)}
 .tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:57px;z-index:4}

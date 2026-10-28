@@ -35,7 +35,41 @@ $('#tabs').addEventListener('click', e => {
   if (t) showTab(t.dataset.tab);
 });
 
-$('#packName').addEventListener('input', e => { pack.name = e.target.value; savePack(); renderPackPicker(); });
+// Renaming: the pack button turns into a text field in place — from a
+// double-click on it, or ✎ Rename in its list. Enter or a click away keeps
+// the name, Esc puts it back; a name another pack here has is refused.
+let renaming = false;
+function startRename() {
+  if (noPack) return;
+  closeSpritePicker();
+  renaming = true;
+  const box = $('.packrename'), inp = $('#packName');
+  inp.value = pack.name;
+  $('#packPick').hidden = true;
+  box.hidden = false;
+  inp.focus();
+  inp.select();
+}
+async function endRename(keep) {
+  if (!renaming) return;
+  const inp = $('#packName'), name = inp.value.trim();
+  if (keep && name && name !== pack.name) {
+    const taken = (await dbList().catch(() => [])).some(x => x.id !== pack.id && x.name === name);
+    if (taken) { toast(`There is already a pack called ${name}`, true); inp.focus(); inp.select(); return; }
+    pack.name = name;
+    savePack();
+  }
+  renaming = false;
+  $('.packrename').hidden = true;
+  $('#packPick').hidden = false;
+  renderPackPicker();
+}
+$('#packPick').addEventListener('dblclick', startRename);
+$('#packName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); endRename(true); }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endRename(false); $('#packPick').focus(); }
+});
+$('#packName').addEventListener('blur', () => endRename(true));
 $('#exportBtn').onclick = async () => {
   try {
     if (!await exportPack()) return;
@@ -179,11 +213,13 @@ async function openPack(id) {
 // click away or Esc closes it.
 $('#packPick').addEventListener('click', async e => {
   e.stopPropagation();
+  if (e.detail > 1) { closeSpritePicker(); return; }    // a double-click renames
   const wrap = $('#packPick').parentElement;
   if (wrap.querySelector('.sprlist')) { closeSpritePicker(); return; }
   closeSpritePicker();
   const list = (await dbList().catch(() => [])).map(x => x.id === (pack && pack.id) ? { ...x, name: pack.name, dirty: pack.dirty } : x)
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  if (renaming || wrap.querySelector('.sprlist')) return;
   const open = noPack ? null : pack.id;
   const box = document.createElement('div');
   box.className = 'sprlist';
@@ -191,6 +227,7 @@ $('#packPick').addEventListener('click', async e => {
   box.innerHTML = [
     `<button type="button" role="option" class="spropt spronew" data-packact="new"><span>+ New pack…</span><small>empty</small></button>`,
     noPack ? '' : `<button type="button" role="option" class="spropt spronew" data-packact="copy"><span>⧉ Duplicate ${esc(pack.name)}</span></button>`,
+    noPack ? '' : `<button type="button" role="option" class="spropt spronew" data-packact="rename"><span>✎ Rename ${esc(pack.name)}…</span><small>or double-click</small></button>`,
     ...list.map(x => `<button type="button" role="option" class="spropt ${x.id === open ? 'on' : ''}" data-packid="${esc(x.id)}" aria-selected="${x.id === open}">
       <span>${esc(x.name || 'untitled')}${x.dirty ? ' *' : ''}</span>${x.id === open ? '<small>open</small>' : ''}</button>`)
   ].join('');
@@ -202,7 +239,8 @@ $('#packPick').parentElement.addEventListener('click', async e => {
   const b = e.target.closest('[data-packact],[data-packid]');
   if (!b) return;
   closeSpritePicker();
-  if (b.dataset.packact === 'new') await makePack('empty');
+  if (b.dataset.packact === 'rename') startRename();
+  else if (b.dataset.packact === 'new') await makePack('empty');
   else if (b.dataset.packact === 'copy') await makePack('copy');
   else await openPack(b.dataset.packid);
 });
