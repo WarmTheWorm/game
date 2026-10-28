@@ -206,6 +206,27 @@
   #chooseCard select { font-size: 14px; }
   #chooseCard button { width: auto; padding: 7px 12px; font-size: 14px; border-radius: 7px; }
   #chooseNote:empty { display: none; }
+  /* the level pack button and its list, as the creator's: a new one, a copy
+     and a rename first, then the level packs here; renaming turns it into a
+     text field in place */
+  .packwrap { position: relative; display: flex; }
+  .packwrap [hidden] { display: none; }
+  .top #packPick { cursor: pointer; color: var(--fg); }
+  .top #packPick b { font-weight: 400; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .top #packPick .caret { color: var(--muted); font-size: 10px; }
+  .top #packPick:hover { border-color: var(--amber); }
+  .packrename input[type=text] { width: 22ch; }
+  .packlist { position: absolute; z-index: 30; left: 0; top: calc(100% + 4px); min-width: 280px; max-width: 380px; max-height: 320px;
+    overflow: auto; display: grid; gap: 1px; padding: 4px; border: 1px solid var(--line2); border-radius: 8px;
+    background: var(--panel); box-shadow: 0 8px 24px #0008; }
+  .top .packlist button { appearance: none; display: flex; align-items: center; gap: 8px; min-height: 0; padding: 4px 6px;
+    border: 0; border-radius: 5px; background: transparent; box-shadow: none; color: var(--fg); font-family: var(--mono);
+    font-size: 12.5px; line-height: 1.5; text-align: start; }
+  .top .packlist button:hover, .top .packlist button:focus-visible { background: var(--panel2); outline: none; }
+  .top .packlist button.on { box-shadow: inset 3px 0 0 var(--amber); background: var(--panel2); }
+  .top .packlist button.new { color: var(--amber); }
+  .packlist span { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .packlist small { color: var(--muted); font-size: 11.5px; }
   .top #assetBtn { cursor: pointer; color: var(--fg); }
   .top #assetBtn b { font-weight: 400; }
   .top #assetBtn:hover { border-color: var(--amber); }
@@ -258,12 +279,11 @@
      clicks the select again and shuts the list it just opened. -->
 <header class="top">
   <h1 class="logo">Level<span>Editor</span></h1>
-  <div class="namebox packOnly"><span>level pack</span><select id="packSelect" title="The level packs in this browser — * changed since it was last exported. Every one is kept here as you work, where the game and the asset pack creator can open it too."></select></div>
-  <div class="namebox packOnly"><span>name</span><input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40"></div>
+  <div class="packwrap"><button type="button" class="namebox" id="packPick" aria-haspopup="listbox" title="The level packs in this browser — open one, make a new one, or duplicate this one; * changed since it was last exported. Every one is kept here as you work, where the game and the asset pack creator can open it too. Double-click to rename this one"><span>level pack</span><b id="packPickName"></b><span class="caret">▾</span></button><label class="namebox packrename" hidden><span>level pack</span><input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40" aria-label="Rename the level pack"></label></div>
   <button class="namebox packOnly" id="assetBtn" title="The asset pack this level pack is built with: its tiles, objects, backgrounds and sounds — click to pick another"><span>asset pack</span><b id="assetName"></b></button>
   <button id="editAssetsBtn" class="packOnly" title="Open this asset pack in the asset pack creator, to change its tiles, sprites, objects and sounds">Edit ↗</button>
   <span class="grow"></span>
-  <button id="importBtn" title="Add a level pack: from levelpacks/, a .zip, a copy of the open one, or an empty one">Import…</button>
+  <button id="importBtn" title="Add a level pack: one in levelpacks/index.json, or a .zip">Import…</button>
   <button id="downloadBtn" class="go packOnly" title="Save the open level pack, with its asset pack, as a .zip — clears its *">⬇ Export .zip</button>
   <button id="revertBtn" class="packOnly" title="Put the open level pack back as it was when it was last exported or imported" disabled>⟲ Revert</button>
   <button id="delPackBtn" class="packOnly">Remove</button>
@@ -279,7 +299,7 @@
 
 <section class="nopackBox">
   <h2>No level packs in this browser</h2>
-  <p>Import one to start — <b>Import…</b> above: from levelpacks/, a .zip, or an empty one.</p>
+  <p>Import one to start — <b>Import…</b> above, from levelpacks/ or a .zip — or make an empty one from the <b>level pack</b> button.</p>
 </section>
 
 <div id="app">
@@ -1630,11 +1650,11 @@ const colsInput = document.getElementById('colsInput');
 const rowsInput = document.getElementById('rowsInput');
 const nameInput = document.getElementById('nameInput');
 const packNameInput = document.getElementById('packNameInput');
-const packSelect = document.getElementById('packSelect');
+const packPick = document.getElementById('packPick');
+const packPickName = document.getElementById('packPickName');
 const levelSelect = document.getElementById('levelSelect');
 
 nameInput.addEventListener('input', () => { levelName = nameInput.value; refreshLevels(); save(); });
-packNameInput.addEventListener('input', () => { packName = packNameInput.value; refreshPacks(); save(); });
 
 // The asset pack the open level pack is built with: the folders the page can
 // read — in assetpacks/ and the ones the asset pack creator keeps in the
@@ -1858,14 +1878,9 @@ function setOptions(sel, html) {
 
 function refreshPacks() {
   document.body.classList.toggle('no-pack', noPack);
-  if (noPack) return;
-  setOptions(packSelect, packs.map((p, i) => {
-    const live = i === packIndex ? { ...p, name: packName, levels } : p;
-    const name = live.name || `Level pack ${i + 1}`;
-    const count = live.levels.length;
-    return `<option value="${i}" ${i === packIndex ? 'selected' : ''}>${escHtml(name)}${packDirty(live) ? ' *' : ''}  (${count} ${count === 1 ? 'level' : 'levels'})</option>`;
-  }).join(''));
-  packSelect.value = packIndex;
+  if (noPack) { packPickName.textContent = '— no level packs —'; return; }
+  const live = { ...packs[packIndex], name: packName, levels };
+  packPickName.textContent = `${packName || `Level pack ${packIndex + 1}`}${packDirty(live) ? ' *' : ''}`;
   // nothing unexported: it is in a file somewhere, and only leaves the
   // browser; with a *, its changes go with it, so it asks
   const dirty = packDirty({ ...packs[packIndex], name: packName, levels });
@@ -1888,7 +1903,98 @@ function refreshLevels() {
 }
 
 levelSelect.addEventListener('change', () => openLevel(+levelSelect.value));
-packSelect.addEventListener('change', () => openPack(+packSelect.value));
+// The level pack button: a list, as the creator's pack button — a new level
+// pack, a copy of the open one and a rename first, then the level packs in
+// this browser, the open one marked, a * on those changed since last
+// exported. A click picks; a click away or Esc closes it.
+function closePackList() { document.querySelectorAll('.packlist').forEach(l => l.remove()); }
+packPick.addEventListener('click', e => {
+  e.stopPropagation();
+  const wrap = packPick.parentElement;
+  if (e.detail > 1 || wrap.querySelector('.packlist')) { closePackList(); return; }   // a double-click renames
+  const name = escHtml(packName || 'this level pack');
+  const box = document.createElement('div');
+  box.className = 'packlist';
+  box.setAttribute('role', 'listbox');
+  box.innerHTML = [
+    `<button type="button" role="option" class="new" data-packact="new"><span>+ New level pack…</span><small>empty</small></button>`,
+    noPack ? '' : `<button type="button" role="option" class="new" data-packact="copy"><span>⧉ Duplicate ${name}</span></button>`,
+    noPack ? '' : `<button type="button" role="option" class="new" data-packact="rename"><span>✎ Rename ${name}…</span><small>or double-click</small></button>`,
+    ...(noPack ? [] : packs.map((p, i) => {
+      const live = i === packIndex ? { ...p, name: packName, levels } : p;
+      const count = live.levels.length;
+      return `<button type="button" role="option" class="${i === packIndex ? 'on' : ''}" data-packi="${i}" aria-selected="${i === packIndex}">
+        <span>${escHtml(live.name || `Level pack ${i + 1}`)}${packDirty(live) ? ' *' : ''}</span><small>${count} ${count === 1 ? 'level' : 'levels'}${i === packIndex ? ' · open' : ''}</small></button>`;
+    }))
+  ].join('');
+  wrap.appendChild(box);
+  (box.querySelector('.on') || box.querySelector('button')).focus();
+});
+packPick.parentElement.addEventListener('click', e => {
+  const b = e.target.closest('[data-packact],[data-packi]');
+  if (!b) return;
+  closePackList();
+  if (b.dataset.packact === 'rename') startRename();
+  else if (b.dataset.packact) makeLevelPack(b.dataset.packact);
+  else openPack(+b.dataset.packi);
+});
+addEventListener('click', e => { if (!e.target.closest('.packwrap')) closePackList(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.packlist')) { closePackList(); packPick.focus(); } });
+
+// Renaming: the button turns into a text field in place — from a
+// double-click on it, or ✎ Rename in its list. Enter or a click away keeps
+// the name, Esc puts it back; a name another level pack here has is refused.
+let renaming = false;
+function startRename() {
+  if (noPack) return;
+  closePackList();
+  renaming = true;
+  packNameInput.value = packName;
+  packPick.hidden = true;
+  packNameInput.parentElement.hidden = false;
+  packNameInput.focus();
+  packNameInput.select();
+}
+function endRename(keep) {
+  if (!renaming) return;
+  const name = packNameInput.value.trim();
+  if (keep && name && name !== packName) {
+    if (packs.some((p, i) => i !== packIndex && p.name === name)) {
+      levelMsg.textContent = `There is already a level pack called “${name}”.`;
+      packNameInput.focus(); packNameInput.select();
+      return;
+    }
+    packName = name;
+    save();
+  }
+  renaming = false;
+  packNameInput.parentElement.hidden = true;
+  packPick.hidden = false;
+  refreshPacks();
+}
+packPick.addEventListener('dblclick', startRename);
+packNameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); endRename(true); }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endRename(false); packPick.focus(); }
+});
+packNameInput.addEventListener('blur', () => endRename(true));
+
+// A level pack made here, not read in: a copy of the open one, or an empty one.
+function makeLevelPack(kind) {
+  if (kind === 'copy') {
+    stashPack();
+    const copy = JSON.parse(JSON.stringify(packs[packIndex]));
+    delete copy.sum; delete copy.mirror; delete copy.mirrorSum; delete copy.base;
+    copy.name = freeLevelPackName((packName || 'Level pack') + ' copy');
+    addPack(copy);
+    levelMsg.textContent = `Made “${copy.name}”, a copy.`;
+    return;
+  }
+  const blank = blankPack();
+  blank.name = freeLevelPackName('Level pack');
+  addPack(blank);
+  levelMsg.textContent = `Made “${blank.name}”, empty.`;
+}
 
 const delPackBtn = document.getElementById('delPackBtn');
 delPackBtn.addEventListener('click', async () => {
@@ -2881,8 +2987,6 @@ async function importChoices() {
       }
     }
   } catch (err) { /* nothing stored to offer */ }
-  if (!noPack) opts.push({ value: 'copy', label: `A copy of ${packName || 'the open level pack'} (the level pack open)` });
-  opts.push({ value: 'empty', label: 'An empty level pack' });
   return opts;
 }
 // kept for the callers from before Import was a dialog: there is no list to redraw now
@@ -2893,20 +2997,7 @@ document.getElementById('importBtn').addEventListener('click', async () => {
     'It is added to the level packs in this browser; the one open now is kept.');
   if (!pick) return;
   if (pick.startsWith('url:')) { openLevelPack(pick.slice(4)); return; }
-  if (pick === 'zip') { importZip(); return; }
-  if (pick === 'copy') {
-    stashPack();
-    const copy = JSON.parse(JSON.stringify(packs[packIndex]));
-    delete copy.sum; delete copy.mirror; delete copy.mirrorSum; delete copy.base;
-    copy.name = freeLevelPackName((packName || 'Level pack') + ' copy');
-    addPack(copy);
-    levelMsg.textContent = `Made “${copy.name}”, a copy.`;
-    return;
-  }
-  const blank = blankPack();
-  blank.name = freeLevelPackName('Level pack');
-  addPack(blank);
-  levelMsg.textContent = `Made “${blank.name}”, empty.`;
+  if (pick === 'zip') importZip();
 });
 
 // A .zip of a level pack: read here, put in the pack store for a moment so it

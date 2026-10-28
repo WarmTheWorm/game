@@ -49,8 +49,9 @@ kept in the browser:
   with the **Asset pack** it is built with, and the open one also as
   `/__idb/levels/<name>/`, built as its download would be, which the game
   plays (`/src/index.html?pack=/__idb/levels/<name>/levelpack.json&assets=...`).
-  Its **Import…** adds a level pack — from `levelpacks/`, a `.zip`, a copy of
-  the open one, or an empty one — and **⬇ Export .zip** saves the open one
+  Its **level pack** button lists them, with **+ New**, **⧉ Duplicate** and
+  **✎ Rename** (or double-click it) first, as the creator's pack button;
+  **Import…** adds one from `levelpacks/index.json` or a `.zip`, and **⬇ Export .zip** saves the open one
   with its whole asset pack. As in the creator, a `*` marks changes never
   exported: **Remove** takes a level pack without one out at once, a red
   **Delete** asks first; with none left, only Import is offered;
