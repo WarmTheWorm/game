@@ -797,7 +797,7 @@ function openPack(i) {
   stashPack();
   packIndex = i;
   // built with another asset pack: the page opens again on that one
-  if ((packs[i].assets || DEFAULT_ASSETS) !== EDITOR_DIR) { save(); reopenOn(packs[i].assets || DEFAULT_ASSETS); return; }
+  if ((packs[i].assets || DEFAULT_ASSETS) !== EDITOR_DIR) { persist(); reopenOn(packs[i].assets || DEFAULT_ASSETS); return; }
   applyPack(packs[i]);
   resize(cols, rows, true);
   refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
@@ -2014,7 +2014,7 @@ delPackBtn.addEventListener('click', async () => {
   levelMsg.textContent = `${packDirty(p) ? 'Deleted' : 'Removed'} “${name}”.`;
   if (!packs.length) { enterNoPack(); return; }
   packIndex = Math.min(gone, packs.length - 1);
-  if ((packs[packIndex].assets || DEFAULT_ASSETS) !== EDITOR_DIR) { save(); reopenOn(packs[packIndex].assets || DEFAULT_ASSETS); return; }
+  if ((packs[packIndex].assets || DEFAULT_ASSETS) !== EDITOR_DIR) { persist(); reopenOn(packs[packIndex].assets || DEFAULT_ASSETS); return; }
   applyPack(packs[packIndex]);
   resize(cols, rows, true);
   refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
@@ -2042,7 +2042,7 @@ function addPack(p, stashed = false, clean = false) {
   else if (!stashed) stashPack();
   packs.push({ assets: EDITOR_DIR, ...p });
   packIndex = packs.length - 1;
-  if ((packs[packIndex].assets || DEFAULT_ASSETS) !== EDITOR_DIR) { save(); reopenOn(packs[packIndex].assets); return; }
+  if ((packs[packIndex].assets || DEFAULT_ASSETS) !== EDITOR_DIR) { persist(); reopenOn(packs[packIndex].assets); return; }
   applyPack(packs[packIndex]);
   resize(cols, rows, true);
   refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
@@ -2072,7 +2072,7 @@ document.getElementById('revertBtn').addEventListener('click', async () => {
   packs[packIndex] = { ...p, ...was, current: Math.min(p.current || 0, was.levels.length - 1) };
   undoStack.length = 0;      // what could be undone belonged to what was let go of
   // built with another asset pack then: the page opens again on that one
-  if ((was.assets || DEFAULT_ASSETS) !== EDITOR_DIR) { save(); reopenOn(was.assets || DEFAULT_ASSETS); return; }
+  if ((was.assets || DEFAULT_ASSETS) !== EDITOR_DIR) { persist(); reopenOn(was.assets || DEFAULT_ASSETS); return; }
   applyPack(packs[packIndex]);
   resize(cols, rows, true);
   refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null); save();
@@ -2898,12 +2898,19 @@ document.addEventListener('keydown', e => {
 // ---------- keeping the work ----------
 function save() {
   if (noPack) return;
-  try {
-    stashPack();
-    localStorage.setItem(STORE_KEY, JSON.stringify({ packs, packIndex, objGlyphs: OBJECTS.map(o => o.glyph) }));
-  } catch (err) { /* private mode, etc. */ }
+  try { stashPack(); } catch (err) { /* written as it is, then */ }
+  persist();
   refreshPacks();
   scheduleMirror();
+}
+// The level packs as they are, written down without taking in what is on
+// screen first. For just before the page opens again on another asset pack:
+// by then packIndex names the level pack it is going to, and what is still on
+// screen is the one it left — save()'s stash would copy that over it.
+function persist() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ packs, packIndex, objGlyphs: OBJECTS.map(o => o.glyph) }));
+  } catch (err) { /* private mode, etc. */ }
 }
 
 // The open level pack is also kept, built as its download would be, in the
