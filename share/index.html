@@ -19,6 +19,11 @@
     share/                     pick a level pack to share
     share/?pack=<name>         ... with that one picked (one in this browser: idb:<name>)
     share/?pack=<name>&go=1    ... and shared at once: the game's Share button
+    share/?del=<name>          take a level pack out of this browser's store
+    share/?...&get=<name>&del  ... the one a friend's link names
+    share/?del                 ... any of them: every one kept here, listed
+  Taking one out always waits for a click, so a link alone can't empty
+  anyone's browser. Packs on disk in levelpacks/ aren't touched.
     share/?from=<id>&get=<name>&v=<version>
                                a friend's link: fetch that pack from that browser
 
@@ -87,6 +92,15 @@
       <button id="copyBtn">Copy</button>
     </div>
     <div class="friends" id="friends"></div>
+  </section>
+
+  <!-- taking packs out of this browser -->
+  <section id="delView" class="card" hidden>
+    <h2>Level packs in this browser</h2>
+    <p id="delNote">Kept here by the level editor, or fetched from a friend. Taking one out frees its space; the game in it goes too.</p>
+    <div class="friends" id="delList"></div>
+    <div class="row" id="delAllRow" hidden><button id="delAll">Take them all out</button></div>
+    <div class="status" id="delStatus"></div>
   </section>
 
   <!-- the friend -->
@@ -325,7 +339,38 @@ function say(sel, text, kind = '') {
   el.className = 'status' + (kind ? ' ' + kind : '');
 }
 
-if (typeof Peer === 'undefined') {
+// ---------- taking packs out ----------
+// ?del=<name>, or ?del with get=<name> — one pack; ?del alone — every one.
+async function delMode() {
+  $('#delView').hidden = false;
+  const want = q.get('del') || q.get('get');
+  const draw = async () => {
+    let list = [];
+    try { list = (await packStore.list('levels')).filter(p => !p.name.startsWith('__')); } catch { /* no store */ }
+    if (want) list = list.filter(p => p.name === packStore.clean(want));
+    $('#delList').innerHTML = list.map(p => `<div class="row"><span class="status" style="flex:1">${p.title.replace(/</g, '&lt;')} <small>— ${p.count} files</small></span>
+      <button data-del="${p.name}">Take it out</button></div>`).join('');
+    $('#delAllRow').hidden = list.length < 2;
+    if (!list.length) say('#delStatus', want ? `There is no level pack called ${want} in this browser.` : 'There are no level packs in this browser.', 'ok');
+  };
+  $('#delList').onclick = async e => {
+    const b = e.target.closest('[data-del]');
+    if (!b) return;
+    b.disabled = true;
+    try { await packStore.remove('levels', b.dataset.del); say('#delStatus', `Took ${b.dataset.del} out of this browser.`, 'ok'); }
+    catch (err) { say('#delStatus', 'Could not: ' + err.message, 'err'); }
+    await draw();
+  };
+  $('#delAll').onclick = async () => {
+    for (const b of document.querySelectorAll('#delList [data-del]')) await packStore.remove('levels', b.dataset.del).catch(() => {});
+    say('#delStatus', 'Took them all out of this browser.', 'ok');
+    await draw();
+  };
+  await draw();
+}
+
+if (q.has('del')) delMode();
+else if (typeof Peer === 'undefined') {
   document.querySelector('main').insertAdjacentHTML('beforeend', '<p class="status err">Could not load PeerJS from cdnjs — this page needs the internet to find the other browser.</p>');
 } else if (q.get('from')) getMode(q.get('from'));
 else sendMode(q.get('go') ? q.get('pack') : undefined);
