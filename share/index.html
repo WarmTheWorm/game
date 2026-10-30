@@ -22,9 +22,10 @@
     share/?from=<id>&get=<name>&v=<version>
                                a friend's link: fetch that pack from that browser
 
-  A link names the pack and its version (a hash of its files). Opened again
-  in a browser that already has that very pack — fetched the first time — it
-  asks nothing of the first browser: that copy is played, and shared from
+  A link names the pack and its version (a hash of its files). Opened in a
+  browser that already has that very pack — fetched before, or the one it was
+  shared from in the first place, on disk in levelpacks/ — it asks nothing of
+  the other browser: that copy is played, and shared from
   this browser, with a link of its own. So every friend who has it can hand
   it on, whether or not whoever they got it from is still there.
 -->
@@ -148,6 +149,7 @@ async function sources() {
     const res = await fetch('/levelpacks/index.json', { cache: 'no-store' });
     if (res.ok) for (const p of await res.json()) if (Array.isArray(p.files)) {
       out.push({ key: p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — levelpacks/${p.name}`,
+        play: files => files.some(f => f.path === 'index.html') ? p.dir + 'index.html' : `/src/index.html?pack=${encodeURIComponent(p.dir + 'levelpack.json')}`,
         load: async () => Promise.all(p.files.map(async path => {
           const r = await fetch(p.dir + path, { cache: 'no-store' });
           if (!r.ok) throw new Error(`${p.dir}${path}: ${r.status}`);
@@ -159,6 +161,7 @@ async function sources() {
     for (const p of await packStore.list('levels')) {
       if (p.name.startsWith('__')) continue;     // the editor's passing copies
       out.push({ key: 'idb:' + p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — in this browser`,
+        play: files => playUrl(p.name, files),
         load: () => readStored(p.name) });
     }
   } catch { /* no store */ }
@@ -208,14 +211,25 @@ async function sendMode(auto) {
 
 // A friend's link, opened in a browser that already has that pack, at that
 // version: nothing to fetch. Play it, and share it from here.
-async function haveMode(name) {
-  const files = await readStored(name);
-  const title = (await packStore.list('levels')).find(p => p.name === name)?.title || name;
-  $('#sendTitle').textContent = `${title} is already in this browser`;
+async function haveMode(src, files) {
+  $('#sendTitle').textContent = `You already have ${src.title}`;
   $('#sendNote').textContent = 'Nothing to fetch — play it, or pass it on: this page is sharing it now, so send your own link to a friend, and keep the page open while they fetch it.';
   $('#haveRow').hidden = false;
-  $('#havePlay').onclick = () => { location.href = playUrl(name, files); };
-  await sendMode('idb:' + name);
+  $('#havePlay').onclick = () => { location.href = src.play(files); };
+  await sendMode(src.key);
+}
+
+// The pack a link names, if this browser has it at that version: in its
+// pack store or on disk, wherever it came from.
+async function haveHere(name, v) {
+  for (const src of await sources()) {
+    if (packStore.clean(src.name) !== name) continue;
+    try {
+      const files = await src.load();
+      if (files.length && await versionOf(files) === v) return { src, files };
+    } catch { /* unreadable: not this one */ }
+  }
+  return null;
 }
 
 // One friend: a row of its own, the pack sent file by file.
@@ -251,10 +265,8 @@ function serve(conn, pack, files, size) {
 async function getMode(from) {
   const name = q.get('get') && packStore.clean(q.get('get')), v = q.get('v');
   if (name && v) {
-    try {
-      const here = await readStored(name);
-      if (here.length && await versionOf(here) === v) { await haveMode(name); return; }
-    } catch { /* not here, or unreadable: fetch it */ }
+    const have = await haveHere(name, v);
+    if (have) { await haveMode(have.src, have.files); return; }
   }
   $('#getView').hidden = false;
   const peer = new Peer();
