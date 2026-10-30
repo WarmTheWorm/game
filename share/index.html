@@ -18,7 +18,14 @@
 
     share/                     pick a level pack to share
     share/?pack=<name>         ... with that one picked (one in this browser: idb:<name>)
-    share/?from=<id>           a friend's link: fetch the pack from that browser
+    share/?from=<id>&get=<name>&v=<version>
+                               a friend's link: fetch that pack from that browser
+
+  A link names the pack and its version (a hash of its files). Opened again
+  in a browser that already has that very pack — fetched the first time — it
+  asks nothing of the first browser: that copy is played, and shared from
+  this browser, with a link of its own. So every friend who has it can hand
+  it on, whether or not whoever they got it from is still there.
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <script src="/src/js/packstore.js"></script>
@@ -68,8 +75,9 @@
 
   <!-- the one sharing -->
   <section id="sendView" class="card" hidden>
-    <h2>Share a level pack</h2>
-    <p>Pick one, then send the link to a friend. Keep this page open while they fetch it — it comes straight from your browser.</p>
+    <h2 id="sendTitle">Share a level pack</h2>
+    <p id="sendNote">Pick one, then send the link to a friend. Keep this page open while they fetch it — it comes straight from your browser.</p>
+    <div class="row" id="haveRow" hidden><button class="go play" id="havePlay">▶ Play</button></div>
     <label>Level pack <select id="packSel"></select></label>
     <div class="row"><button class="go" id="startBtn">Share it</button><span class="status" id="sendStatus"></span></div>
     <div id="linkBox" class="row" hidden>
@@ -108,6 +116,27 @@ const pageUrl = new URL(location.pathname, location.origin).href;
 
 packStore.boot();
 
+// A pack's version: one number from every file's path and bytes, so two
+// browsers holding the same pack agree on it whatever order they read it in.
+async function versionOf(files) {
+  let h = 0x811c9dc5;
+  const mix = b => { h = Math.imul(h ^ b, 0x01000193); };
+  for (const f of [...files].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) {
+    for (const c of new TextEncoder().encode(f.path + '\0')) mix(c);
+    const u8 = new Uint8Array(f.data);
+    for (let i = 0; i < u8.length; i++) mix(u8[i]);
+  }
+  return (h >>> 0).toString(36);
+}
+
+// Where a stored pack is played: its own index.html, the whole game, or the
+// engine's page on it if it came without one.
+const playUrl = (name, files) => {
+  const dir = packStore.url('levels', name);
+  return files.some(f => (f.path || f.name) === 'index.html') ? dir + 'index.html' : `/src/index.html?pack=${encodeURIComponent(dir + 'levelpack.json')}`;
+};
+const readStored = async name => Promise.all((await packStore.files('levels', name)).map(async f => ({ path: f.name, data: await f.data.arrayBuffer() })));
+
 // ---------- sharing ----------
 // The level packs this browser can send: those on disk (levelpacks/index.json
 // lists their files) and those in its pack store — the level editor's, and
@@ -129,19 +158,22 @@ async function sources() {
     for (const p of await packStore.list('levels')) {
       if (p.name.startsWith('__')) continue;     // the editor's passing copies
       out.push({ key: 'idb:' + p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — in this browser`,
-        load: async () => Promise.all((await packStore.files('levels', p.name)).map(async f => ({ path: f.name, data: await f.data.arrayBuffer() }))) });
+        load: () => readStored(p.name) });
     }
   } catch { /* no store */ }
   return out;
 }
 
-async function sendMode() {
+// `auto`: the key of a pack to share at once — one this browser already had
+// when a friend's link for it was opened again.
+async function sendMode(auto) {
   $('#sendView').hidden = false;
   const list = await sources();
   const sel = $('#packSel');
   sel.innerHTML = list.length ? list.map(p => `<option value="${p.key}">${p.label.replace(/</g, '&lt;')}</option>`).join('')
     : '<option>— no level packs here —</option>';
-  if (q.get('pack') && list.some(p => p.key === q.get('pack'))) sel.value = q.get('pack');
+  const want = auto || q.get('pack');
+  if (want && list.some(p => p.key === want)) sel.value = want;
   $('#startBtn').disabled = !list.length;
 
   let files = null, pack = null, peer = null;
@@ -153,10 +185,11 @@ async function sendMode() {
     try { files = await pack.load(); }
     catch (err) { say('#sendStatus', 'Could not read it: ' + err.message, 'err'); $('#startBtn').disabled = sel.disabled = false; return; }
     const size = files.reduce((n, f) => n + f.data.byteLength, 0);
+    const v = await versionOf(files);
     say('#sendStatus', 'Opening a line…');
     peer = new Peer('wtw-' + crypto.randomUUID().slice(0, 12));
     peer.on('open', id => {
-      $('#linkOut').value = `${pageUrl}?from=${encodeURIComponent(id)}`;
+      $('#linkOut').value = `${pageUrl}?from=${encodeURIComponent(id)}&get=${encodeURIComponent(packStore.clean(pack.name))}&v=${v}`;
       $('#linkBox').hidden = false;
       say('#sendStatus', `Ready — ${files.length} files, ${fmt(size)}. Waiting for a friend…`, 'ok');
     });
@@ -169,6 +202,19 @@ async function sendMode() {
     catch { $('#linkOut').select(); document.execCommand('copy'); $('#copyBtn').textContent = 'Copied'; }
     setTimeout(() => $('#copyBtn').textContent = 'Copy', 1500);
   };
+  if (auto && sel.value === auto) $('#startBtn').click();
+}
+
+// A friend's link, opened in a browser that already has that pack, at that
+// version: nothing to fetch. Play it, and share it from here.
+async function haveMode(name) {
+  const files = await readStored(name);
+  const title = (await packStore.list('levels')).find(p => p.name === name)?.title || name;
+  $('#sendTitle').textContent = `${title} is already in this browser`;
+  $('#sendNote').textContent = 'Nothing to fetch — play it, or pass it on: this page is sharing it now, so send your own link to a friend, and keep the page open while they fetch it.';
+  $('#haveRow').hidden = false;
+  $('#havePlay').onclick = () => { location.href = playUrl(name, files); };
+  await sendMode('idb:' + name);
 }
 
 // One friend: a row of its own, the pack sent file by file.
@@ -202,6 +248,13 @@ function serve(conn, pack, files, size) {
 
 // ---------- fetching ----------
 async function getMode(from) {
+  const name = q.get('get') && packStore.clean(q.get('get')), v = q.get('v');
+  if (name && v) {
+    try {
+      const here = await readStored(name);
+      if (here.length && await versionOf(here) === v) { await haveMode(name); return; }
+    } catch { /* not here, or unreadable: fetch it */ }
+  }
   $('#getView').hidden = false;
   const peer = new Peer();
   let meta = null, got = 0, total = 0, done = false;
@@ -244,8 +297,7 @@ async function keep(meta, files) {
     await packStore.put('levels', meta.name, files, meta.title);
   } catch (err) { say('#getStatus', 'Could not keep it: ' + err.message, 'err'); return; }
   const name = packStore.clean(meta.name);
-  const dir = packStore.url('levels', name);
-  const play = files.some(f => f.name === 'index.html') ? dir + 'index.html' : `/src/index.html?pack=${encodeURIComponent(dir + 'levelpack.json')}`;
+  const play = playUrl(name, files);
   say('#getStatus', `${meta.title} is in this browser now — it stays here.`, 'ok');
   $('#getNote').textContent = 'All here.';
   $('#doneRow').hidden = false;
