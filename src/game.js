@@ -2547,6 +2547,28 @@ Promise.all([atlas.loadRoot(), sound.loadRoot()]).then(loadBuiltinLevels).then((
   levelLoadMsg.classList.remove('hidden');
 });
 
+// ---------- Share ----------
+// A level pack served from this site — one in levelpacks/, or one kept in the
+// browser under /__idb/levels/<name>/ — can be handed to a friend through
+// share/, which starts sharing it at once, in a tab of its own that stays
+// open while the friend fetches it. A game opened any other way (an unzipped
+// folder, a host without share/) shows no button.
+(async () => {
+  const pack = new URL(ROOT_PACK_URL, location.href);
+  if (pack.origin !== location.origin) return;
+  let key = null, m;
+  if ((m = /^\/__idb\/levels\/([^/]+)\//.exec(pack.pathname))) key = 'idb:' + decodeURIComponent(m[1]);
+  else if ((m = /^\/levelpacks\/([^/]+)\//.exec(pack.pathname))) key = decodeURIComponent(m[1]);
+  if (!key) return;
+  try {
+    const res = await fetch('/share/index.html', { method: 'HEAD', cache: 'no-store' });
+    if (!res.ok) return;
+  } catch (err) { return; }
+  const btn = document.getElementById('shareBtn');
+  btn.classList.remove('hidden');
+  btn.addEventListener('click', () => window.open(`/share/?pack=${encodeURIComponent(key)}&go=1`, 'wtw-share'));
+})();
+
 document.getElementById('customLevelBtn').addEventListener('click', () => {
   goToScreen(customLevelScreen);
 });

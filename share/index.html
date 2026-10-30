@@ -18,6 +18,7 @@
 
     share/                     pick a level pack to share
     share/?pack=<name>         ... with that one picked (one in this browser: idb:<name>)
+    share/?pack=<name>&go=1    ... and shared at once: the game's Share button
     share/?from=<id>&get=<name>&v=<version>
                                a friend's link: fetch that pack from that browser
 
@@ -315,7 +316,7 @@ function say(sel, text, kind = '') {
 if (typeof Peer === 'undefined') {
   document.querySelector('main').insertAdjacentHTML('beforeend', '<p class="status err">Could not load PeerJS from cdnjs — this page needs the internet to find the other browser.</p>');
 } else if (q.get('from')) getMode(q.get('from'));
-else sendMode();
+else sendMode(q.get('go') ? q.get('pack') : undefined);
 </script>
 </body>
 </html>

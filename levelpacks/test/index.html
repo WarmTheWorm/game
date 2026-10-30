@@ -353,6 +353,7 @@
       <button class="bigbtn secondary" id="achievementsBtn">🎖️ Achievements</button>
       <button class="bigbtn secondary" id="customLevelBtn">🧩 Custom Level</button>
       <button class="bigbtn secondary" id="optionsBtn">⚙️ Options</button>
+      <button class="bigbtn secondary hidden" id="shareBtn">🔗 Share with a friend</button>
     </div>
 
     <div id="achievementsScreen" class="overlay hidden">
@@ -586,6 +587,16 @@ const packStore = (() => {
       const db = await open();
       const rec = await result(db.transaction(FILES, 'readonly').objectStore(FILES).get(`${kind}/${name}/${path}`));
       return rec || null;
+    },
+
+    // Every file of a pack, as put() takes them: [{ name, data: Blob }].
+    async files(kind, name) {
+      const db = await open();
+      const keys = await keysOf(db, kind, name);
+      const store = db.transaction(FILES, 'readonly').objectStore(FILES);
+      const recs = await Promise.all(keys.map(k => result(store.get(k))));
+      const at = `${kind}/${name}/`.length;
+      return keys.map((k, i) => ({ name: k.slice(at), data: recs[i].data }));
     },
 
     async remove(kind, name) {
@@ -4167,6 +4178,28 @@ Promise.all([atlas.loadRoot(), sound.loadRoot()]).then(loadBuiltinLevels).then((
     : 'Could not load game data: ' + err.message;
   levelLoadMsg.classList.remove('hidden');
 });
+
+// ---------- Share ----------
+// A level pack served from this site — one in levelpacks/, or one kept in the
+// browser under /__idb/levels/<name>/ — can be handed to a friend through
+// share/, which starts sharing it at once, in a tab of its own that stays
+// open while the friend fetches it. A game opened any other way (an unzipped
+// folder, a host without share/) shows no button.
+(async () => {
+  const pack = new URL(ROOT_PACK_URL, location.href);
+  if (pack.origin !== location.origin) return;
+  let key = null, m;
+  if ((m = /^\/__idb\/levels\/([^/]+)\//.exec(pack.pathname))) key = 'idb:' + decodeURIComponent(m[1]);
+  else if ((m = /^\/levelpacks\/([^/]+)\//.exec(pack.pathname))) key = decodeURIComponent(m[1]);
+  if (!key) return;
+  try {
+    const res = await fetch('/share/index.html', { method: 'HEAD', cache: 'no-store' });
+    if (!res.ok) return;
+  } catch (err) { return; }
+  const btn = document.getElementById('shareBtn');
+  btn.classList.remove('hidden');
+  btn.addEventListener('click', () => window.open(`/share/?pack=${encodeURIComponent(key)}&go=1`, 'wtw-share'));
+})();
 
 document.getElementById('customLevelBtn').addEventListener('click', () => {
   goToScreen(customLevelScreen);
