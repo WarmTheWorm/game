@@ -30,8 +30,9 @@
                                a friend's link: fetch that pack from that browser
 
   A link names the pack and its version (packStore.manifestOf: a hash of the
-  list of its files' hashes). A friend with an older copy fetches only the
-  files that changed. Opened in a browser that already has that very
+  list of its files' hashes). A friend fetches only the files whose hash
+  none of the level packs in their browser has: an older copy of the same
+  pack, or another pack built with the same art and sounds, gives the rest. Opened in a browser that already has that very
   version — fetched before, or the one it was shared from in the first
   place, on disk in levelpacks/ — it asks nothing of the other browser: that
   copy is played, and shared from this browser, with a link of its own. So every friend who has it can hand
@@ -144,14 +145,14 @@ const pageUrl = new URL(location.pathname, location.origin).href;
 
 // What goes over the wire, in order:
 //   sharer -> friend  { t: 'pack', name, title, v, files: [{ path, size, hash }] }
-//   friend -> sharer  { t: 'want', paths }   the files its own copy lacks or
-//                                            has different — all of them if
-//                                            it has none
+//   friend -> sharer  { t: 'want', paths }   the files whose hash no level
+//                                            pack in this browser has — all
+//                                            of them if it has none
 //   sharer -> friend  { t: 'file', path, data: ArrayBuffer }   one per file wanted,
 //   friend -> sharer  { t: 'got', path }                        each answered
 //   sharer -> friend  { t: 'end' }
-// The friend's new copy is what it had of the files that didn't change, and
-// the ones sent; files the pack no longer has go. One file at a time, each
+// The friend's new copy is the files sent and, for the rest, the same bytes
+// from whichever pack here has them; files the pack no longer has go. One file at a time, each
 // waited for, so neither side holds the whole pack in the channel's buffer
 // and both can show how far it has got.
 
@@ -315,7 +316,8 @@ async function getMode(from) {
   }
   $('#getView').hidden = false;
   const peer = new Peer();
-  let meta = null, got = 0, total = 0, done = false, kept = [];
+  let meta = null, got = 0, total = 0, done = false;
+  let kept = [];     // [{ to: path in the pack, from: { pack, path } here }]
   const files = [];
   peer.on('open', () => {
     const conn = peer.connect(from, { reliable: true });
@@ -325,16 +327,25 @@ async function getMode(from) {
       if (msg.t === 'pack') {
         meta = msg;
         $('#getTitle').textContent = msg.title;
-        // what this browser's own copy, if any, already has of it
-        let mine = null;
-        try { mine = await packStore.manifest('levels', packStore.clean(msg.name)); } catch { /* none */ }
-        const had = new Map((mine ? mine.files : []).map(f => [f.path, f.hash]));
-        const need = msg.files.filter(f => had.get(f.path) !== f.hash);
-        kept = msg.files.filter(f => had.get(f.path) === f.hash).map(f => f.path);
+        // every file this browser already holds, by hash, in any level pack
+        // here — its own older copy of this one looked in first
+        const own = packStore.clean(msg.name);
+        let names = [];
+        try { names = (await packStore.list('levels')).map(p => p.name).filter(n => !n.startsWith('__')); } catch { /* none */ }
+        names.sort((a, b) => (b === own) - (a === own));
+        const held = new Map();     // hash -> { pack, path }
+        for (const pack of names) {
+          let m = null;
+          try { m = await packStore.manifest('levels', pack); } catch { /* unreadable: skip it */ }
+          for (const f of m ? m.files : []) if (!held.has(f.hash)) held.set(f.hash, { pack, path: f.path });
+        }
+        const need = msg.files.filter(f => !held.has(f.hash));
+        kept = msg.files.filter(f => held.has(f.hash)).map(f => ({ to: f.path, from: held.get(f.hash) }));
         total = need.reduce((n, f) => n + f.size, 0);
         const whole = msg.files.reduce((n, f) => n + f.size, 0);
+        const update = names.includes(own);
         $('#getNote').textContent = !kept.length ? `A level pack, ${msg.files.length} files, ${fmt(whole)}.`
-          : `An update to the copy you have: ${need.length} of ${msg.files.length} files changed, ${fmt(total)} of ${fmt(whole)}.`;
+          : `${update ? 'An update to the copy you have' : 'Some of it is here already'}: fetching ${need.length} of ${msg.files.length} files, ${fmt(total)} of ${fmt(whole)}.`;
         conn.send({ t: 'want', paths: need.map(f => f.path) });
       } else if (msg.t === 'file') {
         files.push({ name: msg.path, data: msg.data });
@@ -344,10 +355,11 @@ async function getMode(from) {
         conn.send({ t: 'got', path: msg.path });
       } else if (msg.t === 'end') {
         done = true;
-        // the files that didn't change, from the copy here
-        if (kept.length) {
-          const stay = new Set(kept);
-          for (const f of await packStore.files('levels', packStore.clean(meta.name))) if (stay.has(f.name)) files.push(f);
+        // the rest, from whichever pack here has the same bytes
+        for (const k of kept) {
+          const rec = await packStore.get('levels', k.from.pack, k.from.path).catch(() => null);
+          if (!rec) { say('#getStatus', `${k.to} was taken out of this browser meanwhile — open the link again.`, 'err'); return; }
+          files.push({ name: k.to, data: rec.data });
         }
         await keep(meta, files);
         conn.close();
