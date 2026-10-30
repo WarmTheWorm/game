@@ -82,6 +82,15 @@
 <main>
   <h1 class="logo">Warm the <span>Worm</span></h1>
 
+  <!-- on a plain http address other than localhost (a computer's own IP, on
+       the home network) the browser won't run the service worker that keeps
+       and plays a fetched pack; sending one from disk still works -->
+  <section id="insecure" class="card" hidden>
+    <h2>This address can't keep games</h2>
+    <p>Browsers only save and play a fetched level pack on <b>https</b> or <b>localhost</b>. To try it on the home network, tell this browser to trust this address:</p>
+    <p>Open <b id="flagsUrl">chrome://flags</b>, find <b>Insecure origins treated as secure</b>, add <b id="originOut"></b>, set it to Enabled and relaunch.</p>
+  </section>
+
   <!-- the one sharing -->
   <section id="sendView" class="card" hidden>
     <h2 id="sendTitle">Share a level pack</h2>
@@ -215,7 +224,7 @@ async function sendMode(auto) {
     const size = files.reduce((n, f) => n + f.data.byteLength, 0);
     const v = await versionOf(files);
     say('#sendStatus', 'Opening a line…');
-    peer = new Peer('wtw-' + crypto.randomUUID().slice(0, 12));
+    peer = new Peer('wtw-' + [...crypto.getRandomValues(new Uint8Array(6))].map(b => b.toString(16).padStart(2, '0')).join(''));
     peer.on('open', id => {
       $('#linkOut').value = `${pageUrl}?from=${encodeURIComponent(id)}&get=${encodeURIComponent(packStore.clean(pack.name))}&v=${v}`;
       $('#linkBox').hidden = false;
@@ -338,9 +347,18 @@ async function keep(meta, files) {
   say('#getStatus', `${meta.title} is in this browser now — it stays here.`, 'ok');
   $('#getNote').textContent = 'All here.';
   $('#doneRow').hidden = false;
-  $('#playBtn').onclick = async () => { await packStore.ready(); location.href = play; };
+  $('#playBtn').onclick = async () => {
+    if (!await packStore.ready()) { say('#getStatus', 'It is saved, but this address can't play it — see the box at the top.', 'err'); return; }
+    location.href = play;
+  };
   $('#passBtn').onclick = () => { location.href = `${pageUrl}?pack=${encodeURIComponent('idb:' + name)}`; };
   $('#playBtn').focus();
+}
+
+if (!window.isSecureContext) {
+  $('#insecure').hidden = false;
+  $('#originOut').textContent = location.origin;
+  $('#flagsUrl').textContent = /Edg\//.test(navigator.userAgent) ? 'edge://flags' : 'chrome://flags';
 }
 
 function say(sel, text, kind = '') {
