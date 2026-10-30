@@ -2920,6 +2920,7 @@ function persist() {
 // asset pack creator can import its art. Rebuilt a little after it stops
 // changing, and only when it has.
 let mirrorTimer = 0;
+let mirrorError = '';     // why the last copy wasn't made, for 🔗 Share to say
 function scheduleMirror() {
   clearTimeout(mirrorTimer);
   mirrorTimer = setTimeout(mirrorNow, 2500);
@@ -2931,8 +2932,9 @@ async function mirrorNow() {
   if (!p) return;
   const key = packSum(p) + '|' + EDITOR_DIR;
   if (p.mirrorSum === key) return;
+  mirrorError = '';
   try {
-    if (!await storeReady(3000)) return;
+    if (!await storeReady(3000)) { mirrorError = 'the service worker is not running'; return; }
     // its own slot, not another level pack's of the same name
     const taken = new Set(packs.filter(x => x !== p).map(x => x.mirror));
     let slot = packSlug(), n = 2;
@@ -2943,7 +2945,17 @@ async function mirrorNow() {
     p.mirror = slot;
     p.mirrorSum = key;
     localStorage.setItem(STORE_KEY, JSON.stringify({ packs, packIndex, objGlyphs: OBJECTS.map(o => o.glyph) }));
-  } catch (err) { /* kept here regardless; the copy is made again on the next change */ }
+  } catch (err) { mirrorError = err.message; /* kept here regardless; the copy is made again on the next change */ }
+}
+
+// Why the pack store can't be used from this page, in words — or '' if it can.
+async function storeTrouble() {
+  if (!window.isSecureContext) return `${location.origin} is plain http — open it on https or localhost`;
+  if (!navigator.serviceWorker) return 'this browser has no service workers here (a private window can turn them off)';
+  try { await navigator.serviceWorker.register('/sw.js', { scope: '/' }); }
+  catch (err) { return 'the service worker would not start: ' + err.message + (location.protocol === 'https:' ? ' — is the https certificate trusted on this device?' : ''); }
+  if (!navigator.serviceWorker.controller) return 'the service worker is not looking after this page yet — reload it once';
+  return '';
 }
 // 🔗 Share: the level pack as it is now, from its copy in the pack store —
 // made at once rather than waited for — through share/, which shares it
@@ -2958,7 +2970,9 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   const p = packs[packIndex];
   if (!p.mirror || p.mirrorSum !== packSum(p) + '|' + EDITOR_DIR) {
     if (tab) tab.close();
-    levelMsg.textContent = 'Could not keep a copy to share — sharing needs the page served from localhost or https.';
+    const why = await storeTrouble() || mirrorError || 'no reason given';
+    levelMsg.textContent = 'Could not keep a copy to share: ' + why + '.';
+    await ask('Could not share', 'The level pack has to be kept in this browser to be shared, and it could not be: ' + why + '.', 'OK');
     return;
   }
   const url = `/share/?pack=${encodeURIComponent('idb:' + p.mirror)}&go=1`;
