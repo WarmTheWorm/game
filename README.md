@@ -61,7 +61,10 @@ kept in the browser:
   friend's browser copies it into its own store and plays it from
   `/__idb/levels/<name>/index.html`. The browsers meet through PeerJS's public
   broker; the files go straight between them, so the sharer's page stays open
-  until it's done. A pack fetched this way can be shared on in turn.
+  until it's done. A pack fetched this way can be shared on in turn. The
+  game's start screen and the level editor's **🔗 Share** open it on their own
+  level pack; `share/?list` lists every level pack here, `share/?del` takes
+  ones kept in the browser out.
 
 A static server cannot list folders, so the packs on disk are listed in
 `assetpacks/index.json` and `levelpacks/index.json`, which `npm run build`
