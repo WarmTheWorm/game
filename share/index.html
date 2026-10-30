@@ -348,7 +348,7 @@ async function keep(meta, files) {
   $('#getNote').textContent = 'All here.';
   $('#doneRow').hidden = false;
   $('#playBtn').onclick = async () => {
-    if (!await packStore.ready()) { say('#getStatus', 'It is saved, but this address can't play it — see the box at the top.', 'err'); return; }
+    if (!await packStore.ready()) { say('#getStatus', "It is saved, but this address can't play it — see the box at the top.", 'err'); return; }
     location.href = play;
   };
   $('#passBtn').onclick = () => { location.href = `${pageUrl}?pack=${encodeURIComponent('idb:' + name)}`; };
