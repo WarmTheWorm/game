@@ -55,7 +55,13 @@ kept in the browser:
   with its whole asset pack. As in the creator, a `*` marks changes never
   exported: **Remove** takes a level pack without one out at once, a red
   **Delete** asks first; with none left, only Import is offered;
-- the game plays whatever `?pack=` and `?assets=` name.
+- the game plays whatever `?pack=` and `?assets=` name;
+- **share/** hands a level pack to another browser, peer to peer: pick one
+  (from `levelpacks/` or the browser's store), send the link it gives, and the
+  friend's browser copies it into its own store and plays it from
+  `/__idb/levels/<name>/index.html`. The browsers meet through PeerJS's public
+  broker; the files go straight between them, so the sharer's page stays open
+  until it's done. A pack fetched this way can be shared on in turn.
 
 A static server cannot list folders, so the packs on disk are listed in
 `assetpacks/index.json` and `levelpacks/index.json`, which `npm run build`

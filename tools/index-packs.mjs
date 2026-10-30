@@ -13,6 +13,9 @@
 //
 // An asset pack may be a .zip in assetpacks/ (what the creator's Export
 // writes) rather than a folder; the creator's Import reads either.
+//
+// A level pack's entry also lists every file in its folder ("files"), so a
+// page can fetch the whole pack — share/ sends one to another browser that way.
 import { readdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
@@ -46,7 +49,18 @@ function zipPackName(buf) {
   } catch { return null; }
 }
 
-async function index(folder, manifest, zips = false) {
+// Every file under a folder, as paths inside it with / between parts.
+async function filesIn(dir, at = '') {
+  const out = [];
+  for (const e of (await readdir(join(dir, at), { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
+    const path = at ? `${at}/${e.name}` : e.name;
+    if (e.isDirectory()) out.push(...await filesIn(dir, path));
+    else if (e.isFile()) out.push(path);
+  }
+  return out;
+}
+
+async function index(folder, manifest, zips = false, listFiles = false) {
   const dir = join(ROOT, folder);
   const out = [];
   for (const e of (await readdir(dir, { withFileTypes: true })).filter(e => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -55,7 +69,9 @@ async function index(folder, manifest, zips = false) {
     if (!await exists(file)) continue;
     let title = e.name;
     try { title = JSON.parse(await readFile(file, 'utf8')).name || e.name; } catch { /* the folder's name will do */ }
-    out.push({ name: e.name, dir: `/${folder}/${e.name}/`, title });
+    const entry = { name: e.name, dir: `/${folder}/${e.name}/`, title };
+    if (listFiles) entry.files = await filesIn(join(dir, e.name));
+    out.push(entry);
   }
   if (zips) {
     for (const e of (await readdir(dir, { withFileTypes: true })).filter(e => e.isFile() && /\.zip$/i.test(e.name)).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -69,4 +85,4 @@ async function index(folder, manifest, zips = false) {
 }
 
 await index('assetpacks', 'assetpack.json', true);
-await index('levelpacks', 'levelpack.json');
+await index('levelpacks', 'levelpack.json', false, true);

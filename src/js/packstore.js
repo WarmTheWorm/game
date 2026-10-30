@@ -102,6 +102,16 @@ const packStore = (() => {
       return rec || null;
     },
 
+    // Every file of a pack, as put() takes them: [{ name, data: Blob }].
+    async files(kind, name) {
+      const db = await open();
+      const keys = await keysOf(db, kind, name);
+      const store = db.transaction(FILES, 'readonly').objectStore(FILES);
+      const recs = await Promise.all(keys.map(k => result(store.get(k))));
+      const at = `${kind}/${name}/`.length;
+      return keys.map((k, i) => ({ name: k.slice(at), data: recs[i].data }));
+    },
+
     async remove(kind, name) {
       const db = await open();
       const old = await keysOf(db, kind, name);
