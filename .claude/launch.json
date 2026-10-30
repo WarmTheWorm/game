@@ -4,14 +4,43 @@
     {
       "name": "creator",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tools/serve.mjs", "creator", "--port=5180", "--no-open"],
+      "runtimeArgs": [
+        "tools/serve.mjs",
+        "creator",
+        "--port=5180",
+        "--no-open"
+      ],
       "port": 5180
     },
     {
       "name": "static",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5181", "--bind", "127.0.0.1"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5181",
+        "--bind",
+        "127.0.0.1"
+      ],
       "port": 5181
+    },
+    {
+      "name": "https",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes",
+        "http-server",
+        "-S",
+        "-C",
+        "C:/Users/User/.warmworm-certs/cert.pem",
+        "-K",
+        "C:/Users/User/.warmworm-certs/key.pem",
+        "-c-1",
+        "-p",
+        "8443"
+      ],
+      "port": 8443,
+      "url": "https://localhost:8443"
     }
   ]
 }
