@@ -22,6 +22,8 @@
     share/?del=<name>          take a level pack out of this browser's store
     share/?...&get=<name>&del  ... the one a friend's link names
     share/?del                 ... any of them: every one kept here, listed
+    share/?list                every level pack here — on disk and in this
+                               browser — to play, share, or take out
   Taking one out always waits for a click, so a link alone can't empty
   anyone's browser. Packs on disk in levelpacks/ aren't touched.
     share/?from=<id>&get=<name>&v=<version>
@@ -78,7 +80,7 @@
 </head>
 <body>
 <main>
-  <h1 class="logo">Warm the<span>Worm</span></h1>
+  <h1 class="logo">Warm the <span>Worm</span></h1>
 
   <!-- the one sharing -->
   <section id="sendView" class="card" hidden>
@@ -92,6 +94,14 @@
       <button id="copyBtn">Copy</button>
     </div>
     <div class="friends" id="friends"></div>
+  </section>
+
+  <!-- every level pack here -->
+  <section id="listView" class="card" hidden>
+    <h2>Level packs</h2>
+    <p>On disk in levelpacks/, and kept in this browser — by the level editor, or fetched from a friend.</p>
+    <div class="friends" id="listRows"></div>
+    <div class="status" id="listStatus"></div>
   </section>
 
   <!-- taking packs out of this browser -->
@@ -339,6 +349,37 @@ function say(sel, text, kind = '') {
   el.className = 'status' + (kind ? ' ' + kind : '');
 }
 
+// ---------- the list ----------
+// Every level pack this page can reach, each to play, to share (this page,
+// with it picked and shared at once), or — one in this browser — to take out.
+async function listMode() {
+  $('#listView').hidden = false;
+  const draw = async () => {
+    const list = await sources();
+    const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    $('#listRows').innerHTML = list.map((p, i) => `<div class="row">
+      <span class="status" style="flex:1;min-width:12ch">${esc(p.title)}<br><small>${p.key.startsWith('idb:') ? 'in this browser' : 'levelpacks/' + esc(p.name)}</small></span>
+      <button class="go" data-play="${i}">▶ Play</button>
+      <button data-share="${i}">Share</button>
+      ${p.key.startsWith('idb:') ? `<button data-out="${i}">Take it out</button>` : ''}</div>`).join('');
+    if (!list.length) say('#listStatus', 'There are no level packs here.', 'ok');
+    $('#listRows').onclick = async e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      const p = list[+(b.dataset.play ?? b.dataset.share ?? b.dataset.out)];
+      if (b.dataset.play) { b.disabled = true; location.href = p.play(await p.load()); }
+      else if (b.dataset.share) location.href = `${pageUrl}?pack=${encodeURIComponent(p.key)}&go=1`;
+      else {
+        b.disabled = true;
+        try { await packStore.remove('levels', p.name); say('#listStatus', `Took ${p.title} out of this browser.`, 'ok'); }
+        catch (err) { say('#listStatus', 'Could not: ' + err.message, 'err'); }
+        await draw();
+      }
+    };
+  };
+  await draw();
+}
+
 // ---------- taking packs out ----------
 // ?del=<name>, or ?del with get=<name> — one pack; ?del alone — every one.
 async function delMode() {
@@ -370,6 +411,7 @@ async function delMode() {
 }
 
 if (q.has('del')) delMode();
+else if (q.has('list')) listMode();
 else if (typeof Peer === 'undefined') {
   document.querySelector('main').insertAdjacentHTML('beforeend', '<p class="status err">Could not load PeerJS from cdnjs — this page needs the internet to find the other browser.</p>');
 } else if (q.get('from')) getMode(q.get('from'));
