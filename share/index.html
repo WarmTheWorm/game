@@ -22,8 +22,8 @@
     share/?del=<name>          take a level pack out of this browser's store
     share/?...&get=<name>&del  ... the one a friend's link names
     share/?del                 ... any of them: every one kept here, listed
-    share/?list                every level pack here — on disk and in this
-                               browser — to play, share, or take out
+    share/?list                every level pack kept in this browser — to
+                               play, share, or delete
   Taking one out always waits for a click, so a link alone can't empty
   anyone's browser. Packs on disk in levelpacks/ aren't touched.
     share/?from=<id>&get=<name>
@@ -114,10 +114,10 @@
     <div class="friends" id="friends"></div>
   </section>
 
-  <!-- every level pack here -->
+  <!-- every level pack in this browser -->
   <section id="listView" class="card" hidden>
     <h2>Level packs</h2>
-    <p>On disk in levelpacks/, and kept in this browser — by the level editor, or fetched from a friend.</p>
+    <p>Kept in this browser — by the level editor, or fetched from a friend.</p>
     <div class="friends" id="listRows"></div>
     <div class="row" id="listAllRow" hidden><button id="listAll">🗑 Delete all in this browser</button></div>
     <div class="status" id="listStatus"></div>
@@ -492,27 +492,27 @@ function say(sel, text, kind = '') {
 }
 
 // ---------- the list ----------
-// Every level pack this page can reach, each to play, to share (this page,
-// with it picked and shared at once), or — one in this browser — to delete.
+// Every level pack kept in this browser, each to play, to share (this page,
+// with it picked and shared at once), or to delete. Those on disk in
+// levelpacks/ aren't listed: they aren't this browser's to delete.
 async function listMode() {
   $('#listView').hidden = false;
   const draw = async () => {
-    const list = await sources();
+    const list = (await sources()).filter(p => p.key.startsWith('idb:'));
     const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     $('#listRows').innerHTML = list.map((p, i) => `<div class="row">
-      <span class="status" style="flex:1;min-width:12ch">${esc(p.title)}<br><small>${p.key.startsWith('idb:') ? `in this browser, ${p.count} files` : 'levelpacks/' + esc(p.name)}</small></span>
+      <span class="status" style="flex:1;min-width:12ch">${esc(p.title)}<br><small>${p.count} files</small></span>
       <button class="go" data-play="${i}">▶ Play</button>
       <button data-share="${i}">Share</button>
-      ${p.key.startsWith('idb:') ? `<button data-out="${i}" title="Delete it from this browser">🗑 Delete</button>` : ''}</div>`).join('');
-    const stored = list.filter(p => p.key.startsWith('idb:'));
-    $('#listAllRow').hidden = stored.length < 2;
+      <button data-out="${i}" title="Delete it from this browser">🗑 Delete</button></div>`).join('');
+    $('#listAllRow').hidden = list.length < 2;
     $('#listAll').onclick = async () => {
-      if (!confirm(`Delete all ${stored.length} level packs kept in this browser? The games in them go too.`)) return;
-      for (const p of stored) await packStore.remove('levels', p.name).catch(() => {});
+      if (!confirm(`Delete all ${list.length} level packs kept in this browser? The games in them go too.`)) return;
+      for (const p of list) await packStore.remove('levels', p.name).catch(() => {});
       say('#listStatus', 'Deleted every level pack in this browser.', 'ok');
       await draw();
     };
-    if (!list.length) say('#listStatus', 'There are no level packs here.', 'ok');
+    if (!list.length) say('#listStatus', 'There are no level packs in this browser.', 'ok');
     $('#listRows').onclick = async e => {
       const b = e.target.closest('button');
       if (!b) return;

@@ -94,7 +94,7 @@ kept in the browser:
   broker; the files go straight between them, so the sharer's page stays open
   until it's done. A pack fetched this way can be shared on in turn. The
   game's start screen and the level editor's **🔗 Share** open it on their own
-  level pack; `share/?list` lists every level pack here, `share/?del` takes
+  level pack; `share/?list` lists the level packs kept in the browser, `share/?del` takes
   ones kept in the browser out.
 
 A static server cannot list folders, so the packs on disk are listed in
