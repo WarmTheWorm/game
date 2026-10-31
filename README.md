@@ -95,7 +95,8 @@ kept in the browser:
   until it's done. A pack fetched this way can be shared on in turn. The
   game's start screen and the level editor's **🔗 Share** open it on their own
   level pack; `share/?list` lists the level packs kept in the browser, `share/?del` takes
-  ones kept in the browser out.
+  ones kept in the browser out, `&diff` on a friend's link only lists the
+  files it would fetch, and `share/?help` lists all of these.
 
 A static server cannot list folders, so the packs on disk are listed in
 `assetpacks/index.json` and `levelpacks/index.json`, which `npm run build`

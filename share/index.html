@@ -28,6 +28,9 @@
   anyone's browser. Packs on disk in levelpacks/ aren't touched.
     share/?from=<id>&get=<name>
                                a friend's link: fetch that pack from that browser
+    share/?from=<id>&get=<name>&diff
+                               ... only list the files it would fetch, and fetch none
+    share/?help                all of these, on the page
 
   Every browser has one id of its own (shareId, kept in localStorage), so its
   link for a pack is the same every time: it works whenever a share page is
@@ -84,6 +87,13 @@
   .friend { display: grid; gap: 6px; }
   .friend .status { display: flex; justify-content: space-between; gap: 8px; }
   .play { font-size: 17px; padding: 12px 18px; }
+  .files { display: grid; gap: 2px; font: 12px/1.5 var(--mono); color: var(--muted); max-height: 50vh; overflow: auto; }
+  .files div { display: flex; justify-content: space-between; gap: 12px; }
+  .files .fetch { color: var(--amber); }
+  .help { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+  .help code { font: 12px var(--mono); color: var(--fg); white-space: nowrap; }
+  .foot { text-align: center; font-size: 12px; }
+  .foot a { color: var(--muted); }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -142,7 +152,29 @@
       <button class="go play" id="playBtn">▶ Play</button>
       <button id="passBtn">Share it on</button>
     </div>
+    <div class="files" id="diffList" hidden></div>
   </section>
+
+  <!-- every command this page takes -->
+  <section id="helpView" class="card" hidden>
+    <h2>What this page can do</h2>
+    <p>Add these to the page's address. <i>name</i> is a level pack's short name — the one in its share link after <code>get=</code>.</p>
+    <div class="help">
+      <code>share/</code><span>pick a level pack and share it</span>
+      <code>?pack=<i>name</i></code><span>… with that one picked — a pack on disk in levelpacks/, or <code>idb:<i>name</i></code> for one kept in this browser</span>
+      <code>?pack=<i>name</i>&amp;go=1</code><span>… and shared at once (the game's and the level editor's 🔗 Share)</span>
+      <code>?from=<i>id</i>&amp;get=<i>name</i></code><span>a friend's link: fetch that pack from that browser, only the files not already here</span>
+      <code>…&amp;diff</code><span>only list the files that link would fetch, and those already here — fetch nothing</span>
+      <code>?list</code><span>the level packs kept in this browser: play, share or delete each</span>
+      <code>?del</code><span>the level packs kept in this browser, to delete</span>
+      <code>?del=<i>name</i></code><span>… just that one</span>
+      <code>…&amp;get=<i>name</i>&amp;del</code><span>… the one a friend's link names</span>
+      <code>?help</code><span>this list</span>
+    </div>
+    <p>Deleting always waits for a click, so a link alone can't empty anyone's browser.</p>
+  </section>
+
+  <p class="foot"><a href="?help">All commands</a></p>
 </main>
 
 <script>
@@ -314,7 +346,7 @@ async function haveHere(name, v) {
 // opened on, or any other this browser has — its manifest, then the files it
 // wants, one by one.
 function serve(conn, current) {
-  let all = [], files = [], size = 0;
+  let all = [], files = [], size = 0, wanted = false;
   const row = document.createElement('div');
   row.className = 'friend';
   row.innerHTML = `<div class="status"><span>A friend</span><span class="n">connecting…</span></div><div class="bar"><i></i></div>`;
@@ -351,8 +383,9 @@ function serve(conn, current) {
       return;
     }
     if (msg && msg.t === 'want' && Array.isArray(msg.paths)) {
-      const wanted = new Set(msg.paths);
-      files = all.filter(f => wanted.has(f.path));
+      wanted = true;
+      const paths = new Set(msg.paths);
+      files = all.filter(f => paths.has(f.path));
       size = files.reduce((t, f) => t + f.data.byteLength, 0);
       next();
       return;
@@ -362,19 +395,26 @@ function serve(conn, current) {
     n.textContent = `${fmt(sent)} of ${fmt(size)}`;
     next();
   });
-  conn.on('close', () => { if (!finished) { n.textContent = 'left before the end'; n.parentElement.classList.add('err'); } });
+  conn.on('close', () => {
+    if (finished) return;
+    // &diff: it read the list and fetched nothing
+    if (all.length && !wanted) { n.textContent = 'only looked at what it would fetch'; return; }
+    n.textContent = 'left before the end';
+    n.parentElement.classList.add('err');
+  });
   conn.on('error', err => { n.textContent = 'failed: ' + err.message; n.parentElement.classList.add('err'); });
 }
 
 // ---------- fetching ----------
 async function getMode(from) {
   const name = q.get('get') && packStore.clean(q.get('get')), v = q.get('v');
+  const diff = q.has('diff');
   // this browser's own link: share that pack from here
-  if (name && from === shareId()) {
+  if (name && from === shareId() && !diff) {
     const src = await sourceNamed(name);
     if (src) { await haveMode(src, await src.load()); return; }
   }
-  if (name && v) {
+  if (name && v && !diff) {
     const have = await haveHere(name, v);
     if (have) { await haveMode(have.src, have.files); return; }
   }
@@ -386,7 +426,7 @@ async function getMode(from) {
   peer.on('open', () => {
     const conn = peer.connect(from, { reliable: true });
     conn.on('open', () => {
-      $('#getNote').textContent = 'Connected — fetching…';
+      $('#getNote').textContent = diff ? 'Connected — reading the list of files…' : 'Connected — fetching…';
       conn.send({ t: 'ask', name: name || '' });
     });
     conn.on('data', async msg => {
@@ -416,6 +456,13 @@ async function getMode(from) {
         total = need.reduce((n, f) => n + f.size, 0);
         const whole = msg.files.reduce((n, f) => n + f.size, 0);
         const update = names.includes(own);
+        if (diff) {
+          done = true;
+          showDiff(msg, need, kept, whole, update);
+          conn.close();
+          peer.destroy();
+          return;
+        }
         $('#getNote').textContent = !kept.length ? `A level pack, ${msg.files.length} files, ${fmt(whole)}.`
           : `${update ? 'An update to the copy you have' : 'Some of it is here already'}: fetching ${need.length} of ${msg.files.length} files, ${fmt(total)} of ${fmt(whole)}.`;
         conn.send({ t: 'want', paths: need.map(f => f.path) });
@@ -457,6 +504,24 @@ async function getMode(from) {
     $('#playBtn').onclick = async () => { location.href = src.play(await src.load()); };
     $('#passBtn').onclick = () => { location.href = `${pageUrl}?pack=${encodeURIComponent(src.key)}&go=1`; };
   }
+}
+
+// &diff: what opening the link would fetch, and what it would take from the
+// packs already here — nothing is fetched or kept.
+function showDiff(meta, need, kept, whole, update) {
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const total = need.reduce((n, f) => n + f.size, 0);
+  const from = new Map(kept.map(k => [k.to, k.from]));
+  $('#getNote').textContent = !need.length ? `Nothing to fetch — all ${meta.files.length} files are here already.`
+    : `Opening the link would fetch ${need.length} of ${meta.files.length} files, ${fmt(total)} of ${fmt(whole)}${update ? ' — an update to the copy you have' : ''}.`;
+  say('#getStatus', 'Only listed — nothing was fetched. Open the link without &diff to fetch it.', 'ok');
+  $('#getBar').parentElement.hidden = true;
+  const fetchSet = new Set(need.map(f => f.path));
+  const rows = [...meta.files].sort((a, b) => fetchSet.has(b.path) - fetchSet.has(a.path) || (a.path < b.path ? -1 : 1)).map(f => fetchSet.has(f.path)
+    ? `<div class="fetch"><span>⬇ ${esc(f.path)}</span><span>${fmt(f.size)}</span></div>`
+    : `<div><span>✓ ${esc(f.path)}</span><span>here${from.get(f.path).pack === packStore.clean(meta.name) && from.get(f.path).path === f.path ? '' : ' in ' + esc(from.get(f.path).pack)}</span></div>`);
+  $('#diffList').innerHTML = rows.join('');
+  $('#diffList').hidden = false;
 }
 
 // Into this browser's pack store, then played from there: the pack's own
@@ -561,7 +626,8 @@ async function delMode() {
   await draw();
 }
 
-if (q.has('del')) delMode();
+if (q.has('help')) $('#helpView').hidden = false;
+else if (q.has('del')) delMode();
 else if (q.has('list')) listMode();
 else if (typeof Peer === 'undefined') {
   document.querySelector('main').insertAdjacentHTML('beforeend', '<p class="status err">Could not load PeerJS from cdnjs — this page needs the internet to find the other browser.</p>');
