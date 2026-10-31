@@ -18,8 +18,9 @@
 
     share/                     pick a level pack and share it
     share/?<command>...        any command of share/commands.js — ?help lists
-                               them: ?list, ?del, ?info, ?id, ?link, ?from
-                               (a friend's link), ?pack (sharing)
+                               them: ?list, ?del, ?info, ?id, ?link, ?get
+                               (a friend's link: ?get=<name>&from=<id>&v=…),
+                               ?pack (sharing)
     ...&json                   its answer as JSON instead of a view: printed,
                                or, in a frame of a page of this address
                                (share/cli.html, the level editor's Import),
@@ -474,7 +475,7 @@ else {
     $('#originOut').textContent = location.origin;
     $('#flagsUrl').textContent = /Edg\//.test(navigator.userAgent) ? 'edge://flags' : 'chrome://flags';
   }
-  const views = { help: helpMode, del: delMode, list: listMode, from: getMode, pack: () => sendMode('go' in P ? P.pack : undefined) };
+  const views = { help: helpMode, del: delMode, list: listMode, get: getMode, pack: () => sendMode('go' in P ? P.pack : undefined) };
   const c = ShareCommands.find(P);
   if (!c) sendMode();
   else if (views[c.name]) views[c.name]();

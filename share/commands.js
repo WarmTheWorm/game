@@ -3,7 +3,7 @@
 // command line; its options are parameters too, each a -flag there:
 //
 //   share/?del=garden             share del garden
-//   share/?from=wtw-…&get=x&diff  share from wtw-… -get x -diff
+//   share/?get=x&from=wtw-…&diff  share get x -from wtw-… -diff
 //
 // so the two never drift apart: cli.html knows no command of its own — it
 // turns a command line into the page's address (toQuery), runs it there with
@@ -11,7 +11,8 @@
 // on both.
 //
 // Each command: name, `value` (what the parameter holds; a trailing ? if it
-// may be left out), `options` ({ name: what it holds, '' for a bare flag }),
+// may be left out), `options` ({ name: what it holds — a trailing ! if it must
+// be given — or '' for a bare flag }),
 // `about`, and run(params, io) → plain data, where io is
 //   progress(data)   how it is going
 //   event(data)      something that happened, for a command that goes on
@@ -68,9 +69,10 @@ const ShareCommands = (() => {
         return { name: info.name, title: info.title, v: info.v, link: C.linkFor(info.name, info.v) };
       },
       text: r => `${r.title} (version ${r.v})\n${r.link}` },
-    { name: 'from', value: 'id', options: { get: 'name', v: 'version', diff: '', check: '' },
+    // a friend's link (?from=<id>&get=<name>&v=<version>) is this command
+    { name: 'get', value: 'name', options: { from: 'id!', v: 'version', diff: '', check: '' },
       about: "fetch a level pack from another browser — a friend's link; only the files not here, and nothing at all if this one has its version. -diff only lists them; -check asks even so",
-      run: (p, io) => C.fetchPack({ from: p.from, name: needs(p.get, '-get <name>'), v: p.v, diff: 'diff' in p, check: 'check' in p }, io.progress),
+      run: (p, io) => C.fetchPack({ from: needs(p.from, '-from <id>'), name: needs(p.get, 'a level pack name'), v: p.v, diff: 'diff' in p, check: 'check' in p }, io.progress),
       text: r => ({
         own: () => `That is this browser's own link — ${r.title} is here.`,
         have: () => `${r.title} is here already at version ${r.v} — nothing asked of the other browser. (-check asks even so.)`,
@@ -143,8 +145,8 @@ const ShareCommands = (() => {
     const urlValue = c.value ? (c.value.endsWith('?') ? `[=<${c.value.slice(0, -1)}>]` : `=<${c.value}>`) : '';
     const opts = Object.entries(c.options || {});
     return {
-      command: `share ${c.name}${value}` + opts.map(([k, v]) => ` [-${k}${v ? ` <${v}>` : ''}]`).join(''),
-      url: `share/?${c.name}${urlValue}` + opts.map(([k, v]) => `[&${k}${v ? `=<${v}>` : ''}]`).join(''),
+      command: `share ${c.name}${value}` + opts.map(([k, v]) => v.endsWith('!') ? ` -${k} <${v.slice(0, -1)}>` : ` [-${k}${v ? ` <${v}>` : ''}]`).join(''),
+      url: `share/?${c.name}${urlValue}` + opts.map(([k, v]) => v.endsWith('!') ? `&${k}=<${v.slice(0, -1)}>` : `[&${k}${v ? `=<${v}>` : ''}]`).join(''),
       about: c.about
     };
   }
@@ -161,7 +163,7 @@ const ShareCommands = (() => {
     return c.run(p, io);
   }
 
-  // A command line — `share del garden`, `share from wtw-… -get x -diff` — as
+  // A command line — `share del garden`, `share get x -from wtw-… -diff` — as
   // the address's query: the first word is the command and a word after it
   // its value; each -option after that a parameter too, a word after it its
   // value. Quotes keep a value with spaces in one word.

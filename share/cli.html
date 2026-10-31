@@ -8,9 +8,9 @@
   A command line in the page for the share page's commands, all in this
   browser — nothing is installed, no server is asked.
 
-    share list                  ->  share/?list&json
-    share del garden            ->  share/?del=garden&json
-    share from wtw-… -get x     ->  share/?from=wtw-…&get=x&json
+    share list                  ->  share/?list&text
+    share del garden            ->  share/?del=garden&text
+    share get x -from wtw-…     ->  share/?get=x&from=wtw-…&text
 
   This page knows no share command of its own: it turns the command line into
   the share page's address (ShareCommands.toQuery — the command and each
@@ -164,7 +164,7 @@ const OWN = {
     '  share help               what they are (from share/commands.js)',
     '  share list               the level packs kept in this browser',
     '  share del <name>         delete one (asks first)',
-    '  share from <id> -get <name> -diff',
+    "  share get <name> -from <id> -diff   what a friend's link would fetch",
     'This shell:',
     '  share <command> … -url   the address it is — as the page, as text, as JSON — not run',
     '  share <command> … -json  its answer as JSON, not text',

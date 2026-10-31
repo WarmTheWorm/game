@@ -101,7 +101,7 @@ kept in the browser:
   is one row of `share/commands.js` (over `share/core.js`): its name is its
   URL parameter, `&json` gives its answer as JSON, and **`share/cli.html`**,
   a command line in the page, runs the same commands — `share list`,
-  `share del garden`, `share from <id> -get <name> -diff` — through that
+  `share del garden`, `share get <name> -from <id> -diff` — through that
   address.
 
 A static server cannot list folders, so the packs on disk are listed in
