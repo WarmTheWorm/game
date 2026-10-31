@@ -22,6 +22,37 @@ npm run creator              # the asset pack creator
 Add `--port=N` to move off 8080, or `--no-open` to leave the browser alone.
 Naming a pack that isn't there lists the ones that are.
 
+### On a phone or another computer: https
+
+The pack store, and so sharing, runs on a service worker, which a browser
+only starts on `localhost` or https. On this computer `npm run creator` (or any
+of the above) is enough — two browsers, Edge and Chrome, can share with each
+other on `http://localhost:8080`. A phone or another computer on the home
+network needs https:
+
+```
+npm run https                # https on 8443, the share page; prints this computer's addresses
+```
+
+`tools/devcert.mjs` signs its certificate with a local test CA kept in
+`~/.warmworm-certs` (never served), and signs a new one by itself whenever the
+router gives this computer a different address — so nothing has to be pushed
+anywhere to test. Each device trusts the CA once:
+
+- **Windows** (this computer, for Edge and Chrome): in a terminal in the
+  project, `certutil -user -addstore Root .certs\ca.crt`, and say yes. Firefox
+  keeps its own list: Settings → Certificates → Import.
+- **Android**: open `https://<address>:8443/.certs/ca.crt` (pass the warning
+  this once), then Settings → Security → Encryption & credentials → Install a
+  certificate → CA certificate, and pick the downloaded file.
+- **iPhone**: open the same address in Safari and allow the profile, install it
+  in Settings → Profile Downloaded, then turn it on under General → About →
+  Certificate Trust Settings.
+
+Only this computer's test pages are signed by that CA; take it out again with
+`certutil -user -delstore Root "WarmTheWorm Local Test CA"` (or the phone's
+list of trusted credentials).
+
 ### With any static server
 
 `tools/serve.mjs` is only a convenience: the three tools are static pages and

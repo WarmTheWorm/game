@@ -5,6 +5,13 @@
 //   node tools/serve.mjs game    [level-pack] [--assets=name] [--built] [--port=N] [--no-open]
 //   node tools/serve.mjs editor  [asset-pack]                            [--port=N] [--no-open]
 //   node tools/serve.mjs creator                                         [--port=N] [--no-open]
+//   node tools/serve.mjs share                                           [--port=N] [--no-open]
+//
+// --https serves it over https (tools/devcert.mjs makes the certificate), for
+// a phone or another computer on the home network: a page there needs https
+// for the service worker the pack store and sharing run on. Plain http is
+// enough on this computer, where localhost counts as secure. `npm run https`
+// is the share page that way, on port 8443.
 //
 // It is a plain static server: the tools need nothing from it that any other
 // static server (live-server, http-server) wouldn't give. Packs the tools
@@ -12,11 +19,13 @@
 // the service worker in sw.js; the packs on disk are listed in
 // assetpacks/index.json and levelpacks/index.json (npm run build).
 import { createServer } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { createReadStream } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { extname, join, relative, resolve, sep } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { addresses, devCert } from './devcert.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const LEVEL_PACKS = join(ROOT, 'levelpacks');
@@ -35,7 +44,8 @@ const TYPES = {
   '.ico': 'image/x-icon',
   '.wav': 'audio/wav',
   '.mp3': 'audio/mpeg',
-  '.ogg': 'audio/ogg'
+  '.ogg': 'audio/ogg',
+  '.crt': 'application/x-x509-ca-cert'
 };
 
 // ---------- what was asked for ----------
@@ -49,8 +59,8 @@ const flagValue = (name, fallback) => {
   return found && found.includes('=') ? found.slice(found.indexOf('=') + 1) : fallback;
 };
 
-if (mode !== 'game' && mode !== 'editor' && mode !== 'creator') {
-  die('first argument must be "game", "editor" or "creator" — try: npm run game -- garden');
+if (!['game', 'editor', 'creator', 'share'].includes(mode)) {
+  die('first argument must be "game", "editor", "creator" or "share" — try: npm run game -- garden');
 }
 
 // A pack is a folder, so the list of them is the folder listing; naming one
@@ -72,6 +82,8 @@ const assetPack = await pickPack(ASSET_PACKS, 'asset pack', mode === 'editor' ? 
 let page;
 if (mode === 'creator') {
   page = '/assetpack-editor/index.html';
+} else if (mode === 'share') {
+  page = '/share/?list';
 } else if (mode === 'editor') {
   page = `/editor/index.html?assets=${encodeURIComponent(`/assetpacks/old/${assetPack}/`)}`;
 } else {
@@ -108,7 +120,9 @@ function serve(req, res) {
 }
 
 const wanted = Number(flagValue('port', 8080));
-const server = createServer(serve);
+const https = !!flag('https');
+// .certs/ (git-ignored) gets the CA's certificate, for devices to install
+const server = https ? createHttpsServer(devCert(join(ROOT, '.certs')), serve) : createServer(serve);
 
 // A port left busy by the last run should not stop this one.
 server.on('error', err => {
@@ -118,9 +132,13 @@ server.on('error', err => {
 });
 
 server.listen(wanted, () => {
-  const url = `http://localhost:${server.address().port}${page}`;
+  const port = server.address().port, scheme = https ? 'https' : 'http';
+  const url = `${scheme}://localhost:${port}${page}`;
   console.log(`serving ${relative(process.cwd(), ROOT) || '.'}${sep}`);
   console.log(url);
+  // the same on the home network — open to it either way, as any address is
+  for (const ip of addresses().slice(1)) console.log(`${scheme}://${ip}:${port}${page}`);
+  if (https) console.log(`each device trusts the test CA once: ${scheme}://<address>:${port}/.certs/ca.crt (see the README)`);
   console.log('ctrl-c to stop');
   if (!flag('no-open')) open(url);
 });

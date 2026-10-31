@@ -13,6 +13,8 @@
     "game": "node tools/serve.mjs game",
     "editor": "node tools/serve.mjs editor",
     "creator": "node tools/serve.mjs creator",
+    "share": "node tools/serve.mjs share",
+    "https": "node tools/serve.mjs share --https --port=8443",
     "start": "node tools/serve.mjs editor",
     "gen:sprites": "pwsh -NoProfile -File tools/gen/sprites.ps1",
     "gen:objects": "pwsh -NoProfile -File tools/gen/pack-objects.ps1",

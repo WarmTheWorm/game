@@ -26,18 +26,13 @@
     },
     {
       "name": "https",
-      "runtimeExecutable": "npx",
+      "runtimeExecutable": "node",
       "runtimeArgs": [
-        "--yes",
-        "http-server",
-        "-S",
-        "-C",
-        "C:/Users/User/.warmworm-certs/cert.pem",
-        "-K",
-        "C:/Users/User/.warmworm-certs/key.pem",
-        "-c-1",
-        "-p",
-        "8443"
+        "tools/serve.mjs",
+        "share",
+        "--https",
+        "--port=8443",
+        "--no-open"
       ],
       "port": 8443,
       "url": "https://localhost:8443"
