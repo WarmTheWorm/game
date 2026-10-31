@@ -2956,7 +2956,9 @@ async function mirrorNow() {
   const p = packs[packIndex];
   if (!p) return;
   const key = packSum(p) + '|' + EDITOR_DIR;
-  if (p.mirrorSum === key) return;
+  // made already — unless it was taken out since (share/?list deletes them)
+  if (p.mirrorSum === key && p.mirror && await storeReady(3000)
+    && await packStore.get('levels', p.mirror, 'levelpack.json').catch(() => null)) return;
   mirrorError = '';
   try {
     if (!await storeReady(3000)) { mirrorError = 'the service worker is not running'; return; }
