@@ -420,11 +420,11 @@ async function listMode() {
 }
 
 // ---------- taking packs out ----------
-// ?del=<name>, or ?del with get=<name> — one pack; ?del alone — every one.
+// ?del=<name> — one pack; ?del alone (or &all) — every one, each by itself.
 // Each waits for a click.
 async function delMode() {
   $('#delView').hidden = false;
-  const want = P.del || P.get;
+  const want = P.del;
   const draw = async () => {
     let list = [];
     try { list = await ShareCore.listPacks(); } catch { /* no store */ }

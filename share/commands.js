@@ -32,16 +32,20 @@ const ShareCommands = (() => {
     { name: 'help', about: 'every command — this list',
       run: () => COMMANDS.map(describe),
       text: rows => rows.map(d => `${d.command}\n    ${d.about}\n    ${d.url}`).join('\n\n') },
-    { name: 'del', value: 'name?', options: { get: 'name' },
-      about: 'delete a level pack kept in this browser — every one, with no name; asks first',
+    { name: 'del', value: 'name?', options: { all: '' },
+      about: 'delete a level pack kept in this browser, or with -all every one; asks first',
       run: async (p, io) => {
-        const name = p.del || p.get;
+        const name = p.del;
         let list = await C.listPacks();
         if (name) list = list.filter(x => x.name === C.clean(name));
+        else if (!('all' in p)) {
+          const names = list.map(x => x.name);
+          throw Object.assign(new Error(`Name a level pack, or -all for every one${names.length ? ` — here: ${names.join(', ')}` : ' (there are none here)'}.`), { code: 'usage' });
+        }
         if (name && !list.length) throw Object.assign(new Error(`There is no level pack called ${name} in this browser.`), { code: 'missing' });
         if (!list.length) return { deleted: [] };
         const what = list.length === 1 ? `“${list[0].title}”` : `all ${list.length} level packs`;
-        if (!await io.confirm(`Delete ${what} from this browser? The game in it goes too.`)) return { deleted: [], cancelled: true };
+        if (!await io.confirm(`Delete ${what} from this browser? ${list.length === 1 ? 'The game in it goes' : 'The games in them go'} too.`)) return { deleted: [], cancelled: true };
         return { deleted: await C.deletePacks(list.map(x => x.name)) };
       },
       text: r => r.cancelled ? 'Nothing deleted.' : r.deleted.length ? `Deleted ${r.deleted.join(', ')}.` : 'There are no level packs in this browser.' },
