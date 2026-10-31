@@ -108,6 +108,12 @@ kept in the browser:
   pack is marked by pressing Share it or saying yes to `share pack`, never by
   a link alone, so `?pack=…&go=1` starts at once only for one shared already.
 
+The store keeps a file's bytes once, under its SHA-256, however many packs
+hold it — level packs carry their asset pack's art and sounds, so most of
+their megabytes are the same few files; `share store` says how much that
+saves. Bytes no pack names any more are swept away when a pack is saved
+again or removed.
+
 A static server cannot list folders, so the packs on disk are listed in
 `assetpacks/index.json` and `levelpacks/index.json`, which `npm run build`
 (or `npm run index-packs` alone) writes. Each origin — host and port — has a
