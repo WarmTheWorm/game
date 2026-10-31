@@ -3075,10 +3075,11 @@ document.getElementById('importBtn').addEventListener('click', async () => {
 });
 
 // A level pack shared from another browser, by the link its share page gave
-// (share/?from=<id>&get=<name>, on any address): this page's own share page,
-// in a hidden frame, fetches it into this browser's pack store, as a friend
-// opening the link would — only the files not here already — and says when
-// it has; it is read from there as any level pack is.
+// (share/?from=<id>&get=<name>&v=<version>, on any address): this page's own
+// share page runs that command in a hidden frame with &json — fetching it
+// into this browser's pack store as a friend opening the link would, only the
+// files not here already — and posts how it goes and where the pack is; it is
+// read from there as any level pack is.
 let shareFrame = null;
 async function importShared(text) {
   let link;
@@ -3090,15 +3091,15 @@ async function importShared(text) {
   const frame = shareFrame = document.createElement('iframe');
   frame.hidden = true;
   const v = link.searchParams.get('v');     // the copy here at that version: nothing to ask
-  frame.src = `/share/?from=${encodeURIComponent(from)}&get=${encodeURIComponent(name)}${v ? '&v=' + encodeURIComponent(v) : ''}&embed=1`;
+  frame.src = `/share/?from=${encodeURIComponent(from)}&get=${encodeURIComponent(name)}${v ? '&v=' + encodeURIComponent(v) : ''}&json`;
   levelMsg.textContent = `Connecting to the browser sharing "${name}"…`;
   const done = () => { window.removeEventListener('message', heard); frame.remove(); if (shareFrame === frame) shareFrame = null; };
   const heard = e => {
     if (e.source !== frame.contentWindow || e.origin !== location.origin || !e.data || e.data.wtw !== 'share') return;
-    const m = e.data;
-    if (m.kind === 'progress') levelMsg.textContent = 'Fetching the shared level pack: ' + m.text;
-    else if (m.kind === 'error') { levelMsg.textContent = 'Could not fetch the shared level pack: ' + m.text; done(); }
-    else if (m.kind === 'kept') { done(); openLevelPack(m.url); }
+    const { kind, data } = e.data;
+    if (kind === 'progress' && (data.text || data.note)) levelMsg.textContent = 'Fetching the shared level pack: ' + (data.text || data.note);
+    else if (kind === 'error') { levelMsg.textContent = 'Could not fetch the shared level pack: ' + data.message; done(); }
+    else if (kind === 'result') { done(); openLevelPack(data.url); }     // kept, or here already
   };
   window.addEventListener('message', heard);
   document.body.appendChild(frame);

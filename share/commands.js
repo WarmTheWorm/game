@@ -1,0 +1,105 @@
+// share/commands.js — every command of the share page, in one table. A
+// command's name is its URL parameter and its flag on share/cli.html's
+// command line, and so are its options:
+//
+//   share/?del=garden            share -del garden
+//   share/?from=wtw-…&get=x&diff  share -from wtw-… -get x -diff
+//
+// so the two never drift apart: cli.html knows no command of its own — it
+// turns a command line into the page's address (toQuery), runs it there with
+// &json, and prints what comes back. A command added here works on both.
+//
+// Each command: name, `value` (what the parameter holds; a trailing ? if it
+// may be left out), `options` ({ name: what it holds, '' for a bare flag }),
+// `about`, and run(params, io) → plain data, where io is
+//   progress(data)   how it is going
+//   event(data)      something that happened, for a command that goes on
+//   stay()           it goes on (sharing) until its page is closed
+//   confirm(text)    → Promise<boolean>: asks the one running it
+// The share page also has views of its own for some (share/index.html).
+const ShareCommands = (() => {
+  const C = ShareCore;
+  const needs = (value, what) => { if (!value) throw Object.assign(new Error(`It needs ${what}.`), { code: 'usage' }); return value; };
+
+  const COMMANDS = [
+    { name: 'help', about: 'every command — this list',
+      run: () => COMMANDS.map(describe) },
+    { name: 'del', value: 'name?', options: { get: 'name' },
+      about: 'delete a level pack kept in this browser — every one, with no name; asks first',
+      run: async (p, io) => {
+        const name = p.del || p.get;
+        let list = await C.listPacks();
+        if (name) list = list.filter(x => x.name === C.clean(name));
+        if (name && !list.length) throw Object.assign(new Error(`There is no level pack called ${name} in this browser.`), { code: 'missing' });
+        if (!list.length) return { deleted: [] };
+        const what = list.length === 1 ? `“${list[0].title}”` : `all ${list.length} level packs`;
+        if (!await io.confirm(`Delete ${what} from this browser? The game in it goes too.`)) return { deleted: [], cancelled: true };
+        return { deleted: await C.deletePacks(list.map(x => x.name)) };
+      } },
+    { name: 'list', about: 'the level packs kept in this browser',
+      run: () => C.listPacks() },
+    { name: 'info', value: 'name', about: "a level pack's version and every file in it — one kept here, or on disk",
+      run: p => C.packInfo(needs(p.info, 'a level pack name')) },
+    { name: 'id', about: "this browser's share id — the from= of the links it makes",
+      run: () => ({ id: C.shareId() }) },
+    { name: 'link', value: 'name', about: 'the link a level pack here is shared by — sharing nothing yet',
+      run: async p => {
+        const info = await C.packInfo(needs(p.link, 'a level pack name'));
+        return { name: info.name, title: info.title, v: info.v, link: C.linkFor(info.name, info.v) };
+      } },
+    { name: 'from', value: 'id', options: { get: 'name', v: 'version', diff: '', check: '' },
+      about: "fetch a level pack from another browser — a friend's link; only the files not here, and nothing at all if this one has its version. -diff only lists them; -check asks even so",
+      run: (p, io) => C.fetchPack({ from: p.from, name: needs(p.get, '-get <name>'), v: p.v, diff: 'diff' in p, check: 'check' in p }, io.progress) },
+    { name: 'pack', value: 'name', options: { go: '' },
+      about: 'share a level pack (idb:<name> for one kept here when one on disk has the same name): goes on, serving each friend, until stopped. On the page, -go starts at once',
+      run: (p, io) => new Promise((resolve, reject) => {
+        C.share(needs(p.pack, 'a level pack name'), {
+          ready: d => { io.event({ event: 'ready', ...d }); io.stay(); },
+          friend: (n, r) => io.event({ event: 'friend', friend: n, ...r }),
+          trouble: (text, final) => final ? reject(new Error(text)) : io.event({ event: 'trouble', text })
+        }).catch(reject);
+      }) }
+  ];
+
+  // A command as help shows it: its command line and its address.
+  function describe(c) {
+    const value = c.value ? (c.value.endsWith('?') ? ` [<${c.value.slice(0, -1)}>]` : ` <${c.value}>`) : '';
+    const urlValue = c.value ? (c.value.endsWith('?') ? `[=<${c.value.slice(0, -1)}>]` : `=<${c.value}>`) : '';
+    const opts = Object.entries(c.options || {});
+    return {
+      command: `share -${c.name}${value}` + opts.map(([k, v]) => ` [-${k}${v ? ` <${v}>` : ''}]`).join(''),
+      url: `share/?${c.name}${urlValue}` + opts.map(([k, v]) => `[&${k}${v ? `=<${v}>` : ''}]`).join(''),
+      about: c.about
+    };
+  }
+
+  // The address's parameters as { name: value }, a bare one as ''.
+  const params = search => Object.fromEntries(new URLSearchParams(search));
+
+  // The command an address names: the first in the table it has.
+  const find = p => COMMANDS.find(c => c.name in p) || null;
+
+  // Runs the command an address names; none named, help.
+  async function run(p, io) {
+    const c = find(p) || COMMANDS[0];
+    return c.run(p, io);
+  }
+
+  // A command line — `share -del garden`, `-list`, `list` — as the address's
+  // query: each -flag a parameter, a word after it its value.
+  function toQuery(line) {
+    const words = (line.match(/"[^"]*"|'[^']*'|\S+/g) || []).map(w => /^(["']).*\1$/.test(w) ? w.slice(1, -1) : w);
+    if (words[0] === 'share') words.shift();
+    const q = new URLSearchParams();
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      const flag = w.startsWith('-') ? w.replace(/^-+/, '') : i === 0 ? w : null;
+      if (!flag) throw Object.assign(new Error(`“${w}” isn't a -flag or a flag's value.`), { code: 'usage' });
+      const value = words[i + 1] !== undefined && !words[i + 1].startsWith('-') ? words[++i] : '';
+      q.append(flag, value);
+    }
+    return q.toString().replace(/=(&|$)/g, '$1');     // bare flags without =
+  }
+
+  return { COMMANDS, describe, params, find, run, toQuery };
+})();
