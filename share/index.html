@@ -191,8 +191,11 @@ const EMBED = q.has('embed') && window.parent !== window;
 const tell = msg => { if (EMBED) window.parent.postMessage({ wtw: 'share', ...msg }, location.origin); };
 
 // What goes over the wire, in order:
-//   friend -> sharer  { t: 'ask', name }     the pack its link names
-//   sharer -> friend  { t: 'pack', name, title, v, files: [{ path, size, hash }] }
+//   friend -> sharer  { t: 'ask', name, v }  the pack its link names, and the
+//                                            version of its own copy, if any
+//   sharer -> friend  { t: 'same', name, title, v }   that is this version:
+//                                                     nothing more is sent
+//                     or { t: 'pack', name, title, v, files: [{ path, size, hash }] }
 //                     or { t: 'none', name }  if this browser hasn't got it
 //   friend -> sharer  { t: 'want', paths }   the files whose hash no level
 //                                            pack in this browser has — all
@@ -387,6 +390,13 @@ function serve(conn, current) {
       }
       all = had;
       row.querySelector('span').textContent = `A friend — ${pack.title}`;
+      if (msg.v && msg.v === manifest.v) {
+        conn.send({ t: 'same', name: pack.name, title: pack.title, v: manifest.v });
+        n.textContent = 'had this version already';
+        n.parentElement.classList.add('ok');
+        finished = true;
+        return;
+      }
       conn.send({ t: 'pack', name: pack.name, title: pack.title, v: manifest.v, files: manifest.files });
       return;
     }
@@ -429,6 +439,10 @@ async function getMode(from) {
     if (have) { await haveMode(have.src, have.files); return; }
   }
   $('#getView').hidden = false;
+  // the version of the copy kept here, if any: the same at the sharer's, and
+  // nothing is sent
+  let mine = null;
+  try { mine = name && (await packStore.manifest('levels', name))?.v; } catch { /* none kept */ }
   const peer = new Peer();
   let meta = null, got = 0, total = 0, done = false;
   let kept = [];     // [{ to: path in the pack, from: { pack, path } here }]
@@ -437,7 +451,7 @@ async function getMode(from) {
     const conn = peer.connect(from, { reliable: true });
     conn.on('open', () => {
       $('#getNote').textContent = diff ? 'Connected — reading the list of files…' : 'Connected — fetching…';
-      conn.send({ t: 'ask', name: name || '' });
+      conn.send({ t: 'ask', name: name || '', v: mine || '' });
     });
     conn.on('data', async msg => {
       if (!msg) return;
@@ -446,6 +460,16 @@ async function getMode(from) {
         say('#getStatus', `Your friend's browser hasn't got ${msg.name || 'that pack'} any more.`, 'err');
         await offerOwn();
         peer.destroy();
+      } else if (msg.t === 'same') {
+        // the copy here is the sharer's very version
+        done = true;
+        conn.close();
+        peer.destroy();
+        const here = packStore.clean(msg.name);
+        if (EMBED) { tell({ kind: 'kept', name: here, title: msg.title, url: packStore.url('levels', here) + 'levelpack.json' }); return; }
+        say('#getStatus', `Nothing to fetch — your copy is the same version (${msg.v}).`, 'ok');
+        if (diff) { $('#getTitle').textContent = msg.title; $('#getNote').textContent = 'Opening the link would fetch nothing.'; $('#getBar').parentElement.hidden = true; return; }
+        await offerOwn('You have the latest version already.');
       } else if (msg.t === 'pack') {
         meta = msg;
         $('#getTitle').textContent = msg.title;
@@ -505,11 +529,12 @@ async function getMode(from) {
   });
 
   // A copy of the pack already here, maybe older: to play meanwhile.
-  async function offerOwn() {
+  async function offerOwn(note = 'You have a copy of it here already — play that one meanwhile.') {
     const src = name && await sourceNamed(name);
     if (!src) return;
     $('#getTitle').textContent = src.title;
-    $('#getNote').textContent = 'You have a copy of it here already — play that one meanwhile.';
+    $('#getNote').textContent = note;
+    $('#getBar').parentElement.hidden = true;
     $('#doneRow').hidden = false;
     $('#playBtn').onclick = async () => { location.href = src.play(await src.load()); };
     $('#passBtn').onclick = () => { location.href = `${pageUrl}?pack=${encodeURIComponent(src.key)}&go=1`; };
