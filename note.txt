@@ -1,0 +1,12 @@
+cannon ball cannon
+ladder
+rope
+static enemy
+button?
+trampolin
+block that break
+push block -> to push on block (triger)
+remote key open door only when someing on it
+plant-> different dirs
+enviroment parameters - gravity speed ??/
+alert when no player exist
