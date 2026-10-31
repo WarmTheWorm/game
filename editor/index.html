@@ -3089,7 +3089,8 @@ async function importShared(text) {
   if (shareFrame) shareFrame.remove();
   const frame = shareFrame = document.createElement('iframe');
   frame.hidden = true;
-  frame.src = `/share/?from=${encodeURIComponent(from)}&get=${encodeURIComponent(name)}&embed=1`;
+  const v = link.searchParams.get('v');     // the copy here at that version: nothing to ask
+  frame.src = `/share/?from=${encodeURIComponent(from)}&get=${encodeURIComponent(name)}${v ? '&v=' + encodeURIComponent(v) : ''}&embed=1`;
   levelMsg.textContent = `Connecting to the browser sharing "${name}"…`;
   const done = () => { window.removeEventListener('message', heard); frame.remove(); if (shareFrame === frame) shareFrame = null; };
   const heard = e => {

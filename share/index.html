@@ -26,10 +26,11 @@
                                play, share, or delete
   Taking one out always waits for a click, so a link alone can't empty
   anyone's browser. Packs on disk in levelpacks/ aren't touched.
-    share/?from=<id>&get=<name>
+    share/?from=<id>&get=<name>&v=<version>
                                a friend's link: fetch that pack from that browser
-    share/?from=<id>&get=<name>&diff
-                               ... only list the files it would fetch, and fetch none
+    ...&diff                   ... only list the files it would fetch, and fetch none
+    ...&check=1                ... ask the other browser even if the version here
+                               is the link's (for a newer one since)
     share/?help                all of these, on the page
     ...&embed=1                in a frame of another page of this address (the
                                level editor's Import): it fetches as a friend
@@ -37,10 +38,15 @@
                                where the pack is once kept, by postMessage
 
   Every browser has one id of its own (shareId, kept in localStorage), so its
-  link for a pack is the same every time: it works whenever a share page is
-  open in that browser, whichever pack that page was opened on — the friend
-  asks for the pack by name. Only one page at a time can hold the id; another
-  waits for it.
+  link works whenever a share page is open in that browser, whichever pack
+  that page was opened on — the friend asks for the pack by name. Only one
+  page at a time can hold the id; another waits for it.
+
+  The link carries the pack's version too (v, a hash of its manifest). A
+  friend whose copy is that version plays it without asking the other browser
+  at all — and can still check for a newer one. A link made before the pack
+  changed still fetches it: the friend's copy isn't the link's version, so it
+  asks, and gets whatever the sharer has now.
 
   The sharer answers with the pack's manifest (packStore.manifestOf: every
   file's hash, and a version from those). A friend fetches only the files
@@ -49,8 +55,8 @@
   the rest. A browser opening its own link just shares that pack; one with a
   copy whose sharer isn't there plays its copy. So every friend who has it can
   hand it on, with their own link, whether or not whoever they got it from is
-  still there. (Older links also carry &v=<version>: one already held at that
-  version is played without asking the other browser.)
+  still there. With the sharer, a friend sends the version of its own copy:
+  the same, the sharer says so and sends nothing more.
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <script src="/src/js/packstore.js"></script>
@@ -118,7 +124,7 @@
   <section id="sendView" class="card" hidden>
     <h2 id="sendTitle">Share a level pack</h2>
     <p id="sendNote">Pick one, then send the link to a friend. It stays the same for this browser — it works whenever a share page is open here, and the pack comes straight from your browser.</p>
-    <div class="row" id="haveRow" hidden><button class="go play" id="havePlay">▶ Play</button></div>
+    <div class="row" id="haveRow" hidden><button class="go play" id="havePlay">▶ Play</button><button id="haveCheck" hidden>Check for a newer version</button></div>
     <label>Level pack <select id="packSel"></select></label>
     <div class="row"><button class="go" id="startBtn">Share it</button><span class="status" id="sendStatus"></span></div>
     <div id="linkBox" class="row" hidden>
@@ -167,8 +173,9 @@
       <code>share/</code><span>pick a level pack and share it</span>
       <code>?pack=<i>name</i></code><span>… with that one picked — a pack on disk in levelpacks/, or <code>idb:<i>name</i></code> for one kept in this browser</span>
       <code>?pack=<i>name</i>&amp;go=1</code><span>… and shared at once (the game's and the level editor's 🔗 Share)</span>
-      <code>?from=<i>id</i>&amp;get=<i>name</i></code><span>a friend's link: fetch that pack from that browser, only the files not already here</span>
+      <code>?from=<i>id</i>&amp;get=<i>name</i>&amp;v=<i>version</i></code><span>a friend's link: fetch that pack from that browser, only the files not already here — nothing at all, without even connecting, if the copy here is that version</span>
       <code>…&amp;diff</code><span>only list the files that link would fetch, and those already here — fetch nothing</span>
+      <code>…&amp;check=1</code><span>ask the other browser even if the copy here is the link's version, for a newer one</span>
       <code>?list</code><span>the level packs kept in this browser: play, share or delete each</span>
       <code>?del</code><span>the level packs kept in this browser, to delete</span>
       <code>?del=<i>name</i></code><span>… just that one</span>
@@ -223,7 +230,7 @@ function shareId() {
   }
   return id;
 }
-const linkFor = name => `${pageUrl}?from=${encodeURIComponent(shareId())}&get=${encodeURIComponent(packStore.clean(name))}`;
+const linkFor = (name, v) => `${pageUrl}?from=${encodeURIComponent(shareId())}&get=${encodeURIComponent(packStore.clean(name))}&v=${v}`;
 
 // The pack a link names, of those this browser can send: one in its pack
 // store before one on disk of the same name.
@@ -294,7 +301,7 @@ async function sendMode(auto) {
     catch (err) { say('#sendStatus', 'Could not read it: ' + err.message, 'err'); $('#startBtn').disabled = sel.disabled = false; return; }
     const size = files.reduce((n, f) => n + f.data.byteLength, 0);
     manifest = packStore.manifestOf(files);
-    $('#linkOut').value = linkFor(pack.name);
+    $('#linkOut').value = linkFor(pack.name, manifest.v);
     $('#linkBox').hidden = false;
     say('#sendStatus', 'Opening a line…');
     // the one picked is at hand; any other a friend asks for is read then
@@ -336,6 +343,11 @@ async function haveMode(src, files) {
   $('#sendNote').textContent = 'Nothing to fetch — play it, or pass it on: this page is sharing it now, so send your own link to a friend, and keep the page open while they fetch it.';
   $('#haveRow').hidden = false;
   $('#havePlay').onclick = () => { location.href = src.play(files); };
+  // opened from someone else's link: theirs may have changed since
+  if (q.get('from') && q.get('from') !== shareId()) {
+    $('#haveCheck').hidden = false;
+    $('#haveCheck').onclick = () => { const u = new URL(location.href); u.searchParams.set('check', '1'); location.href = u.href; };
+  }
   await sendMode(src.key);
 }
 
@@ -434,8 +446,10 @@ async function getMode(from) {
     if (src && EMBED) { tell({ kind: 'kept', name: src.name, title: src.title, url: src.dir + 'levelpack.json' }); return; }
     if (src) { await haveMode(src, await src.load()); return; }
   }
-  if (name && v && !diff && !EMBED) {
+  // the link's very version here already: no need to ask the other browser
+  if (name && v && !diff && !q.has('check')) {
     const have = await haveHere(name, v);
+    if (have && EMBED) { tell({ kind: 'kept', name: have.src.name, title: have.src.title, url: have.src.dir + 'levelpack.json' }); return; }
     if (have) { await haveMode(have.src, have.files); return; }
   }
   $('#getView').hidden = false;
