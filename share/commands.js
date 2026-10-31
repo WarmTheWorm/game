@@ -1,9 +1,9 @@
 // share/commands.js — every command of the share page, in one table. A
-// command's name is its URL parameter and its flag on share/cli.html's
-// command line, and so are its options:
+// command's name is its URL parameter and its word on share/cli.html's
+// command line; its options are parameters too, each a -flag there:
 //
-//   share/?del=garden            share -del garden
-//   share/?from=wtw-…&get=x&diff  share -from wtw-… -get x -diff
+//   share/?del=garden             share del garden
+//   share/?from=wtw-…&get=x&diff  share from wtw-… -get x -diff
 //
 // so the two never drift apart: cli.html knows no command of its own — it
 // turns a command line into the page's address (toQuery), runs it there with
@@ -67,7 +67,7 @@ const ShareCommands = (() => {
     const urlValue = c.value ? (c.value.endsWith('?') ? `[=<${c.value.slice(0, -1)}>]` : `=<${c.value}>`) : '';
     const opts = Object.entries(c.options || {});
     return {
-      command: `share -${c.name}${value}` + opts.map(([k, v]) => ` [-${k}${v ? ` <${v}>` : ''}]`).join(''),
+      command: `share ${c.name}${value}` + opts.map(([k, v]) => ` [-${k}${v ? ` <${v}>` : ''}]`).join(''),
       url: `share/?${c.name}${urlValue}` + opts.map(([k, v]) => `[&${k}${v ? `=<${v}>` : ''}]`).join(''),
       about: c.about
     };
@@ -85,20 +85,22 @@ const ShareCommands = (() => {
     return c.run(p, io);
   }
 
-  // A command line — `share -del garden`, `-list`, `list` — as the address's
-  // query: each -flag a parameter, a word after it its value.
+  // A command line — `share del garden`, `share from wtw-… -get x -diff` — as
+  // the address's query: the first word is the command and a word after it
+  // its value; each -option after that a parameter too, a word after it its
+  // value. Quotes keep a value with spaces in one word.
   function toQuery(line) {
     const words = (line.match(/"[^"]*"|'[^']*'|\S+/g) || []).map(w => /^(["']).*\1$/.test(w) ? w.slice(1, -1) : w);
     if (words[0] === 'share') words.shift();
     const q = new URLSearchParams();
     for (let i = 0; i < words.length; i++) {
       const w = words[i];
-      const flag = w.startsWith('-') ? w.replace(/^-+/, '') : i === 0 ? w : null;
-      if (!flag) throw Object.assign(new Error(`“${w}” isn't a -flag or a flag's value.`), { code: 'usage' });
+      if (i === 0 ? w.startsWith('-') : !w.startsWith('-'))
+        throw Object.assign(new Error(i === 0 ? `The command comes first, without a dash: share ${w.replace(/^-+/, '')}` : `“${w}” — an option needs a dash in front: -${w}`), { code: 'usage' });
       const value = words[i + 1] !== undefined && !words[i + 1].startsWith('-') ? words[++i] : '';
-      q.append(flag, value);
+      q.append(w.replace(/^-+/, ''), value);
     }
-    return q.toString().replace(/=(&|$)/g, '$1');     // bare flags without =
+    return q.toString().replace(/=(&|$)/g, '$1');     // bare ones without =
   }
 
   return { COMMANDS, describe, params, find, run, toQuery };

@@ -8,15 +8,16 @@
   A command line in the page for the share page's commands, all in this
   browser — nothing is installed, no server is asked.
 
-    share -list                 ->  share/?list&json
-    share -del garden           ->  share/?del=garden&json
-    share -from wtw-… -get x    ->  share/?from=wtw-…&get=x&json
+    share list                  ->  share/?list&json
+    share del garden            ->  share/?del=garden&json
+    share from wtw-… -get x     ->  share/?from=wtw-…&get=x&json
 
   This page knows no share command of its own: it turns the command line into
-  the share page's address (ShareCommands.toQuery — each -flag a parameter, a
-  word after it its value), opens that in a hidden frame and prints what the
-  page posts back (share/index.html, "&json"). So a command added to
-  share/commands.js works here at once, and `share -help` is that table.
+  the share page's address (ShareCommands.toQuery — the command and each
+  -option a parameter, a word after one its value), opens that in a hidden
+  frame and prints what the page posts back (share/index.html, "&json"). So
+  a command added to share/commands.js works here at once, and `share help`
+  is that table.
 
   Its own commands: help, clear, url <share …> (the address a command is),
   open <share …> (that address as the page shows it), jobs, stop <n>.
@@ -56,7 +57,7 @@
 <div id="out" aria-live="polite"></div>
 <form id="form" autocomplete="off">
   <span id="prompt">$</span>
-  <input id="line" spellcheck="false" autocapitalize="off" aria-label="Command" placeholder="share -help">
+  <input id="line" spellcheck="false" autocapitalize="off" aria-label="Command" placeholder="share help">
 </form>
 
 <script>
@@ -103,7 +104,7 @@ function run(text, background) {
 
 function setForeground(job) {
   fg = job;
-  line.placeholder = job ? 'running — Ctrl+C stops it' : 'share -help';
+  line.placeholder = job ? 'running — Ctrl+C stops it' : 'share help';
 }
 
 function end(job, quiet) {
@@ -140,10 +141,11 @@ window.addEventListener('message', e => {
 // ---------- the shell's own commands ----------
 const OWN = {
   help: () => print([
-    'Every share command is the share page\'s own, one -flag for each of its address\'s parameters:',
-    '  share -help              what they are (from share/commands.js)',
-    '  share -list              the level packs kept in this browser',
-    '  share -del <name>        delete one (asks first)',
+    'Every share command is the share page\'s own: the command, then its -options — each a parameter of its address:',
+    '  share help               what they are (from share/commands.js)',
+    '  share list               the level packs kept in this browser',
+    '  share del <name>         delete one (asks first)',
+    '  share from <id> -get <name> -diff',
     'This shell:',
     '  url <share …>            the address a command is',
     '  open <share …>           that address in a new tab, as the share page shows it',
@@ -204,7 +206,7 @@ line.addEventListener('keydown', e => {
 out.addEventListener('click', () => { if (!getSelection().toString()) line.focus(); });
 
 print('Warm the Worm share shell — the share page\'s commands, run in this browser.', 'ok');
-print('"share -help" lists them, "help" this shell\'s own.', 'dim');
+print('"share help" lists them, "help" this shell\'s own.', 'dim');
 line.focus();
 </script>
 </body>
