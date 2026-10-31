@@ -19,7 +19,8 @@
   a command added to share/commands.js works here at once, and `share help`
   is that table.
 
-  Its own commands: help, clear, url <share …> (the address a command is),
+  -url on any share command prints its address instead of running it (as
+  does url <share …>). Its own commands: help, clear,
   open <share …> (that address as the page shows it), jobs, stop <n>.
   A command ending in & runs in the background; one that goes on (sharing)
   moves there by itself once it is going. ↑/↓ history, Ctrl+C stops the one
@@ -91,6 +92,15 @@ function addressOf(text) {
 function run(text, background) {
   let query;
   try { ({ query } = addressOf(text)); } catch (err) { print(err.message, 'err'); return; }
+  // -url, on any command: its address, not run — the shell's, not the page's
+  const params = new URLSearchParams(query);
+  if (params.has('url')) {
+    params.delete('url');
+    const q = params.toString().replace(/=(&|$)/g, '$1');
+    print(`${SHARE.href}?${q}`);
+    print(`${SHARE.href}?${q}${q ? '&' : ''}json`, 'dim');
+    return;
+  }
   const n = ++jobCount;
   const frame = document.createElement('iframe');
   frame.hidden = true;
@@ -147,7 +157,7 @@ const OWN = {
     '  share del <name>         delete one (asks first)',
     '  share from <id> -get <name> -diff',
     'This shell:',
-    '  url <share …>            the address a command is',
+    '  share <command> … -url   the address it is, as the page and as JSON — not run',
     '  open <share …>           that address in a new tab, as the share page shows it',
     '  <command> &              run it in the background',
     '  jobs, stop <n>           those running, and stopping one',
