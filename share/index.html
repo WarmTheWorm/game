@@ -24,6 +24,8 @@
                                or, in a frame of a page of this address
                                (share/cli.html, the level editor's Import),
                                posted to that page
+    ...&text                   ... as plain text laid out for reading — what
+                               share/cli.html shows
   The logic is share/core.js; the views here are for people. Deleting always
   asks first, so a link alone can't empty anyone's browser. Packs on disk in
   levelpacks/ aren't touched.
@@ -164,7 +166,7 @@
   <!-- every command this page takes, from share/commands.js -->
   <section id="helpView" class="card" hidden>
     <h2>What this page can do</h2>
-    <p>Each command is a parameter of this page's address, and the same word on the <a href="cli.html">web shell</a>'s command line, its options with a dash. Add <code>&amp;json</code> to an address for its answer as JSON.</p>
+    <p>Each command is a parameter of this page's address, and the same word on the <a href="cli.html">web shell</a>'s command line, its options with a dash. Add <code>&amp;json</code> to an address for its answer as JSON, <code>&amp;text</code> as plain text.</p>
     <div class="help" id="helpRows"></div>
     <p>Deleting always asks first, so a link alone can't empty anyone's browser.</p>
   </section>
@@ -195,20 +197,25 @@ function say(sel, text, kind = '') {
   el.className = 'status' + (kind ? ' ' + kind : '');
 }
 
-// ---------- &json ----------
-// The command's answer as data instead of a view. In a frame of another page
-// of this address — share/cli.html, the level editor's Import — it is posted
-// to that page, each message { wtw: 'share', kind, data }, kind one of
-// progress, event, stay, confirm, result, error; a confirm is answered with
+// ---------- &json, &text ----------
+// The command's answer as data, or as plain text laid out for reading (the
+// table's text()), instead of a view. In a frame of another page of this
+// address — share/cli.html, the level editor's Import — it is posted to that
+// page, each message { wtw: 'share', kind, data, text }, kind one of
+// progress, event, stay, confirm, result, error (text with &text: null for a
+// message not worth a line); a confirm is answered with
 // { wtw: 'share-answer', id, yes }. Opened by itself, it is printed here, and
 // a confirm is a click.
-async function jsonMode() {
+async function outputMode(asText) {
+  const command = ShareCommands.find(P) || ShareCommands.COMMANDS[0];
   let framed = false;
   try { framed = window.parent !== window && window.parent.location.origin === location.origin; } catch { /* another site's frame */ }
   document.body.className = 'json';
   document.body.innerHTML = '<pre id="out"></pre>';
   const post = (kind, data) => {
-    if (framed) window.parent.postMessage({ wtw: 'share', kind, data }, location.origin);
+    const text = asText ? ShareCommands.text(command, kind, data) : undefined;
+    if (framed) window.parent.postMessage({ wtw: 'share', kind, data, ...(asText ? { text } : {}) }, location.origin);
+    else if (asText) { if (text != null && kind !== 'confirm') $('#out').textContent += text + '\n'; }
     else $('#out').textContent += (kind === 'result' ? JSON.stringify(data, null, 2) : JSON.stringify({ [kind]: data })) + '\n';
   };
   let asks = 0;
@@ -460,7 +467,7 @@ async function dataMode(c) {
   catch (err) { $('#dataOut').textContent = err.message; $('#dataOut').classList.add('err'); }
 }
 
-if ('json' in P) jsonMode();
+if ('json' in P || 'text' in P) outputMode(!('json' in P));
 else {
   if (!window.isSecureContext) {
     $('#insecure').hidden = false;

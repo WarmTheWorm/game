@@ -7,7 +7,8 @@
 //
 // so the two never drift apart: cli.html knows no command of its own — it
 // turns a command line into the page's address (toQuery), runs it there with
-// &json, and prints what comes back. A command added here works on both.
+// &text (or &json), and prints what comes back. A command added here works
+// on both.
 //
 // Each command: name, `value` (what the parameter holds; a trailing ? if it
 // may be left out), `options` ({ name: what it holds, '' for a bare flag }),
@@ -16,14 +17,21 @@
 //   event(data)      something that happened, for a command that goes on
 //   stay()           it goes on (sharing) until its page is closed
 //   confirm(text)    → Promise<boolean>: asks the one running it
-// The share page also has views of its own for some (share/index.html).
+// and, for &text, `text(result)` and `eventText(event)` — without them the
+// data is laid out as it comes (plain()): a list of records as a table, a
+// record as aligned lines. The share page also has views of its own for some
+// (share/index.html).
 const ShareCommands = (() => {
   const C = ShareCore;
   const needs = (value, what) => { if (!value) throw Object.assign(new Error(`It needs ${what}.`), { code: 'usage' }); return value; };
 
+  const fmt = C.fmt;
+  const day = iso => iso ? iso.slice(0, 16).replace('T', ' ') : '';
+
   const COMMANDS = [
     { name: 'help', about: 'every command — this list',
-      run: () => COMMANDS.map(describe) },
+      run: () => COMMANDS.map(describe),
+      text: rows => rows.map(d => `${d.command}\n    ${d.about}\n    ${d.url}`).join('\n\n') },
     { name: 'del', value: 'name?', options: { get: 'name' },
       about: 'delete a level pack kept in this browser — every one, with no name; asks first',
       run: async (p, io) => {
@@ -35,21 +43,39 @@ const ShareCommands = (() => {
         const what = list.length === 1 ? `“${list[0].title}”` : `all ${list.length} level packs`;
         if (!await io.confirm(`Delete ${what} from this browser? The game in it goes too.`)) return { deleted: [], cancelled: true };
         return { deleted: await C.deletePacks(list.map(x => x.name)) };
-      } },
+      },
+      text: r => r.cancelled ? 'Nothing deleted.' : r.deleted.length ? `Deleted ${r.deleted.join(', ')}.` : 'There are no level packs in this browser.' },
     { name: 'list', about: 'the level packs kept in this browser',
-      run: () => C.listPacks() },
+      run: () => C.listPacks(),
+      text: rows => !rows.length ? 'There are no level packs in this browser.'
+        : table(rows, [['NAME', r => r.name], ['TITLE', r => r.title], ['FILES', r => r.files, true], ['SIZE', r => r.size == null ? '' : fmt(r.size), true],
+          ['VERSION', r => r.v || ''], ['UPDATED', r => day(r.updated)]]) },
     { name: 'info', value: 'name', about: "a level pack's version and every file in it — one kept here, or on disk",
-      run: p => C.packInfo(needs(p.info, 'a level pack name')) },
+      run: p => C.packInfo(needs(p.info, 'a level pack name')),
+      text: r => `${r.title} (${r.name}) — ${r.where === 'disk' ? 'on disk' : 'in this browser'}, ${r.url}\n`
+        + `version ${r.v}, ${r.files.length} files, ${fmt(r.size)}\n\n`
+        + table(r.files, [['PATH', f => f.path], ['SIZE', f => fmt(f.size), true], ['HASH', f => f.hash]]) },
     { name: 'id', about: "this browser's share id — the from= of the links it makes",
-      run: () => ({ id: C.shareId() }) },
+      run: () => ({ id: C.shareId() }),
+      text: r => r.id },
     { name: 'link', value: 'name', about: 'the link a level pack here is shared by — sharing nothing yet',
       run: async p => {
         const info = await C.packInfo(needs(p.link, 'a level pack name'));
         return { name: info.name, title: info.title, v: info.v, link: C.linkFor(info.name, info.v) };
-      } },
+      },
+      text: r => `${r.title} (version ${r.v})\n${r.link}` },
     { name: 'from', value: 'id', options: { get: 'name', v: 'version', diff: '', check: '' },
       about: "fetch a level pack from another browser — a friend's link; only the files not here, and nothing at all if this one has its version. -diff only lists them; -check asks even so",
-      run: (p, io) => C.fetchPack({ from: p.from, name: needs(p.get, '-get <name>'), v: p.v, diff: 'diff' in p, check: 'check' in p }, io.progress) },
+      run: (p, io) => C.fetchPack({ from: p.from, name: needs(p.get, '-get <name>'), v: p.v, diff: 'diff' in p, check: 'check' in p }, io.progress),
+      text: r => ({
+        own: () => `That is this browser's own link — ${r.title} is here.`,
+        have: () => `${r.title} is here already at version ${r.v} — nothing asked of the other browser. (-check asks even so.)`,
+        same: () => `${r.title}: the copy here is the other browser's version, ${r.v} — nothing to fetch.`,
+        diff: () => `${r.title}, version ${r.v}${r.update ? ' — an update to the copy here' : ''}: it would fetch ${r.fetch.length} of ${r.fetch.length + r.here.length} files, ${fmt(r.bytes)} of ${fmt(r.whole)}.`
+          + (r.fetch.length ? '\n\n' + table(r.fetch, [['FETCH', f => f.path], ['SIZE', f => fmt(f.size), true]]) : '')
+          + (r.here.length ? '\n\n' + table(r.here, [['HERE', f => f.path], ['IN', f => f.pack === r.name && f.as === f.path ? '' : f.pack]]) : ''),
+        kept: () => `${r.title}, version ${r.v}, is in this browser now: ${r.fetched} files fetched (${fmt(r.bytes)}), ${r.fromHere} from packs here.\nplay it: ${new URL(r.play, location.origin).href}`
+      }[r.status] || (() => plain(r)))() },
     { name: 'pack', value: 'name', options: { go: '' },
       about: 'share a level pack (idb:<name> for one kept here when one on disk has the same name): goes on, serving each friend, until stopped. On the page, -go starts at once',
       run: (p, io) => new Promise((resolve, reject) => {
@@ -58,8 +84,54 @@ const ShareCommands = (() => {
           friend: (n, r) => io.event({ event: 'friend', friend: n, ...r }),
           trouble: (text, final) => final ? reject(new Error(text)) : io.event({ event: 'trouble', text })
         }).catch(reject);
-      }) }
+      }),
+      // a friend's file-by-file progress only on the page; here, how each ends
+      eventText: e => e.event === 'ready' ? `Sharing ${e.title} — ${e.files} files, ${fmt(e.size)}, version ${e.v}. The link:\n${e.link}`
+        : e.event === 'friend' ? (e.state || e.progress == null ? `friend ${e.friend}${e.title ? ` — ${e.title}` : ''}: ${e.text}` : null)
+        : e.text }
   ];
+
+  // ---------- text ----------
+  // Rows as columns: cols are [heading, value of a row, right-aligned?].
+  function table(rows, cols) {
+    const cells = rows.map(r => cols.map(([, get]) => String(get(r) ?? '')));
+    const widths = cols.map(([head], i) => Math.max(head.length, ...cells.map(c => c[i].length)));
+    const line = vals => vals.map((v, i) => cols[i][2] ? v.padStart(widths[i]) : v.padEnd(widths[i])).join('  ').trimEnd();
+    return [line(cols.map(([head]) => head)), ...cells.map(line)].join('\n');
+  }
+
+  // Any data, laid out for reading: a list of records as a table (their
+  // plain values as columns), a record as aligned `key  value` lines, what is
+  // inside one indented under its key.
+  function plain(data, indent = '') {
+    const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
+    const flat = x => x === null || typeof x !== 'object';
+    if (Array.isArray(data)) {
+      if (!data.length) return indent + '(none)';
+      if (data.every(isObj)) {
+        const keys = [...new Set(data.flatMap(Object.keys))].filter(k => data.every(r => flat(r[k])));
+        return table(data, keys.map(k => [k.toUpperCase(), r => r[k], data.every(r => typeof r[k] === 'number')]))
+          .split('\n').map(l => indent + l).join('\n');
+      }
+      return data.map(x => flat(x) ? indent + x : plain(x, indent)).join('\n');
+    }
+    if (isObj(data)) {
+      const w = Math.max(0, ...Object.keys(data).map(k => k.length));
+      return Object.entries(data).map(([k, v]) => flat(v) ? `${indent}${k.padEnd(w)}  ${v}` : `${indent}${k}:\n${plain(v, indent + '  ')}`).join('\n');
+    }
+    return indent + String(data);
+  }
+
+  // What a command's output is as text: its result, an event, or progress —
+  // null for nothing worth a line.
+  function text(c, kind, data) {
+    if (kind === 'result') return c && c.text ? c.text(data) : plain(data);
+    if (kind === 'event') return c && c.eventText ? c.eventText(data) : plain(data);
+    if (kind === 'progress') return data.note || data.text || null;
+    if (kind === 'error') return data.message;
+    if (kind === 'confirm') return data.text;
+    return null;
+  }
 
   // A command as help shows it: its command line and its address.
   function describe(c) {
@@ -103,5 +175,5 @@ const ShareCommands = (() => {
     return q.toString().replace(/=(&|$)/g, '$1');     // bare ones without =
   }
 
-  return { COMMANDS, describe, params, find, run, toQuery };
+  return { COMMANDS, describe, params, find, run, toQuery, text, plain, table };
 })();

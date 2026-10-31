@@ -15,9 +15,9 @@
   This page knows no share command of its own: it turns the command line into
   the share page's address (ShareCommands.toQuery — the command and each
   -option a parameter, a word after one its value), opens that in a hidden
-  frame and prints what the page posts back (share/index.html, "&json"). So
+  frame with &text and prints what the page posts back (share/index.html). So
   a command added to share/commands.js works here at once, and `share help`
-  is that table.
+  is that table. -json on a command prints its data as JSON instead.
 
   -url on any share command prints its address instead of running it (as
   does url <share …>). Its own commands: help, clear,
@@ -76,7 +76,6 @@ function print(text, cls = '') {
   out.appendChild(div);
   out.scrollTop = out.scrollHeight;
 }
-const printJson = (data, cls = '', pretty = true) => print(JSON.stringify(data, null, pretty ? 2 : 0), cls);
 
 // ---------- jobs ----------
 // Each share command runs in a frame of the share page with &json; the
@@ -92,19 +91,27 @@ function addressOf(text) {
 function run(text, background) {
   let query;
   try { ({ query } = addressOf(text)); } catch (err) { print(err.message, 'err'); return; }
-  // -url, on any command: its address, not run — the shell's, not the page's
+  // -url and -json, on any command, are the shell's, not the page's: its
+  // address, not run; its data as JSON rather than text
   const params = new URLSearchParams(query);
+  const asJson = params.has('json');
+  params.delete('json');
+  const q = params.toString().replace(/=(&|$)/g, '$1');
+  const amp = q ? '&' : '';
   if (params.has('url')) {
     params.delete('url');
-    const q = params.toString().replace(/=(&|$)/g, '$1');
-    print(`${SHARE.href}?${q}`);
-    print(`${SHARE.href}?${q}${q ? '&' : ''}json`, 'dim');
+    const bare = params.toString().replace(/=(&|$)/g, '$1');
+    const and = bare ? '&' : '';
+    print(`${SHARE.href}?${bare}`);
+    print(`${SHARE.href}?${bare}${and}text`, 'dim');
+    print(`${SHARE.href}?${bare}${and}json`, 'dim');
     return;
   }
+  query = q + amp + (asJson ? 'json' : 'text');
   const n = ++jobCount;
   const frame = document.createElement('iframe');
   frame.hidden = true;
-  frame.src = `${SHARE.href}?${query}${query ? '&' : ''}json`;
+  frame.src = `${SHARE.href}?${query}`;
   const job = { n, line: text, frame, bg: !!background };
   jobs.set(n, job);
   document.body.appendChild(frame);
@@ -131,8 +138,10 @@ window.addEventListener('message', e => {
   if (!job) return;
   const { kind, data } = e.data;
   const tag = job.bg ? `[${job.n}] ` : '';
-  if (kind === 'progress') print(tag + JSON.stringify(data), 'dim');
-  else if (kind === 'event') print(tag + JSON.stringify(data));
+  // &text: the page's own lines (none for a message not worth one); &json: the data
+  const said = 'text' in e.data ? e.data.text : JSON.stringify(data, null, kind === 'result' ? 2 : 0);
+  if (kind === 'progress') { if (said != null) print(tag + said, 'dim'); }
+  else if (kind === 'event') { if (said != null) print(tag + said); }
   else if (kind === 'stay') {
     if (fg === job) {
       job.bg = true;
@@ -144,7 +153,7 @@ window.addEventListener('message', e => {
     print(tag + data.text + ' [y/N]', 'cmd');
     promptEl.textContent = 'y/N';
     line.focus();
-  } else if (kind === 'result') { if (tag) print(tag + 'result:', 'dim'); printJson(data, 'ok'); end(job); }
+  } else if (kind === 'result') { if (tag) print(tag + 'result:', 'dim'); print(said, 'ok'); end(job); }
   else if (kind === 'error') { print(`${tag}error: ${data.message}${data.code ? ` (${data.code})` : ''}`, 'err'); end(job); }
 });
 
@@ -157,7 +166,8 @@ const OWN = {
     '  share del <name>         delete one (asks first)',
     '  share from <id> -get <name> -diff',
     'This shell:',
-    '  share <command> … -url   the address it is, as the page and as JSON — not run',
+    '  share <command> … -url   the address it is — as the page, as text, as JSON — not run',
+    '  share <command> … -json  its answer as JSON, not text',
     '  open <share …>           that address in a new tab, as the share page shows it',
     '  <command> &              run it in the background',
     '  jobs, stop <n>           those running, and stopping one',
