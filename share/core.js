@@ -20,6 +20,10 @@
 //   sharer -> friend  { t: 'file', path, data: ArrayBuffer }   one per file wanted,
 //   friend -> sharer  { t: 'got', path }                        each answered
 //   sharer -> friend  { t: 'end' }
+// A sharer answers only for packs marked shared in its browser (setShared):
+// any other name is 'none', as if it weren't there — one link handed on
+// mustn't reach every pack this browser keeps.
+//
 // The friend's new copy is the files sent and, for the rest, the same bytes
 // from whichever pack here has them; files the pack no longer has go. One
 // file at a time, each waited for, so neither side holds the whole pack in
@@ -50,6 +54,23 @@ const ShareCore = (() => {
     return files.some(f => (f.path || f.name) === 'index.html') ? dir + 'index.html' : `/src/index.html?pack=${encodeURIComponent(dir + 'levelpack.json')}`;
   };
   const readStored = async name => Promise.all((await packStore.files('levels', name)).map(async f => ({ path: f.name, data: await f.data.arrayBuffer() })));
+
+  // ---------- which packs are shared ----------
+  // The names of the packs this browser lets friends fetch, kept in its
+  // localStorage. A pack is shared on purpose — Share it, `share open`,
+  // `share pack` — never by a link alone.
+  const SHARED_KEY = 'wtwSharedPacks';
+  function sharedNames() {
+    try { return new Set(JSON.parse(localStorage.getItem(SHARED_KEY) || '[]')); } catch { return new Set(); }
+  }
+  const isShared = name => sharedNames().has(clean(String(name).replace(/^idb:/, '')));
+  function setShared(name, on) {
+    const names = sharedNames(), key = clean(String(name).replace(/^idb:/, ''));
+    if (on) names.add(key); else names.delete(key);
+    try { localStorage.setItem(SHARED_KEY, JSON.stringify([...names].sort())); }
+    catch { throw error('store', "This browser won't keep which packs are shared (its storage is off)."); }
+    return on;
+  }
 
   // ---------- what this browser has ----------
   // The level packs this browser can send: those on disk (levelpacks/index.json
@@ -117,7 +138,7 @@ const ShareCore = (() => {
       let m = null;
       try { m = await packStore.manifest('levels', p.name); } catch { /* unreadable */ }
       out.push({ name: p.name, title: p.title || p.name, files: p.count, size: m ? m.files.reduce((n, f) => n + f.size, 0) : null,
-        v: m ? m.v : null, updated: new Date(p.updated).toISOString(), url: packStore.url('levels', p.name) });
+        v: m ? m.v : null, shared: isShared(p.name), updated: new Date(p.updated).toISOString(), url: packStore.url('levels', p.name) });
     }
     return out;
   }
@@ -128,7 +149,7 @@ const ShareCore = (() => {
     if (!src) throw error('missing', `There is no level pack called ${name} here.`);
     const m = packStore.manifestOf(await src.load());
     return { name: src.name, title: src.title, key: src.key, where: src.key.startsWith('idb:') ? 'browser' : 'disk', url: src.dir,
-      v: m.v, size: m.files.reduce((n, f) => n + f.size, 0), files: m.files };
+      shared: isShared(src.name), v: m.v, size: m.files.reduce((n, f) => n + f.size, 0), files: m.files };
   }
 
   // A pack — kept here or on disk — as a .zip of its files at their paths,
@@ -159,7 +180,11 @@ const ShareCore = (() => {
   // Deletes from this browser's store one pack, or every one; the names gone.
   async function deletePacks(names) {
     const gone = [];
-    for (const name of names) { await packStore.remove('levels', name); gone.push(name); }
+    for (const name of names) {
+      await packStore.remove('levels', name);
+      try { setShared(name, false); } catch { /* not kept anyway */ }
+      gone.push(name);
+    }
     return gone;
   }
 
@@ -225,6 +250,8 @@ const ShareCore = (() => {
     };
     conn.on('data', async msg => {
       if (msg && msg.t === 'ask') {
+        // only a pack this browser shares — any other as if it weren't here
+        if (!isShared(msg.name || '')) { conn.send({ t: 'none', name: msg.name }); fail(`asked for ${msg.name}, which isn't shared`); return; }
         let { pack, files: had, manifest } = current();
         if (clean(msg.name) !== clean(pack.name)) {
           pack = await sourceNamed(msg.name);
@@ -309,7 +336,7 @@ const ShareCore = (() => {
         });
         conn.on('data', async msg => {
           if (!msg || done) return;
-          if (msg.t === 'none') fail('none', `Your friend's browser hasn't got ${msg.name || 'that pack'} any more.`);
+          if (msg.t === 'none') fail('none', `Your friend's browser isn't sharing ${msg.name || 'that pack'}.`);
           else if (msg.t === 'same') {
             const here = clean(msg.name);
             finish(resolve, { ...stored(here, msg.title), status: 'same', v: msg.v });
@@ -370,5 +397,5 @@ const ShareCore = (() => {
     });
   }
 
-  return { fmt, pageUrl, clean, shareId, linkFor, playUrl, sources, sourceNamed, haveHere, listPacks, packInfo, deletePacks, zipPack, readPackZip, share, fetchPack };
+  return { fmt, pageUrl, clean, shareId, linkFor, playUrl, sharedNames, isShared, setShared, sources, sourceNamed, haveHere, listPacks, packInfo, deletePacks, zipPack, readPackZip, share, fetchPack };
 })();

@@ -265,6 +265,8 @@ async function sendMode(auto) {
   $('#startBtn').onclick = async () => {
     const pack = list.find(p => p.key === sel.value);
     if (!pack) return;
+    // a click on Share it is what shares a pack
+    try { ShareCore.setShared(pack.name, true); } catch (err) { say('#sendStatus', err.message, 'err'); return; }
     $('#startBtn').disabled = sel.disabled = true;
     say('#sendStatus', 'Reading the pack…');
     const rows = new Map();
@@ -288,7 +290,9 @@ async function sendMode(auto) {
     catch { $('#linkOut').select(); document.execCommand('copy'); $('#copyBtn').textContent = 'Copied'; }
     setTimeout(() => $('#copyBtn').textContent = 'Copy', 1500);
   };
-  if (picked && auto) $('#startBtn').click();
+  // at once only for a pack shared already: a link alone shares nothing
+  if (picked && auto && ShareCore.isShared(picked.name)) $('#startBtn').click();
+  else if (picked && auto) say('#sendStatus', `Press Share it to let friends with your link fetch ${picked.title}.`);
 }
 
 // One friend's row: who, how far.
@@ -396,7 +400,7 @@ async function listMode() {
   const draw = async () => {
     const list = (await ShareCore.sources()).filter(p => p.key.startsWith('idb:'));
     $('#listRows').innerHTML = list.map((p, i) => `<div class="row">
-      <span class="status" style="flex:1;min-width:12ch">${esc(p.title)}<br><small>${p.count} files</small></span>
+      <span class="status" style="flex:1;min-width:12ch">${esc(p.title)}<br><small>${p.count} files${ShareCore.isShared(p.name) ? ' · shared' : ''}</small></span>
       <button class="go" data-play="${i}">▶ Play</button>
       <button data-share="${i}">Share</button>
       <button data-out="${i}" title="Delete it from this browser">🗑 Delete</button></div>`).join('');

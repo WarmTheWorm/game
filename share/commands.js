@@ -55,8 +55,27 @@ const ShareCommands = (() => {
     { name: 'list', about: 'the level packs kept in this browser',
       run: () => C.listPacks(),
       text: rows => !rows.length ? 'There are no level packs in this browser.'
-        : table(rows, [['NAME', r => r.name], ['TITLE', r => r.title], ['FILES', r => r.files, true], ['SIZE', r => r.size == null ? '' : fmt(r.size), true],
-          ['VERSION', r => r.v || ''], ['UPDATED', r => day(r.updated)]]) },
+        : table(rows, [['NAME', r => r.name], ['TITLE', r => r.title], ['SHARED', r => r.shared ? 'yes' : ''], ['FILES', r => r.files, true],
+          ['SIZE', r => r.size == null ? '' : fmt(r.size), true], ['VERSION', r => r.v || ''], ['UPDATED', r => day(r.updated)]]) },
+    { name: 'open', value: 'name', about: 'share a level pack: friends with your share link may fetch it whenever a share page is open here; asks first',
+      run: async (p, io) => {
+        const src = await C.sourceNamed(needs(p.open, 'a level pack name'));
+        if (!src) throw Object.assign(new Error(`There is no level pack called ${p.open} here.`), { code: 'missing' });
+        const info = await C.packInfo(src.key);
+        const result = { name: src.name, title: src.title, shared: true, link: C.linkFor(src.name, info.v) };
+        if (C.isShared(src.name)) return { ...result, already: true };
+        if (!await io.confirm(`Share “${src.title}”? Anyone with your share link can fetch it while a share page is open in this browser.`)) return { name: src.name, title: src.title, shared: false, cancelled: true };
+        C.setShared(src.name, true);
+        return result;
+      },
+      text: r => r.cancelled ? `${r.title} is not shared.` : `${r.title} is ${r.already ? 'shared already' : 'shared now'}. Its link:\n${r.link}` },
+    { name: 'close', value: 'name?', options: { all: '' }, about: 'stop sharing a level pack — or, with -all, every one; friends asking for it get nothing',
+      run: p => {
+        const names = 'all' in p && !p.close ? [...C.sharedNames()] : [C.clean(needs(p.close, 'a level pack name, or -all'))];
+        for (const n of names) C.setShared(n, false);
+        return { closed: names };
+      },
+      text: r => r.closed.length ? `Not shared any more: ${r.closed.join(', ')}.` : 'No pack was shared.' },
     { name: 'info', value: 'name', about: "a level pack's version and every file in it — one kept here, or on disk",
       run: p => C.packInfo(needs(p.info, 'a level pack name')),
       text: r => `${r.title} (${r.name}) — ${r.where === 'disk' ? 'on disk' : 'in this browser'}, ${r.url}\n`
@@ -104,14 +123,21 @@ const ShareCommands = (() => {
         kept: () => `${r.title}, version ${r.v}, is in this browser now: ${r.fetched} files fetched (${fmt(r.bytes)}), ${r.fromHere} from packs here.\nplay it: ${new URL(r.play, location.origin).href}`
       }[r.status] || (() => plain(r)))() },
     { name: 'pack', value: 'name', options: { go: '' },
-      about: 'share a level pack (idb:<name> for one kept here when one on disk has the same name): goes on, serving each friend, until stopped. On the page, -go starts at once',
-      run: (p, io) => new Promise((resolve, reject) => {
-        C.share(needs(p.pack, 'a level pack name'), {
+      about: 'share a level pack (idb:<name> for one kept here when one on disk has the same name): goes on, serving each friend, until stopped; asks first if it isn\'t shared yet. On the page, -go starts at once — for a pack shared already',
+      run: async (p, io) => {
+        const src = await C.sourceNamed(needs(p.pack, 'a level pack name'));
+        if (!src) throw Object.assign(new Error(`There is no level pack called ${p.pack} here.`), { code: 'missing' });
+        if (!C.isShared(src.name)) {
+          if (!await io.confirm(`Share “${src.title}”? Anyone with your share link can fetch it while a share page is open in this browser.`)) return { name: src.name, cancelled: true };
+          C.setShared(src.name, true);
+        }
+        return new Promise((resolve, reject) => C.share(src.key, {
           ready: d => { io.event({ event: 'ready', ...d }); io.stay(); },
           friend: (n, r) => io.event({ event: 'friend', friend: n, ...r }),
           trouble: (text, final) => final ? reject(new Error(text)) : io.event({ event: 'trouble', text })
-        }).catch(reject);
-      }),
+        }).catch(reject));
+      },
+      text: r => r.cancelled ? 'Not shared.' : plain(r),
       // a friend's file-by-file progress only on the page; here, how each ends
       eventText: e => e.event === 'ready' ? `Sharing ${e.title} — ${e.files} files, ${fmt(e.size)}, version ${e.v}. The link:\n${e.link}`
         : e.event === 'friend' ? (e.state || e.progress == null ? `friend ${e.friend}${e.title ? ` — ${e.title}` : ''}: ${e.text}` : null)

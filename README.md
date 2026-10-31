@@ -103,6 +103,10 @@ kept in the browser:
   a command line in the page, runs the same commands — `share list`,
   `share del garden`, `share get <name> -from <id> -diff` — through that
   address.
+  A browser answers a friend only for the packs it marks shared (`share
+  open <name>`, `share close <name>`, the SHARED column of `share list`): a
+  pack is marked by pressing Share it or saying yes to `share pack`, never by
+  a link alone, so `?pack=…&go=1` starts at once only for one shared already.
 
 A static server cannot list folders, so the packs on disk are listed in
 `assetpacks/index.json` and `levelpacks/index.json`, which `npm run build`
