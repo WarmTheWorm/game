@@ -82,7 +82,8 @@ kept in the browser:
   plays (`/src/index.html?pack=/__idb/levels/<name>/levelpack.json&assets=...`).
   Its **level pack** button lists them, with **+ New**, **⧉ Duplicate** and
   **✎ Rename** (or double-click it) first, as the creator's pack button;
-  **Import…** adds one from `levelpacks/index.json` or a `.zip`, and **⬇ Export .zip** saves the open one
+  **Import…** adds one from `levelpacks/index.json`, a `.zip`, or another
+  browser's share link (fetched through `share/` in a hidden frame), and **⬇ Export .zip** saves the open one
   with its whole asset pack. As in the creator, a `*` marks changes never
   exported: **Remove** takes a level pack without one out at once, a red
   **Delete** asks first; with none left, only Import is offered;

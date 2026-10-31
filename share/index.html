@@ -31,6 +31,10 @@
     share/?from=<id>&get=<name>&diff
                                ... only list the files it would fetch, and fetch none
     share/?help                all of these, on the page
+    ...&embed=1                in a frame of another page of this address (the
+                               level editor's Import): it fetches as a friend
+                               would, and tells that page how it goes, and
+                               where the pack is once kept, by postMessage
 
   Every browser has one id of its own (shareId, kept in localStorage), so its
   link for a pack is the same every time: it works whenever a share page is
@@ -182,6 +186,9 @@ const $ = s => document.querySelector(s);
 const q = new URLSearchParams(location.search);
 const fmt = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`;
 const pageUrl = new URL(location.pathname, location.origin).href;
+// fetching for the page this one is a frame of
+const EMBED = q.has('embed') && window.parent !== window;
+const tell = msg => { if (EMBED) window.parent.postMessage({ wtw: 'share', ...msg }, location.origin); };
 
 // What goes over the wire, in order:
 //   friend -> sharer  { t: 'ask', name }     the pack its link names
@@ -239,7 +246,7 @@ async function sources() {
   try {
     const res = await fetch('/levelpacks/index.json', { cache: 'no-store' });
     if (res.ok) for (const p of await res.json()) if (Array.isArray(p.files)) {
-      out.push({ key: p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — levelpacks/${p.name}`,
+      out.push({ key: p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — levelpacks/${p.name}`, dir: p.dir,
         play: files => files.some(f => f.path === 'index.html') ? p.dir + 'index.html' : `/src/index.html?pack=${encodeURIComponent(p.dir + 'levelpack.json')}`,
         version: async function () { return versionOf(await this.load()); },
         load: async () => Promise.all(p.files.map(async path => {
@@ -253,6 +260,7 @@ async function sources() {
     for (const p of await packStore.list('levels')) {
       if (p.name.startsWith('__')) continue;     // the editor's passing copies
       out.push({ key: 'idb:' + p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — in this browser`, count: p.count,
+        dir: packStore.url('levels', p.name),
         play: files => playUrl(p.name, files),
         version: async () => (await packStore.manifest('levels', p.name))?.v,
         load: () => readStored(p.name) });
@@ -409,12 +417,14 @@ function serve(conn, current) {
 async function getMode(from) {
   const name = q.get('get') && packStore.clean(q.get('get')), v = q.get('v');
   const diff = q.has('diff');
-  // this browser's own link: share that pack from here
+  // this browser's own link: share that pack from here — or, in a frame,
+  // just say where it is
   if (name && from === shareId() && !diff) {
     const src = await sourceNamed(name);
+    if (src && EMBED) { tell({ kind: 'kept', name: src.name, title: src.title, url: src.dir + 'levelpack.json' }); return; }
     if (src) { await haveMode(src, await src.load()); return; }
   }
-  if (name && v && !diff) {
+  if (name && v && !diff && !EMBED) {
     const have = await haveHere(name, v);
     if (have) { await haveMode(have.src, have.files); return; }
   }
@@ -532,6 +542,7 @@ async function keep(meta, files) {
     await packStore.put('levels', meta.name, files, meta.title);
   } catch (err) { say('#getStatus', 'Could not keep it: ' + err.message, 'err'); return; }
   const name = packStore.clean(meta.name);
+  tell({ kind: 'kept', name, title: meta.title, url: packStore.url('levels', name) + 'levelpack.json' });
   const play = playUrl(name, files);
   say('#getStatus', `${meta.title} is in this browser now — it stays here.`, 'ok');
   $('#getNote').textContent = 'All here.';
@@ -551,6 +562,7 @@ if (!window.isSecureContext) {
 }
 
 function say(sel, text, kind = '') {
+  if (sel === '#getStatus' && kind !== 'ok') tell({ kind: kind === 'err' ? 'error' : 'progress', text });
   const el = $(sel);
   el.textContent = text;
   el.className = 'status' + (kind ? ' ' + kind : '');
