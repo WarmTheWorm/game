@@ -107,6 +107,18 @@ kept in the browser:
   open <name>`, `share close <name>`, the SHARED column of `share list`): a
   pack is marked by pressing Share it or saying yes to `share pack`, never by
   a link alone, so `?pack=…&go=1` starts at once only for one shared already.
+- Every pack goes about with a **card** (`share/cards.js`) its author's
+  browser signs: `<author id>/<name>`, a version number, every file's hash,
+  the author's share id, and any web folders it is put up in. A copy passed
+  on by anyone is checked against it, and only the author can sign a newer
+  one. `share latest <name>` asks the author's browser, those the pack came
+  from and its web folders for a newer version, and `-get` fetches only the
+  changed files; the share page asks by itself when it opens a pack you
+  have. `share card <name> -web <url>` adds a web folder: `share download`
+  puts `card.json` in the .zip, and unzipped there it serves the pack while
+  every browser is closed. `share author -export` saves the signing key —
+  without it nobody, you included, can sign a new version of your packs.
+  Signing needs https or localhost.
 
 The store keeps a file's bytes once, under its SHA-256, however many packs
 hold it — level packs carry their asset pack's art and sounds, so most of
