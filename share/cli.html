@@ -49,6 +49,7 @@
   .ok { color: var(--mint); }
   form { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); background: var(--panel); }
   #prompt { color: var(--mint); white-space: nowrap; }
+  .pickbtn { font: inherit; color: #1c1430; background: var(--amber); border: 0; border-radius: 5px; padding: 3px 10px; cursor: pointer; }
   #line { flex: 1; min-width: 0; font: inherit; color: var(--fg); background: transparent; border: 0; outline: none; }
   #line::placeholder { color: var(--muted); }
 </style>
@@ -148,6 +149,30 @@ window.addEventListener('message', e => {
       setForeground(null);
       print(`[${job.n}] goes on in the background — "stop ${job.n}" ends it, "jobs" lists them`, 'dim');
     }
+  } else if (kind === 'save') {
+    // the page's file, kept here: a frame can't download it itself
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(data.blob), download: data.filename });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    print(`${tag}saved ${data.filename} — to your downloads`, 'dim');
+  } else if (kind === 'pick') {
+    // a file is only asked for on a click: a button for it, here
+    const answer = file => { div.remove(); job.frame.contentWindow.postMessage({ wtw: 'share-answer', id: data.id, file }, location.origin); };
+    const div = document.createElement('div');
+    div.innerHTML = '<button type="button" class="pickbtn"></button> <span class="dim">or Ctrl+C</span>';
+    const b = div.firstChild;
+    b.textContent = tag + data.text + '…';
+    b.onclick = () => {
+      const input = Object.assign(document.createElement('input'), { type: 'file', accept: data.accept || '' });
+      input.onchange = () => { print(`${tag}${input.files[0] ? input.files[0].name : 'nothing chosen'}`, 'cmd'); answer(input.files[0] || null); };
+      input.oncancel = () => { print(`${tag}nothing chosen`, 'cmd'); answer(null); };
+      input.click();
+    };
+    out.appendChild(div);
+    out.scrollTop = out.scrollHeight;
+    b.focus();
   } else if (kind === 'confirm') {
     asking = { job, id: data.id };
     print(tag + data.text + ' [y/N]', 'cmd');
@@ -165,6 +190,7 @@ const OWN = {
     '  share list               the level packs kept in this browser',
     '  share del <name>         delete one (asks first)',
     "  share get <name> -from <id> -diff   what a friend's link would fetch",
+    '  share download <name>    save a level pack as a .zip; share upload [<name>] keeps one from a .zip',
     'This shell:',
     '  share <command> … -url   the address it is — as the page, as text, as JSON — not run',
     '  share <command> … -json  its answer as JSON, not text',

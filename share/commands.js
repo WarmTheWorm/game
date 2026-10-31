@@ -18,6 +18,8 @@
 //   event(data)      something that happened, for a command that goes on
 //   stay()           it goes on (sharing) until its page is closed
 //   confirm(text)    → Promise<boolean>: asks the one running it
+//   save(blob, filename)   hands a file to the one running it, to keep
+//   pick(accept, text)     → Promise<File|null>: asks them for a file
 // and, for &text, `text(result)` and `eventText(event)` — without them the
 // data is laid out as it comes (plain()): a list of records as a table, a
 // record as aligned lines. The share page also has views of its own for some
@@ -69,6 +71,25 @@ const ShareCommands = (() => {
         return { name: info.name, title: info.title, v: info.v, link: C.linkFor(info.name, info.v) };
       },
       text: r => `${r.title} (version ${r.v})\n${r.link}` },
+    { name: 'download', value: 'name', about: 'a level pack — kept here or on disk — saved to this computer as a .zip',
+      run: async (p, io) => {
+        const z = await C.zipPack(needs(p.download, 'a level pack name'));
+        await io.save(z.blob, z.filename);
+        return { name: z.name, title: z.title, files: z.files, size: z.blob.size, saved: z.filename };
+      },
+      text: r => `Saved ${r.title} as ${r.saved} — ${r.files} files, ${fmt(r.size)}.` },
+    { name: 'upload', value: 'name?', about: "a level pack's .zip from this computer, kept in this browser — under its own name, or the one given; asks before replacing one",
+      run: async (p, io) => {
+        const file = await io.pick('.zip,application/zip', 'Choose a level pack .zip');
+        if (!file) return { cancelled: true };
+        const z = await C.readPackZip(file, p.upload);
+        const replaced = (await C.listPacks()).some(x => x.name === z.name);
+        if (replaced && !await io.confirm(`Replace “${z.name}” in this browser with ${file.name}?`)) return { cancelled: true };
+        await packStore.put('levels', z.name, z.files, z.title);
+        const m = await packStore.manifest('levels', z.name);
+        return { name: z.name, title: z.title, files: z.files.length, size: m.files.reduce((n, f) => n + f.size, 0), v: m.v, replaced, from: file.name, url: packStore.url('levels', z.name) };
+      },
+      text: r => r.cancelled ? 'Nothing kept.' : `${r.replaced ? 'Replaced' : 'Kept'} ${r.title} (${r.name}) in this browser from ${r.from} — ${r.files} files, ${fmt(r.size)}, version ${r.v}.` },
     // a friend's link (?from=<id>&get=<name>&v=<version>) is this command
     { name: 'get', value: 'name', options: { from: 'id!', v: 'version', diff: '', check: '' },
       about: "fetch a level pack from another browser — a friend's link; only the files not here, and nothing at all if this one has its version. -diff only lists them; -check asks even so",
@@ -135,7 +156,8 @@ const ShareCommands = (() => {
     if (kind === 'event') return c && c.eventText ? c.eventText(data) : plain(data);
     if (kind === 'progress') return data.note || data.text || null;
     if (kind === 'error') return data.message;
-    if (kind === 'confirm') return data.text;
+    if (kind === 'confirm' || kind === 'pick') return data.text;
+    if (kind === 'save') return `saving ${data.filename}`;
     return null;
   }
 

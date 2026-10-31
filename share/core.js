@@ -4,7 +4,8 @@
 // share page's views, its JSON output and share/cli.html (through that) are
 // all the same code. share/commands.js is the table of commands over it.
 //
-// Needs packStore (src/js/packstore.js) and, to share or fetch, PeerJS.
+// Needs packStore (src/js/packstore.js), zipBlob/readZip (src/js/zip.js) for
+// .zip files, and, to share or fetch, PeerJS.
 //
 // What goes over the wire, in order:
 //   friend -> sharer  { t: 'ask', name, v }  the pack its link names, and the
@@ -128,6 +129,31 @@ const ShareCore = (() => {
     const m = packStore.manifestOf(await src.load());
     return { name: src.name, title: src.title, key: src.key, where: src.key.startsWith('idb:') ? 'browser' : 'disk', url: src.dir,
       v: m.v, size: m.files.reduce((n, f) => n + f.size, 0), files: m.files };
+  }
+
+  // A pack — kept here or on disk — as a .zip of its files at their paths,
+  // as levelpacks/<name>/ holds them.
+  async function zipPack(name) {
+    const src = await sourceNamed(name);
+    if (!src) throw error('missing', `There is no level pack called ${name} here.`);
+    const files = await src.load();
+    const blob = zipBlob(files.map(f => ({ name: f.path, data: new Uint8Array(f.data) })));
+    return { name: src.name, title: src.title, files: files.length, blob, filename: `${clean(src.name)}.zip` };
+  }
+
+  // A level pack's .zip, read: its files (those under the folder its
+  // levelpack.json is in, if it is in one), its title, and the name it is kept
+  // under — `name`, or that folder's, or the zip's own.
+  async function readPackZip(file, name) {
+    const all = await readZip(await file.arrayBuffer());
+    const lib = [...all.keys()].filter(k => k === 'levelpack.json' || k.endsWith('/levelpack.json')).sort((a, b) => a.length - b.length)[0];
+    if (!lib) throw error('notpack', `${file.name} is no level pack: there is no levelpack.json in it.`);
+    const root = lib.slice(0, -'levelpack.json'.length);
+    const files = [...all].filter(([k]) => k.startsWith(root)).map(([k, data]) => ({ name: k.slice(root.length), data }));
+    const here = clean(name || root.split('/').filter(Boolean).pop() || file.name.replace(/\.zip$/i, ''));
+    let title = here;
+    try { title = JSON.parse(new TextDecoder().decode(all.get(lib))).name || here; } catch { /* its name, then */ }
+    return { name: here, title, files };
   }
 
   // Deletes from this browser's store one pack, or every one; the names gone.
@@ -344,5 +370,5 @@ const ShareCore = (() => {
     });
   }
 
-  return { fmt, pageUrl, clean, shareId, linkFor, playUrl, sources, sourceNamed, haveHere, listPacks, packInfo, deletePacks, share, fetchPack };
+  return { fmt, pageUrl, clean, shareId, linkFor, playUrl, sources, sourceNamed, haveHere, listPacks, packInfo, deletePacks, zipPack, readPackZip, share, fetchPack };
 })();

@@ -182,6 +182,7 @@
   <p class="foot"><a href="?help">All commands</a> · <a href="cli.html">Web shell</a></p>
 </main>
 
+<script src="/src/js/zip.js"></script>
 <script src="/share/core.js"></script>
 <script src="/share/commands.js"></script>
 <script>
@@ -203,10 +204,12 @@ function say(sel, text, kind = '') {
 // table's text()), instead of a view. In a frame of another page of this
 // address — share/cli.html, the level editor's Import — it is posted to that
 // page, each message { wtw: 'share', kind, data, text }, kind one of
-// progress, event, stay, confirm, result, error (text with &text: null for a
-// message not worth a line); a confirm is answered with
-// { wtw: 'share-answer', id, yes }. Opened by itself, it is printed here, and
-// a confirm is a click.
+// progress, event, stay, confirm, pick, save, result, error (text with
+// &text: null for a message not worth a line); a confirm is answered with
+// { wtw: 'share-answer', id, yes }, a pick with { …, id, file } (null for
+// none); a save hands that page { blob, filename } to keep. Opened by itself,
+// it is printed here, a confirm is a click, a pick a button, and a save a
+// download.
 async function outputMode(asText) {
   const command = ShareCommands.find(P) || ShareCommands.COMMANDS[0];
   let framed = false;
@@ -220,24 +223,27 @@ async function outputMode(asText) {
     else $('#out').textContent += (kind === 'result' ? JSON.stringify(data, null, 2) : JSON.stringify({ [kind]: data })) + '\n';
   };
   let asks = 0;
-  const io = {
+  // asks the page this one is a frame of, and waits for its answer
+  const askParent = (kind, data, answer) => {
+    const id = ++asks;
+    return new Promise(resolve => {
+      const heard = e => {
+        if (e.source !== window.parent || !e.data || e.data.wtw !== 'share-answer' || e.data.id !== id) return;
+        window.removeEventListener('message', heard);
+        resolve(answer(e.data));
+      };
+      window.addEventListener('message', heard);
+      post(kind, { id, ...data });
+    });
+  };
+  const io = framed ? {
     progress: d => post('progress', d),
     event: d => post('event', d),
     stay: () => post('stay', {}),
-    confirm: text => {
-      if (!framed) return Promise.resolve(window.confirm(text));
-      const id = ++asks;
-      return new Promise(resolve => {
-        const heard = e => {
-          if (e.source !== window.parent || !e.data || e.data.wtw !== 'share-answer' || e.data.id !== id) return;
-          window.removeEventListener('message', heard);
-          resolve(!!e.data.yes);
-        };
-        window.addEventListener('message', heard);
-        post('confirm', { id, text });
-      });
-    }
-  };
+    confirm: text => askParent('confirm', { text }, a => !!a.yes),
+    pick: (accept, text) => askParent('pick', { accept, text }, a => a.file || null),
+    save: async (blob, filename) => post('save', { blob, filename })
+  } : { ...hereIo(), progress: d => post('progress', d), event: d => post('event', d), stay() {} };
   try { post('result', await ShareCommands.run(P, io)); }
   catch (err) { post('error', { message: err.message, code: err.code || 'error' }); }
 }
@@ -458,13 +464,42 @@ function helpMode() {
     `<code>${esc(d.command)}</code><span>${esc(d.about)}<br><small><code>${esc(d.url)}</code></small></span>`).join('');
 }
 
+// A command's io on a page opened by itself: a confirm is a click, a pick a
+// button (a file can only be asked for on a click), a save a download.
+function hereIo() {
+  return {
+    progress() {}, event() {}, stay() {},
+    confirm: text => Promise.resolve(window.confirm(text)),
+    pick: (accept, text) => new Promise(resolve => {
+      const row = document.createElement('p');
+      row.className = 'pick';
+      row.innerHTML = '<button class="go"></button>';
+      const b = row.firstChild;
+      b.textContent = text + '…';
+      b.onclick = () => {
+        const input = Object.assign(document.createElement('input'), { type: 'file', accept });
+        input.onchange = () => { row.remove(); resolve(input.files[0] || null); };
+        input.oncancel = () => { row.remove(); resolve(null); };
+        input.click();
+      };
+      ($('#dataView:not([hidden])') || document.body).appendChild(row);
+    }),
+    save: async (blob, filename) => {
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: filename });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    }
+  };
+}
+
 // A command with no view of its own: its answer, as the JSON it gives.
 async function dataMode(c) {
   $('#dataView').hidden = false;
   $('#dataTitle').textContent = `-${c.name}`;
   $('#dataNote').innerHTML = `${esc(c.about)} — as JSON: <a href="${esc(location.search + '&json')}">${esc(location.search)}&amp;json</a>`;
-  const io = { progress() {}, event() {}, stay() {}, confirm: text => Promise.resolve(confirm(text)) };
-  try { $('#dataOut').textContent = JSON.stringify(await ShareCommands.run(P, io), null, 2); }
+  try { $('#dataOut').textContent = JSON.stringify(await ShareCommands.run(P, hereIo()), null, 2); }
   catch (err) { $('#dataOut').textContent = err.message; $('#dataOut').classList.add('err'); }
 }
 
