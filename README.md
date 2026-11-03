@@ -92,9 +92,9 @@ kept in the browser:
   (from `levelpacks/` or the browser's store), send the link it gives, and the
   friend's browser copies it into its own store and plays it from
   `/__idb/levels/<name>/index.html`. The browsers meet through PeerJS's public
-  broker; the files go straight between them, so the sharer's page stays open
-  until it's done. A pack fetched this way can be shared on in turn. The
-  game's start screen and the level editor's **🔗 Share** open it on their own
+  broker; the files go straight between them, in small pieces. A pack fetched
+  this way can be shared on in turn. The game's start screen and the level
+  editor's **🔗 Share** open it on their own
   level pack; `share/?list` lists the level packs kept in the browser, `share/?del` takes
   ones kept in the browser out, `&diff` on a friend's link only lists the
   files it would fetch, and `share/?help` lists all of these. Every command
@@ -103,10 +103,19 @@ kept in the browser:
   a command line in the page, runs the same commands — `share list`,
   `share del garden`, `share get <name> -from <id> -diff` — through that
   address.
-  A browser answers a friend only for the packs it marks shared (`share
-  open <name>`, `share close <name>`, the SHARED column of `share list`): a
-  pack is marked by pressing Share it or saying yes to `share pack`, never by
-  a link alone, so `?pack=…&go=1` starts at once only for one shared already.
+- Sharing belongs to the browser, not to a page. Every page of the game and
+  its tools runs `src/js/sharehost.js`: they meet in a room (a
+  `BroadcastChannel`) and queue for a Web Lock. The page holding it is the
+  master, which alone loads the sharing code and holds the browser's share id;
+  when it closes the next page takes over, and a friend cut off mid-way carries
+  on from where it stopped. A game page hands the lock on if another kind of
+  page is waiting, and sends more gently if it can't. Pages have full rights;
+  a friend's line has no message that writes or deletes anything.
+- Every pack is public unless made private (`share private <name>`, `share
+  public <name>`, the level editor's **🌐 Public** button, `share/?list`); a
+  private pack answers as if it weren't there. `share sharing [on|off]` or the
+  editor's **📡 Sharing** button switches all of it for the whole browser.
+  Anyone with the share id and a public pack's name can fetch that pack.
 - Every pack goes about with a **card** (`share/cards.js`) its author's
   browser signs: `<author id>/<name>`, a version number, every file's hash,
   the author's share id, and any web folders it is put up in. A copy passed
