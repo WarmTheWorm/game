@@ -120,6 +120,10 @@ kept in the browser:
   private pack answers as if it weren't there. `share sharing [on|off]` or the
   editor's **📡 Sharing** button switches all of it for the whole browser.
   Anyone with the share id and a public pack's name can fetch that pack.
+- A share link with `&play` on the end starts the game: the friend's browser
+  fetches the pack (or finds it there already) and goes straight into its
+  first level, its menu skipped. The share page shows that link under the
+  plain one, and `share link` / `share pack` print both.
 - A flag can lead into a level pack in another player's browser: in the
   level editor, its **Leads to** lists every other level pack kept in this
   browser (picking one puts in this browser's share link for it), or take

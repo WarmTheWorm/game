@@ -1621,22 +1621,14 @@ async function enterSharedPack(link) {
     }
     downloadBar.style.width = '100%';
     downloadNote.textContent = 'Starting it…';
-    const src = await C.sourceNamed(key);
-    if (!src) throw new Error('it is not in this browser after all');
-    // its own page: kept in this browser, or one on this site's disk — unless
-    // that page is from before ?play, when it would open at its menu: then
-    // this engine plays the pack
-    const files = (await src.manifest()).files;
-    let page = src.key.startsWith('idb:') ? C.playUrl(src.name, files) : src.play(files);
-    if (/\/index\.html$/.test(page) && !new TextDecoder().decode(await src.read('index.html')).includes('wtw:play')) {
-      page = `${location.pathname.endsWith('/src/index.html') ? location.pathname : '/src/index.html'}?pack=${encodeURIComponent(page.replace(/index\.html$/, 'levelpack.json'))}`;
-    }
+    // its own page (or this engine, for a page from before ?play)
+    const page = await C.startUrl(key);
     // a pack kept in the browser is served by its service worker
     if (page.startsWith(packStore.PREFIX) || page.includes(encodeURIComponent(packStore.PREFIX))) {
       packStore.boot();
       if (!await packStore.ready()) throw new Error('this browser will not keep games here');
     }
-    location.href = page + (page.includes('?') ? '&' : '?') + 'play=1';
+    location.href = page;
   } catch (err) {
     s.state = s.here ? 'open' : 'closed';
     downloadNote.textContent = 'Could not get it: ' + err.message;
