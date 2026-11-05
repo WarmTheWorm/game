@@ -684,8 +684,21 @@ let messages = [];
 
 // Where each flag leads, by the same digit: an index into the pack, or null
 // for a flag that ends the run. The game reads a level's `exit` list the same
-// way, so 0F0 takes the first entry and 1F0 the second.
+// way, so 0F0 takes the first entry and 1F0 the second. A flag may lead
+// instead into a level pack in another player's browser: its entry is then
+// that pack's share link, a string ('' until one is pasted in).
 let exits = [];
+const isShareLink = t => typeof t === 'string';
+// A share link's parts, as the game reads them, or null if it is none.
+function shareLinkParts(text) {
+  if (typeof text !== 'string' || !/^https?:\/\//.test(text)) return null;
+  let u;
+  try { u = new URL(text); } catch { return null; }
+  const from = u.searchParams.get('from'), name = u.searchParams.get('get');
+  return from && name ? { href: u.href, from, name, v: u.searchParams.get('v') || '' } : null;
+}
+// Whether an exit leads anywhere: a level of this pack, or a good share link.
+const exitOk = t => isShareLink(t) ? !!shareLinkParts(t) : t !== null && t !== undefined && !!levels[t];
 
 // ---------- the editor's resource library ----------
 // The kinds an author picks from, each a folder beside editor.json with its
@@ -978,12 +991,12 @@ function readBgSpec(spec) {
 function exitPaths(src) {
   const want = src.exits || [];
   let last = -1;
-  want.forEach((t, d) => { if (t !== null && t !== undefined && levels[t]) last = d; });
+  want.forEach((t, d) => { if (exitOk(t)) last = d; });
   const out = [];
   for (let d = 0; d <= last; d++) {
     const t = want[d];
-    if (t === null || t === undefined || !levels[t]) return [];   // a hole; reported elsewhere
-    out.push(levelFile(t));
+    if (!exitOk(t)) return [];   // a hole; reported elsewhere
+    out.push(isShareLink(t) ? shareLinkParts(t).href : levelFile(t));
   }
   return out;
 }
@@ -995,10 +1008,11 @@ function packProblems() {
   levels.forEach((src, i) => {
     const want = src.exits || [];
     let last = -1;
-    want.forEach((t, d) => { if (t !== null && t !== undefined && levels[t]) last = d; });
+    want.forEach((t, d) => { if (exitOk(t)) last = d; });
+    want.forEach((t, d) => { if (isShareLink(t) && !exitOk(t)) found.push(`${titleAt(i)}: flag ${d} is to lead into another browser's pack, but has no share link that works yet.`); });
     for (let d = 0; d < last; d++) {
       const t = want[d];
-      if (t === null || t === undefined || !levels[t]) {
+      if (!exitOk(t)) {
         found.push(`${titleAt(i)}: flag ${d} leads nowhere, but flag ${last} does — give ${d} a target.`);
         break;
       }
@@ -2498,15 +2512,35 @@ const OBJECT_PROPS = {
     hint: 'A level may hold several flags, numbered by their info digit: 0F0 takes the first exit, 1F0 the second. A flag with nowhere to go ends the run.',
     byDigit: true,
     options: () => [{ value: '', label: '— nothing, the run ends' }]
-      .concat(levels.map((s, i) => ({ value: String(i), label: `${i + 1}. ${titleAt(i)}` }))),
+      .concat(levels.map((s, i) => ({ value: String(i), label: `${i + 1}. ${titleAt(i)}` })))
+      .concat([{ value: 'link', label: '↗ A level pack in another browser — its share link' }]),
     get: d => {
       const t = exits[d];
-      return (t === null || t === undefined || !levels[t]) ? '' : String(t);
+      return isShareLink(t) ? 'link' : exitOk(t) ? String(t) : '';
     },
-    set: (d, v) => { exits[d] = v === '' ? null : +v; },
+    set: (d, v) => {
+      const was = isShareLink(exits[d]);
+      exits[d] = v === 'link' ? (was ? exits[d] : '') : v === '' ? null : +v;
+      // the link's own field, filled or emptied to match
+      if (was !== (v === 'link')) setTimeout(() => { propsKey = null; renderProps(v === 'link'); });
+    },
     summary: d => {
       const t = exits[d];
-      return (t === null || t === undefined || !levels[t]) ? '' : titleAt(t);
+      if (isShareLink(t)) { const l = shareLinkParts(t); return l ? `↗ ${l.name}` : '↗ (no link yet)'; }
+      return exitOk(t) ? titleAt(t) : '';
+    }
+  }, {
+    key: 'exitLink',
+    label: 'Share link',
+    kind: 'text',
+    rows: 2,
+    placeholder: 'https://…/share/?from=wtw-…&get=…&v=…',
+    hint: 'For a way into another browser: paste the link a share page gives for that level pack (share pack <name> in the web shell). In the game the flag stands faded until the pack can be had, then going through fetches it and plays it from its first level.',
+    get: d => isShareLink(exits[d]) ? exits[d] : '',
+    set: (d, v) => {
+      v = v.trim();
+      if (v) exits[d] = v;
+      else if (isShareLink(exits[d])) exits[d] = '';
     }
   }]
 };
@@ -2560,7 +2594,7 @@ function propField(p) {
   input.value = p.get(objDigit);
   input.addEventListener(p.kind === 'select' ? 'change' : 'input', () => {
     p.set(objDigit, p.kind === 'number' ? +input.value : input.value);
-    refreshPropList(p);
+    propsFor().forEach(refreshPropList);     // one field may change another's summary
     save();
     render();
   });
@@ -3215,6 +3249,7 @@ async function openLevelPack(url) {
       const data = await r.json();
       datas.push(data);
       for (const exit of data.exit || []) {
+        if (shareLinkParts(exit)) continue;        // another browser's pack
         const href = new URL(exit, order[i]).href;
         if (!order.includes(href)) order.push(href);
       }
@@ -3225,7 +3260,7 @@ async function openLevelPack(url) {
       blankLevel();
       const error = fromText(JSON.stringify(datas[i]));
       if (error) throw new Error(`${new URL(order[i]).pathname.split('/').pop()}: ${error}`);
-      exits = (datas[i].exit || []).map(e => order.indexOf(new URL(e, order[i]).href));
+      exits = (datas[i].exit || []).map(e => shareLinkParts(e) ? e : order.indexOf(new URL(e, order[i]).href));
       read.push(JSON.parse(snapshot()));
     }
     // read straight from a file, it matches that file: no *
@@ -3267,11 +3302,14 @@ let testFrom = 0;        // the level Test was pressed on, to come back to
 function campaignEntries() {
   const pack = { name: packName || 'Level Pack' };
   return levels.map((src, i) => {
-    const exits = [];
+    const exits = [], links = [];
     const want = src.exits || [];
     let last = -1;
-    want.forEach((t, d) => { if (t !== null && t !== undefined && levels[t]) last = d; });
-    for (let d = 0; d <= last; d++) exits[d] = want[d];
+    want.forEach((t, d) => { if (exitOk(t)) last = d; });
+    for (let d = 0; d <= last; d++) {
+      if (isShareLink(want[d])) links[d] = shareLinkParts(want[d]);
+      else exits[d] = want[d];
+    }
     let lastMsg = -1;
     (src.messages || []).forEach((m, k) => { if (m) lastMsg = k; });
     return {
@@ -3288,7 +3326,8 @@ function campaignEntries() {
       sounds: null,
       glyphs: undefined,
       exits,
-      returns: []
+      returns: [],
+      links
     };
   });
 }
