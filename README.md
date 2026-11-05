@@ -87,6 +87,10 @@ kept in the browser:
   with its whole asset pack. As in the creator, a `*` marks changes never
   exported: **Remove** takes a level pack without one out at once, a red
   **Delete** asks first; with none left, only Import is offered;
+- the level editor's level pack button also lists the level packs kept in
+  the browser that the editor hasn't opened (from friends, uploaded, or left
+  from before): a click opens one, and its copy in the store becomes that
+  pack's own, under the name it has there, rather than a second copy;
 - the game plays whatever `?pack=` and `?assets=` name;
 - **share/** hands a level pack to another browser, peer to peer: pick one
   (from `levelpacks/` or the browser's store), send the link it gives, and the

@@ -217,6 +217,7 @@
   .top #packPick b { font-weight: 400; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .top #packPick .caret { color: var(--muted); font-size: 10px; }
   .top #packPick:hover { border-color: var(--amber); }
+  .packlistHead { padding: 6px 10px 2px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line, #3a3150); margin-top: 4px; }
   .packrename input[type=text] { width: 22ch; }
   .packlist { position: absolute; z-index: 30; left: 0; top: calc(100% + 4px); min-width: 280px; max-width: 380px; max-height: 320px;
     overflow: auto; display: grid; gap: 1px; padding: 4px; border: 1px solid var(--line2); border-radius: 8px;
@@ -1951,12 +1952,21 @@ levelSelect.addEventListener('change', () => openLevel(+levelSelect.value));
 // The level pack button: a list, as the creator's pack button — a new level
 // pack, a copy of the open one and a rename first, then the level packs in
 // this browser, the open one marked, a * on those changed since last
-// exported. A click picks; a click away or Esc closes it.
+// exported, and after them the level packs kept in this browser that the
+// editor hasn't opened (fetched from a friend, uploaded, or from before): a
+// click opens one here. A click picks; a click away or Esc closes it.
 function closePackList() { document.querySelectorAll('.packlist').forEach(l => l.remove()); }
-packPick.addEventListener('click', e => {
+// The browser's level packs that aren't the copies of the editor's own.
+async function storePacksNotHere() {
+  const mine = new Set(packs.map(p => p.mirror).filter(Boolean));
+  try { return (await ShareCore.listPacks()).filter(p => !mine.has(p.name)); } catch { return []; }
+}
+packPick.addEventListener('click', async e => {
   e.stopPropagation();
   const wrap = packPick.parentElement;
   if (e.detail > 1 || wrap.querySelector('.packlist')) { closePackList(); return; }   // a double-click renames
+  const others = await storePacksNotHere();
+  if (wrap.querySelector('.packlist')) return;
   const name = escHtml(packName || 'this level pack');
   const box = document.createElement('div');
   box.className = 'packlist';
@@ -1970,16 +1980,20 @@ packPick.addEventListener('click', e => {
       const count = live.levels.length;
       return `<button type="button" role="option" class="${i === packIndex ? 'on' : ''}" data-packi="${i}" aria-selected="${i === packIndex}">
         <span>${escHtml(live.name || `Level pack ${i + 1}`)}${packDirty(live) ? ' *' : ''}</span><small>${count} ${count === 1 ? 'level' : 'levels'}${i === packIndex ? ' · open' : ''}</small></button>`;
-    }))
+    })),
+    others.length ? '<div class="packlistHead">Also in this browser — click to edit</div>' : '',
+    ...others.map(p => `<button type="button" role="option" data-store="${escHtml(p.name)}">
+      <span>${escHtml(p.title)}</span><small>${p.files} files${p.public ? '' : ' · private'}</small></button>`)
   ].join('');
   wrap.appendChild(box);
   (box.querySelector('.on') || box.querySelector('button')).focus();
 });
 packPick.parentElement.addEventListener('click', e => {
-  const b = e.target.closest('[data-packact],[data-packi]');
+  const b = e.target.closest('[data-packact],[data-packi],[data-store]');
   if (!b) return;
   closePackList();
-  if (b.dataset.packact === 'rename') startRename();
+  if (b.dataset.store) openStorePack(b.dataset.store);
+  else if (b.dataset.packact === 'rename') startRename();
   else if (b.dataset.packact) makeLevelPack(b.dataset.packact);
   else openPack(+b.dataset.packi);
 });
@@ -3040,7 +3054,7 @@ async function mirrorNow() {
     if (!await storeReady(3000)) { mirrorError = 'the service worker is not running'; return; }
     // its own slot, not another level pack's of the same name
     const taken = new Set(packs.filter(x => x !== p).map(x => x.mirror));
-    let slot = packSlug(), n = 2;
+    let slot = p.storeName && !taken.has(p.storeName) ? p.storeName : packSlug(), n = 2;
     while (taken.has(slot)) slot = packSlug() + '-' + n++;
     const files = await levelPackFiles(true);
     // private before there is anything to fetch, and under a new name too
@@ -3136,6 +3150,23 @@ function load() {
     applyPack(packs[packIndex]);
     return true;
   } catch (err) { return false; }
+}
+
+// A level pack kept in this browser that the editor hasn't opened, opened
+// here: read in as Import would, and that very copy in the store becomes this
+// pack's — not a second one beside it — under the name it has there, so links
+// to it go on working however it is renamed here. It is built again only once
+// something in it changes, with this editor's asset pack.
+async function openStorePack(name) {
+  const before = noPack ? 0 : packs.length;
+  await openLevelPack(packStore.url('levels', name) + 'levelpack.json');
+  if (noPack || packs.length === before) return;      // not added
+  if (packs.some((x, i) => i !== packIndex && x.mirror === name)) return;
+  stashPack();                      // (it puts a new record in place: take it after)
+  const p = packs[packIndex];
+  p.mirror = p.storeName = name;
+  p.mirrorSum = packSum(p) + '|' + EDITOR_DIR;
+  persist();
 }
 
 // ---------- Import ----------
