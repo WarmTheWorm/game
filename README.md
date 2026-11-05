@@ -117,9 +117,11 @@ kept in the browser:
   editor's **📡 Sharing** button switches all of it for the whole browser.
   Anyone with the share id and a public pack's name can fetch that pack.
 - A flag can lead into a level pack in another player's browser: in the
-  level editor, set its **Leads to** to *A level pack in another browser* and
-  paste that pack's share link (`share pack <name>` gives it), which goes into
-  the level's `exit` list as it is. In the game the flag stands faded until
+  level editor, its **Leads to** lists every other level pack kept in this
+  browser (picking one puts in this browser's share link for it), or take
+  *A level pack in another browser* and paste that pack's share link
+  (`share pack <name>` gives it). The link goes into the level's `exit` list
+  as it is. In the game the flag stands faded until
   the pack can be had — kept here already, or from a browser that answers,
   looked for again every 20 seconds — and going through shows the pack's name
   and a bar while only the files not here come over, then plays it from its

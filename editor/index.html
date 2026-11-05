@@ -697,6 +697,28 @@ function shareLinkParts(text) {
   const from = u.searchParams.get('from'), name = u.searchParams.get('get');
   return from && name ? { href: u.href, from, name, v: u.searchParams.get('v') || '' } : null;
 }
+// The other level packs kept in this browser, which a flag can lead into by
+// this browser's share link for them: [{ name, title, v, public }]. Read in
+// the background; the flag's choices are drawn again when they change.
+let browserPacks = [];
+let browserPacksAt = 0;
+async function refreshBrowserPacks() {
+  if (Date.now() - browserPacksAt < 3000) return;
+  browserPacksAt = Date.now();
+  let list = [];
+  try { list = await ShareCore.listPacks(); } catch { return; }
+  const own = packs[packIndex] && packs[packIndex].mirror;
+  const next = list.filter(p => p.name !== own).map(p => ({ name: p.name, title: p.title, v: p.v, public: p.public }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+  if (JSON.stringify(next) === JSON.stringify(browserPacks)) return;
+  browserPacks = next;
+  if (mode === 'object' && OBJECTS[objIndex] && OBJECTS[objIndex].glyph === 'F') { propsKey = null; renderProps(); }
+}
+// The pack of this browser a share link leads into, if it is one of them.
+function browserPackOf(t) {
+  const l = shareLinkParts(t);
+  return l && l.from === ShareCore.shareId() ? browserPacks.find(b => b.name === ShareCore.clean(l.name)) || null : null;
+}
 // Whether an exit leads anywhere: a level of this pack, or a good share link.
 const exitOk = t => isShareLink(t) ? !!shareLinkParts(t) : t !== null && t !== undefined && !!levels[t];
 
@@ -2511,22 +2533,36 @@ const OBJECT_PROPS = {
     kind: 'select',
     hint: 'A level may hold several flags, numbered by their info digit: 0F0 takes the first exit, 1F0 the second. A flag with nowhere to go ends the run.',
     byDigit: true,
-    options: () => [{ value: '', label: '— nothing, the run ends' }]
-      .concat(levels.map((s, i) => ({ value: String(i), label: `${i + 1}. ${titleAt(i)}` })))
-      .concat([{ value: 'link', label: '↗ A level pack in another browser — its share link' }]),
+    options: () => {
+      refreshBrowserPacks();
+      return [{ value: '', label: '— nothing, the run ends' }]
+        .concat(levels.map((s, i) => ({ value: String(i), label: `${i + 1}. ${titleAt(i)}` })))
+        .concat(browserPacks.length ? [{ value: '-', label: '── level packs in this browser ──', disabled: true }] : [])
+        .concat(browserPacks.map(b => ({ value: 'pack:' + b.name, label: `↗ ${b.title}${b.public ? '' : ' (private — friends get nothing)'}` })))
+        .concat([{ value: 'link', label: '↗ A level pack in another browser — its share link' }]);
+    },
     get: d => {
       const t = exits[d];
-      return isShareLink(t) ? 'link' : exitOk(t) ? String(t) : '';
+      if (!isShareLink(t)) return exitOk(t) ? String(t) : '';
+      const mine = browserPackOf(t);
+      return mine ? 'pack:' + mine.name : 'link';
     },
     set: (d, v) => {
       const was = isShareLink(exits[d]);
-      exits[d] = v === 'link' ? (was ? exits[d] : '') : v === '' ? null : +v;
+      if (v.startsWith('pack:')) {
+        // one of this browser's packs: its share link, as a friend would be given
+        const b = browserPacks.find(x => x.name === v.slice(5));
+        exits[d] = b ? ShareCore.linkFor(b.name, b.v || '').replace(/&v=$/, '') : '';
+      } else exits[d] = v === 'link' ? (was && !browserPackOf(exits[d]) ? exits[d] : '') : v === '' ? null : +v;
       // the link's own field, filled or emptied to match
-      if (was !== (v === 'link')) setTimeout(() => { propsKey = null; renderProps(v === 'link'); });
+      setTimeout(() => { propsKey = null; renderProps(v === 'link'); });
     },
     summary: d => {
       const t = exits[d];
-      if (isShareLink(t)) { const l = shareLinkParts(t); return l ? `↗ ${l.name}` : '↗ (no link yet)'; }
+      if (isShareLink(t)) {
+        const mine = browserPackOf(t), l = shareLinkParts(t);
+        return mine ? `↗ ${mine.title}` : l ? `↗ ${l.name}` : '↗ (no link yet)';
+      }
       return exitOk(t) ? titleAt(t) : '';
     }
   }, {
@@ -2584,6 +2620,7 @@ function propField(p) {
       const opt = document.createElement('option');
       opt.value = o.value;
       opt.textContent = o.label;
+      opt.disabled = !!o.disabled;
       input.appendChild(opt);
     }
   } else if (p.kind === 'text') {
@@ -3361,10 +3398,10 @@ document.getElementById('testBtn').addEventListener('click', () => {
 testFrame.addEventListener('load', () => {
   if (testOverlay.classList.contains('hidden')) return;
   const w = testFrame.contentWindow;
-  // gone through a flag into a level pack from another browser: that pack's
-  // own page plays on in here, and is left to it
+  // gone through a flag into another level pack (another browser's, or one
+  // kept in this one): that pack's own page plays on in here, and is left to it
   if (!new URLSearchParams(w.location.search).has('test')) {
-    testMsg.textContent = `Playing ${w.document.title && w.document.title !== 'Warm the Worm' ? w.document.title : 'a level pack from another browser'} — Stop to come back to editing.`;
+    testMsg.textContent = 'Playing the level pack the flag led into — Stop to come back to editing.';
     return;
   }
   // The game disables Play until its objects and levels are off disk; that is
