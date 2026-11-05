@@ -3361,6 +3361,12 @@ document.getElementById('testBtn').addEventListener('click', () => {
 testFrame.addEventListener('load', () => {
   if (testOverlay.classList.contains('hidden')) return;
   const w = testFrame.contentWindow;
+  // gone through a flag into a level pack from another browser: that pack's
+  // own page plays on in here, and is left to it
+  if (!new URLSearchParams(w.location.search).has('test')) {
+    testMsg.textContent = `Playing ${w.document.title && w.document.title !== 'Warm the Worm' ? w.document.title : 'a level pack from another browser'} — Stop to come back to editing.`;
+    return;
+  }
   // The game disables Play until its objects and levels are off disk; that is
   // the same thing a custom level needs, so wait for it.
   const ready = w.document.getElementById('playBtn');

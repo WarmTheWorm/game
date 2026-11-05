@@ -1623,9 +1623,14 @@ async function enterSharedPack(link) {
     downloadNote.textContent = 'Starting it…';
     const src = await C.sourceNamed(key);
     if (!src) throw new Error('it is not in this browser after all');
-    // its own page: kept in this browser, or one on this site's disk
+    // its own page: kept in this browser, or one on this site's disk — unless
+    // that page is from before ?play, when it would open at its menu: then
+    // this engine plays the pack
     const files = (await src.manifest()).files;
-    const page = src.key.startsWith('idb:') ? C.playUrl(src.name, files) : src.play(files);
+    let page = src.key.startsWith('idb:') ? C.playUrl(src.name, files) : src.play(files);
+    if (/\/index\.html$/.test(page) && !new TextDecoder().decode(await src.read('index.html')).includes('wtw:play')) {
+      page = `${location.pathname.endsWith('/src/index.html') ? location.pathname : '/src/index.html'}?pack=${encodeURIComponent(page.replace(/index\.html$/, 'levelpack.json'))}`;
+    }
     // a pack kept in the browser is served by its service worker
     if (page.startsWith(packStore.PREFIX) || page.includes(encodeURIComponent(packStore.PREFIX))) {
       packStore.boot();
@@ -2694,6 +2699,7 @@ Promise.all([atlas.loadRoot(), sound.loadRoot()]).then(loadBuiltinLevels).then((
   // every way into another browser's pack, looked for while the menu is up
   for (const level of BUILTIN_LEVELS) for (const link of level.links || []) if (link) linkState(link);
   // come through a flag from another pack (?play): straight into level one.
+  // (wtw:play — the mark a pack's page is looked for by, to know it can.)
   // Sound waits for her first key or touch, as browsers want.
   if (new URLSearchParams(location.search).has('play')) {
     const wake = () => { sound.resume(); removeEventListener('keydown', wake); removeEventListener('pointerdown', wake); };
