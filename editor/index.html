@@ -510,8 +510,10 @@ function withCtx(target, fn) {
 // the open one's, or on ?assets= — which then becomes that level pack's.
 const DEFAULT_ASSETS = '/assetpacks/old/garden/';
 const ASKED_ASSETS = new URLSearchParams(location.search).get('assets');
-// ?for=<a level pack's uid>: the asset pack creator, back with that pack's art
+// ?for=<a level pack's uid>: the asset pack creator, back with that pack's art;
+// ?new: its Open in level editor, on an asset pack no level pack owns
 const FOR_PACK = new URLSearchParams(location.search).get('for');
+const NEW_PACK = new URLSearchParams(location.search).has('new');
 const EDITOR_DIR = (() => {
   let want = ASKED_ASSETS;
   if (!want) {
@@ -858,6 +860,7 @@ function reopenOn(assets) {
   const q = new URLSearchParams(location.search);
   q.delete('pack');
   q.delete('for');
+  q.delete('new');
   q.set('assets', assets);
   location.search = q.toString();
 }
@@ -1731,6 +1734,23 @@ async function adoptArt(p, dir) {
     if (files.length) p.assets = await packStore.put('assets', ownArtName(p), files, p.name || 'Level pack');
   } catch (err) { /* pointed at, then */ }
 }
+// The same, for a level pack already here, in the background: once its copy
+// is made the page opens again on it. The pack is found again by its uid then
+// — its record may have been put anew meanwhile (stashPack).
+function adoptLater(uid, dir, clean = false) {
+  const held = packs.find(x => x.uid === uid);
+  const tmp = { uid, name: held && held.name };
+  adoptArt(tmp, dir).then(() => {
+    if (tmp.assets === dir || noPack) return;
+    if (packs[packIndex] && packs[packIndex].uid === uid) stashPack();
+    const p = packs.find(x => x.uid === uid);
+    if (!p) return;
+    p.assets = tmp.assets;
+    if (clean) keepBase(p);
+    persist();
+    if (packs[packIndex] === p) reopenOn(p.assets);
+  });
+}
 // The art a new level pack can start with: the open one's, the other level
 // packs', the asset packs on disk (assetpacks/index.json) and those the
 // asset pack creator saved in this browser. Whichever it is, the new pack
@@ -2142,14 +2162,7 @@ function addPack(p, stashed = false, clean = false) {
   // built with art another level pack owns (an import takes the open one's):
   // a copy of it becomes this one's own, and the page opens again on that
   const added = packs[packIndex];
-  if (storedArt(added.assets) && storedArt(added.assets) !== ownArtName(added)) {
-    adoptArt(added, added.assets).then(() => {
-      if (added.assets === EDITOR_DIR) return;
-      if (clean) keepBase(added);
-      persist();
-      reopenOn(added.assets);
-    });
-  }
+  if (storedArt(added.assets) && storedArt(added.assets) !== ownArtName(added)) adoptLater(added.uid, added.assets, clean);
 }
 
 // The level pack as it is now is the one Revert goes back to: it has just
@@ -3570,11 +3583,11 @@ if (!load()) {
 // ?assets= alone — the creator's Open in level editor, on an asset pack that
 // is no level pack's — starts a new level pack with a copy of that art,
 // rather than changing the art of one already here
-const artNotOwned = ASKED_ASSETS && !FOR_PACK && storedArt(EDITOR_DIR)
-  && (noPack || packs[packIndex].assets !== EDITOR_DIR);
-if (FOR_PACK || artNotOwned) {
+const artNotOwned = ASKED_ASSETS && NEW_PACK && !FOR_PACK;
+if (FOR_PACK || NEW_PACK) {
   const q = new URLSearchParams(location.search);
   q.delete('for');
+  q.delete('new');
   q.delete('assets');
   history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
 }
@@ -3589,9 +3602,7 @@ if (artNotOwned) {
   if (open.assets !== EDITOR_DIR) { persist(); reopenOn(open.assets); }
   // art the creator kept in the browser that is not this pack's own — from
   // before level packs owned their art: a copy of it becomes its own
-  else if (storedArt(EDITOR_DIR) && storedArt(EDITOR_DIR) !== ownArtName(open)) {
-    adoptArt(open, EDITOR_DIR).then(() => { if (open.assets !== EDITOR_DIR) { persist(); reopenOn(open.assets); } });
-  }
+  else if (storedArt(EDITOR_DIR) && storedArt(EDITOR_DIR) !== ownArtName(open)) adoptLater(open.uid, EDITOR_DIR);
 }
 resize(cols, rows, true);
 

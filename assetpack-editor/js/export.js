@@ -235,7 +235,7 @@ async function openInLevelEditor() {
     // a level pack's own art is kept as that pack's (lp-<its uid>), and the
     // editor opens on that level pack (?for=)
     const base = await packStore.put('assets', pack.owner ? 'lp-' + pack.owner : slug(pack.name), files, pack.name);
-    const url = `/editor/index.html?assets=${encodeURIComponent(base)}${pack.owner ? '&for=' + encodeURIComponent(pack.owner) : ''}`;
+    const url = `/editor/index.html?assets=${encodeURIComponent(base)}${pack.owner ? '&for=' + encodeURIComponent(pack.owner) : '&new'}`;
     if (tab) { tab.location.href = url; tab.focus(); } else window.open(url, 'wtw-level-editor');
     toast(pack.owner ? `Back in the level editor, with ${pack.name}'s new art` : `Saved in this browser as ${base} and opened in the level editor`);
   } catch (err) {
