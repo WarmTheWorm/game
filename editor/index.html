@@ -236,18 +236,24 @@
   .packlist small { color: var(--muted); font-size: 11.5px; }
 
   /* ---- confirm panel ---- */
-  #askOverlay {
+  #askOverlay, #shareOverlay {
     position: fixed; inset: 0; z-index: 20; display: flex;
     align-items: center; justify-content: center;
     background: rgba(13, 10, 22, 0.72);
   }
-  #askCard {
+  #askCard, #shareCard {
     width: 348px; max-width: calc(100% - 32px);
     padding: 16px 18px; background: var(--panel);
     border: 1px solid var(--line2); border-radius: 10px;
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
   }
-  #askCard > label {
+  #shareCard { width: 460px; }
+  #shareCard .row { display: flex; gap: 8px; }
+  #shareLink { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+  #shareCopy { width: auto; }
+  #shareNote { font-size: 12.5px; line-height: 1.5; color: var(--pink); margin-top: 8px; }
+  #shareNote:empty { display: none; }
+  #askCard > label, #shareCard > label {
     display: block; font-size: 11px; letter-spacing: .06em;
     text-transform: uppercase; color: var(--amber); margin-bottom: 8px;
   }
@@ -437,6 +443,21 @@
       <button type="submit" id="chooseYes" class="go"></button>
     </div>
   </form>
+</div>
+
+<!-- 🔗 Share: the open level pack's link, and nothing else -->
+<div id="shareOverlay" class="hidden">
+  <div id="shareCard" class="askCard">
+    <label id="shareTitle">Share</label>
+    <div class="row">
+      <input id="shareLink" readonly aria-label="The share link">
+      <button id="shareCopy" class="go">Copy</button>
+    </div>
+    <div id="shareNote"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="shareClose" class="wide">Close</button>
+    </div>
+  </div>
 </div>
 
 <div id="askOverlay" class="hidden">
@@ -3227,26 +3248,50 @@ document.getElementById('sharingBtn').addEventListener('click', () => {
 });
 addEventListener('storage', e => { if (e.key === 'wtwSharing' || e.key === 'wtwPrivatePacks') drawSharing(); });
 
-// 🔗 Share: the level pack as it is now, from its copy in the pack store —
-// made at once rather than waited for — through share/, which gives its link.
-// The tab is opened on the click itself, so it isn't taken for a pop-up, and
-// pointed at share/ once the copy is made.
+// 🔗 Share: the open level pack's share link, to copy and send — of its copy
+// in the pack store as it is now (made at once rather than waited for), which
+// this browser shares while any of its pages is open. A word below it if
+// friends would get nothing: the pack private, or sharing off.
+const shareOverlay = document.getElementById('shareOverlay');
+const shareLink = document.getElementById('shareLink');
+const shareCopy = document.getElementById('shareCopy');
+document.getElementById('shareClose').addEventListener('click', () => shareOverlay.classList.add('hidden'));
+shareOverlay.addEventListener('click', e => { if (e.target === shareOverlay) shareOverlay.classList.add('hidden'); });
+addEventListener('keydown', e => { if (e.key === 'Escape') shareOverlay.classList.add('hidden'); });
+shareCopy.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(shareLink.value); }
+  catch (err) { shareLink.select(); document.execCommand('copy'); }
+  shareCopy.textContent = 'Copied';
+  setTimeout(() => { shareCopy.textContent = 'Copy'; }, 1500);
+});
 document.getElementById('shareBtn').addEventListener('click', async () => {
   if (noPack) return;
-  const tab = window.open('', 'wtw-share');
   stashPack();
   clearTimeout(mirrorTimer);
+  levelMsg.textContent = 'Making the link…';
   await mirrorNow();
   const p = packs[packIndex];
-  if (!p.mirror || p.mirrorSum !== packSum(p) + '|' + EDITOR_DIR) {
-    if (tab) tab.close();
-    const why = await storeTrouble() || mirrorError || 'no reason given';
-    levelMsg.textContent = 'Could not keep a copy to share: ' + why + '.';
+  let link = '', why = '';
+  if (!p.mirror || p.mirrorSum !== packSum(p) + '|' + EDITOR_DIR) why = await storeTrouble() || mirrorError || 'no reason given';
+  else {
+    try {
+      const m = await packStore.manifest('levels', p.mirror);
+      link = ShareCore.linkFor(p.mirror, m ? m.v : '').replace(/&v=$/, '');
+    } catch (err) { why = err.message; }
+  }
+  levelMsg.textContent = '';
+  if (!link) {
     await ask('Could not share', 'The level pack has to be kept in this browser to be shared, and it could not be: ' + why + '.', 'OK');
     return;
   }
-  const url = `/share/?pack=${encodeURIComponent('idb:' + p.mirror)}`;
-  if (tab) { tab.location.href = url; tab.focus(); } else location.href = url;
+  document.getElementById('shareTitle').textContent = `Share ${packName || p.name || 'this level pack'}`;
+  shareLink.value = link;
+  document.getElementById('shareNote').textContent = packIsPrivate(p)
+    ? 'It is private: friends with the link get nothing until you make it public (🔒 Private, beside Share).'
+    : !ShareCore.sharingOn() ? 'Sharing is off in this browser: friends get nothing until you switch it on (📡 Sharing off).' : '';
+  shareOverlay.classList.remove('hidden');
+  shareLink.focus();
+  shareLink.select();
 });
 
 function load() {
