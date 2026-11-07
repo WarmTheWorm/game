@@ -73,18 +73,29 @@ serves under `/__idb/<kind>/<name>/` exactly as if they were folders. So
 every tool reads a pack the same way, from a URL, whether it is on disk or
 kept in the browser:
 
-- the creator's **Open in level editor** saves the pack it is editing as
-  `/__idb/assets/<name>/` and opens the editor on it; its **Import** offers the
-  packs `assetpacks/index.json` lists;
-- the level editor keeps every level pack in the browser as you work, each
-  with the **Asset pack** it is built with, and the open one also as
+- a level pack owns its art: its tiles, objects, backgrounds and sounds are
+  kept for it alone as `/__idb/assets/lp-<its id>/`, so changing one pack's
+  art changes no other. The level editor has no asset pack picker:
+  **🎨 Edit assets ↗** opens the asset pack creator on the open level pack's
+  art (the first time, on a copy of what it was built with), and the
+  creator's **← Back to level editor** saves it as that pack's and returns to
+  it. **+ New level pack** asks whose art to start with — the open one's,
+  another level pack's, an asset pack on disk or one the creator made — and
+  copies it; **⧉ Duplicate** copies the art too. A level pack from before
+  this takes its own copy the first time its art is edited;
+- the creator's **Open in level editor**, on an asset pack that is no level
+  pack's, saves it as `/__idb/assets/<name>/` and starts a new level pack in
+  the editor with a copy of it; its **Import** offers the packs
+  `assetpacks/index.json` lists;
+- the level editor keeps every level pack in the browser as you work, the
+  open one also as
   `/__idb/levels/<name>/`, built as its download would be, which the game
   plays (`/src/index.html?pack=/__idb/levels/<name>/levelpack.json&assets=...`).
   Its **level pack** button lists them, with **+ New**, **⧉ Duplicate** and
   **✎ Rename** (or double-click it) first, as the creator's pack button;
   **Import…** adds one from `levelpacks/index.json`, a `.zip`, or another
   browser's share link (fetched through `share/` in a hidden frame), and **⬇ Export .zip** saves the open one
-  with its whole asset pack. As in the creator, a `*` marks changes never
+  with all its art. As in the creator, a `*` marks changes never
   exported: **Remove** takes a level pack without one out at once, a red
   **Delete** asks first; with none left, only Import is offered;
 - the level editor's level pack button also lists the level packs kept in

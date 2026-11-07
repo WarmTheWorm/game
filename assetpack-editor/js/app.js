@@ -109,6 +109,12 @@ async function renderPackPicker() {
   // with a * has work in it that is nowhere else: it says Delete, in red, and
   // asks first.
   $('#revertBtn').disabled = !(pack.dirty && pack.hasBase);
+  // a level pack's own art goes back to it; any other pack opens the editor
+  const lv = $('#levelBtn');
+  lv.textContent = pack.owner ? '← Back to level editor' : 'Open in level editor ↗';
+  lv.title = pack.owner
+    ? `This is the art of the level pack ${pack.name}: back to the level editor, with these changes in that pack`
+    : 'Open the level editor on this pack as it stands now';
   const del = $('#deleteBtn');
   del.textContent = pack.dirty ? 'Delete' : 'Remove';
   del.classList.toggle('warn', !!pack.dirty);
@@ -258,7 +264,7 @@ async function makePack(kind) {
     catch (err) { next = newPack(); toast('Could not read ' + EMPTY_PACK + ' — starting from nothing: ' + err.message, true); }
   }
   if (!noPack) await flushPack();
-  Object.assign(next, { id: uid(), dirty: true, origin: '', exported: false, hasBase: false });
+  Object.assign(next, { id: uid(), dirty: true, origin: '', owner: '', exported: false, hasBase: false });
   next.name = await freePackName(kind === 'copy' ? `${was} copy` : 'My Pack');
   await showPack(next);
   toast(kind === 'copy' ? `Made ${next.name}, a copy of ${was}` : `Made ${next.name}, empty`);
@@ -506,13 +512,37 @@ async function boot(already) {
   }
 }
 
-// ?open=<an asset pack's folder> — the level editor's Edit asset pack — opens
-// that pack: the one here it was imported from, or, for the copy Open in
-// level editor keeps in the browser (/__idb/assets/<name>/), the pack here of
-// that name; otherwise it is imported, as Import would.
-async function openFromLink(dir) {
+// ?open=<an asset pack's folder> opens that pack: the one here it was
+// imported from, or, for the copy Open in level editor keeps in the browser
+// (/__idb/assets/<name>/), the pack here of that name; otherwise it is
+// imported, as Import would.
+// With &owner=<a level pack's uid> — the level editor's Edit assets — it is
+// that level pack's own art: the pack here that is it, or, the first time, a
+// new one read from the folder, named after the level pack; its Back to
+// level editor then saves it as that level pack's and no other's.
+async function openFromLink(dir, owner, title) {
   const want = packDir(dir);
   const list = await dbList().catch(() => []);
+  if (owner) {
+    const mine = list.find(x => x.owner === owner);
+    if (mine) {
+      if (!pack || mine.id !== pack.id || noPack) {
+        if (noPack) await showPack(await dbLoad(mine.id)); else await openPack(mine.id);
+      }
+      toast(`The art of the level pack ${title || mine.name}`);
+      return;
+    }
+    toast('Reading…');
+    let next;
+    try { next = await importPack(want); }
+    catch (err) { toast('Could not read its art: ' + err.message, true); return; }
+    Object.assign(next, { origin: want, owner });
+    next.name = await freePackName(title || next.name);
+    if (!noPack) await flushPack();
+    await showPack(next, { clean: true });
+    toast(`The art of the level pack ${title || next.name} — its own copy, to change as you like`);
+    return;
+  }
   const kept = /^\/__idb\/assets\/([^/]+)\/$/.exec(want);
   let hit = kept ? list.find(x => slug(x.name) === decodeURIComponent(kept[1])) : null;
   if (!hit) {
@@ -547,9 +577,10 @@ boot()
     const q = new URLSearchParams(location.search);
     const open = q.get('open');
     if (open) {
-      q.delete('open');
+      const owner = q.get('owner'), title = q.get('title');
+      q.delete('open'); q.delete('owner'); q.delete('title');
       history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
-      await openFromLink(open);
+      await openFromLink(open, owner, title);
     }
   })
   .catch(err => toast('Could not start: ' + err.message, true));
