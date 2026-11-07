@@ -76,10 +76,12 @@ kept in the browser:
 - a level pack owns its art: its tiles, objects, backgrounds and sounds are
   kept for it alone as `/__idb/assets/lp-<its id>/`, so changing one pack's
   art changes no other. The level editor has no asset pack picker:
-  **🎨 Edit assets ↗** opens the asset pack creator on the open level pack's
-  art (the first time, on a copy of what it was built with), and the
-  creator's **← Back to level editor** saves it as that pack's and returns to
-  it. **+ New level pack** asks whose art to start with — the open one's,
+  **🎨 Edit assets** shows the Asset Editor (the asset pack creator) in the
+  same page, under the same bar, on the open level pack's art (the first
+  time, on a copy of what it was built with); the button turns into
+  **🧩 Edit levels**, which saves the art as that pack's if it changed and
+  shows the levels again. Meanwhile Export, Share, Import, Revert, Remove and
+  the level pack list wait, since they would read the art as it was. **+ New level pack** asks whose art to start with — the open one's,
   another level pack's, an asset pack on disk or one the creator made — and
   copies it; **⧉ Duplicate** copies the art too. A level pack from before
   this takes its own copy the first time its art is edited;

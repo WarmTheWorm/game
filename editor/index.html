@@ -48,6 +48,10 @@
   .tab.on { color: var(--amber); border-bottom-color: var(--amber); background: transparent; }
   #panel .group[data-tab]:not(.tabOn) { display: none; }
 
+  /* Edit assets: the Asset Editor in place of the levels */
+  #assetFrame { flex: 1; min-height: 0; width: 100%; border: 0; background: var(--bg); }
+  body.assets-mode #tabs, body.assets-mode #app, body.assets-mode .nopackBox { display: none !important; }
+
   /* with none, a word where the editor would be */
   .nopackBox { display: none; flex: 1; align-items: center; justify-content: center; flex-direction: column;
     gap: 6px; color: var(--muted); text-align: center; }
@@ -279,8 +283,8 @@
      clicks the select again and shuts the list it just opened. -->
 <header class="top">
   <h1 class="logo">Level<span>Editor</span></h1>
-  <div class="packwrap"><button type="button" class="namebox" id="packPick" aria-haspopup="listbox" title="The level packs in this browser — open one, make a new one, or duplicate this one; * changed since it was last exported. Every one is kept here as you work, where the game and the asset pack creator can open it too. Double-click to rename this one"><span>level pack</span><b id="packPickName"></b><span class="caret">▾</span></button><label class="namebox packrename" hidden><span>level pack</span><input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40" aria-label="Rename the level pack"></label></div>
-  <button id="editAssetsBtn" class="packOnly" title="Change this level pack's art — its tiles, sprites, objects, backgrounds and sounds — in the asset pack creator; its Back to level editor brings the changes here. The art is this level pack's own: no other pack changes with it">🎨 Edit assets ↗</button>
+  <div class="packwrap"><button type="button" class="namebox" id="packPick" aria-haspopup="listbox" title="The level packs in this browser — open one, make a new one, or duplicate this one; * changed since it was last exported. Every one is kept here as you work, where the game and the Asset Editor can open it too. Double-click to rename this one"><span>level pack</span><b id="packPickName"></b><span class="caret">▾</span></button><label class="namebox packrename" hidden><span>level pack</span><input type="text" id="packNameInput" placeholder="Level pack name" maxlength="40" aria-label="Rename the level pack"></label></div>
+  <button id="editAssetsBtn" class="packOnly">🎨 Edit assets</button>
   <span class="grow"></span>
   <button id="importBtn" title="Add a level pack: one in levelpacks/index.json, or a .zip">Import…</button>
   <button id="shareBtn" class="packOnly" title="Share the open level pack with a friend, peer to peer: a link they open to fetch it into their browser and play it">🔗 Share</button>
@@ -298,6 +302,10 @@
   <button class="tab" data-tab="background">Background</button>
   <button class="tab" data-tab="sound">Sound</button>
 </nav>
+
+<!-- Edit assets: the Asset Editor, here in place of the levels, on the open
+     level pack's own art; the bar above stays as it is -->
+<iframe id="assetFrame" title="Asset Editor" hidden></iframe>
 
 <section class="nopackBox">
   <h2>No level packs in this browser</h2>
@@ -1773,18 +1781,74 @@ async function artChoices() {
   add(DEFAULT_ASSETS, "garden — the game's own");
   return [...opts].map(([value, label]) => ({ value, label }));
 }
-// Edit assets ↗: the asset pack creator, on this level pack's art — the
-// creator's pack for it, or a copy of what it is built with, made then. One
-// tab is kept for the creator, as the creator keeps one for this editor.
-document.getElementById('editAssetsBtn').addEventListener('click', () => {
+// Edit assets / Edit levels: the Asset Editor, in this page in place of the
+// levels, on the open level pack's art — its pack there for this level pack,
+// or a copy of what it is built with, made then — under the same bar. Edit
+// levels asks it to save the art as this level pack's (only if it changed),
+// and the page opens again on it; unchanged, the levels are just shown again.
+// The frame is kept, so going back to the art is at once. Meanwhile what
+// would read the art as it was — Export, Share, another pack — waits.
+const assetFrame = document.getElementById('assetFrame');
+const editAssetsBtn = document.getElementById('editAssetsBtn');
+const ART_WAITS = ['packPick', 'importBtn', 'shareBtn', 'downloadBtn', 'revertBtn', 'delPackBtn'];
+const MODE_KEY = 'wtwEditorMode';
+let assetsMode = false;
+function showAssetsMode(on) {
+  assetsMode = on;
+  document.body.classList.toggle('assets-mode', on);
+  assetFrame.hidden = !on;
+  editAssetsBtn.textContent = on ? '🧩 Edit levels' : '🎨 Edit assets';
+  editAssetsBtn.title = on
+    ? "Back to this level pack's levels, with the art as you changed it"
+    : "Change this level pack's art — its tiles, sprites, objects, backgrounds and sounds — in the Asset Editor. The art is this level pack's own: no other pack changes with it";
+  for (const id of ART_WAITS) {
+    const b = document.getElementById(id);
+    if (on) { b.disabled = true; b.dataset.waitTitle = b.title; b.title = 'Edit levels first — the art comes in then'; }
+    else if (b.dataset.waitTitle !== undefined) { b.disabled = false; b.title = b.dataset.waitTitle; delete b.dataset.waitTitle; }
+  }
+  if (!on) refreshPacks();
+  try { sessionStorage.setItem(MODE_KEY, on ? 'assets' : ''); } catch (err) { /* not kept */ }
+}
+editAssetsBtn.title = "Change this level pack's art — its tiles, sprites, objects, backgrounds and sounds — in the Asset Editor. The art is this level pack's own: no other pack changes with it";
+function enterAssets() {
   if (noPack) return;
+  closePackList();
   stashPack();
   const p = packs[packIndex];
-  if (!p.uid) { p.uid = newUid(); save(); }
-  const q = new URLSearchParams({ open: EDITOR_DIR, owner: p.uid, title: packName || p.name || 'Level pack' });
-  const tab = window.open('/assetpack-editor/?' + q, 'wtw-asset-editor');
-  if (tab) tab.focus();
-});
+  if (!p.uid) p.uid = newUid();
+  save();
+  if (assetFrame.dataset.owner !== p.uid) {
+    const q = new URLSearchParams({ open: EDITOR_DIR, owner: p.uid, title: packName || p.name || 'Level pack', embed: '1' });
+    assetFrame.src = '/assetpack-editor/?' + q;
+    assetFrame.dataset.owner = p.uid;
+  }
+  showAssetsMode(true);
+}
+async function leaveAssets() {
+  editAssetsBtn.disabled = true;
+  const answer = new Promise(ok => {
+    const heard = e => {
+      if (e.source !== assetFrame.contentWindow || e.origin !== location.origin || !e.data || e.data.wtw !== 'assets' || !('done' in e.data)) return;
+      removeEventListener('message', heard);
+      ok(e.data);
+    };
+    addEventListener('message', heard);
+    setTimeout(() => { removeEventListener('message', heard); ok({ done: false, error: 'the Asset Editor did not answer' }); }, 30000);
+  });
+  assetFrame.contentWindow.postMessage({ wtw: 'assets', do: 'commit' }, location.origin);
+  const r = await answer;
+  editAssetsBtn.disabled = false;
+  if (!r.done) return;                 // the Asset Editor says what is wrong; the art stays open
+  if (!r.changed) { showAssetsMode(false); return; }
+  const p = packs.find(x => x.uid === r.owner);
+  if (!p) { showAssetsMode(false); return; }
+  stashPack();
+  packs.find(x => x.uid === r.owner).assets = r.url;
+  persist();
+  try { sessionStorage.setItem(MODE_KEY, ''); } catch (err) { /* not kept */ }
+  reopenOn(r.url);
+}
+editAssetsBtn.addEventListener('click', () => { if (assetsMode) leaveAssets(); else enterAssets(); });
 
 // ---------- the background panel ----------
 const bgList = document.getElementById('bgList');
@@ -3605,6 +3669,7 @@ if (artNotOwned) {
   else if (storedArt(EDITOR_DIR) && storedArt(EDITOR_DIR) !== ownArtName(open)) adoptLater(open.uid, EDITOR_DIR);
 }
 resize(cols, rows, true);
+try { if (!noPack && sessionStorage.getItem(MODE_KEY) === 'assets') setTimeout(enterAssets); } catch (err) { /* not kept */ }
 
 refreshPacks();
 refreshLevels();

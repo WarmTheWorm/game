@@ -111,9 +111,9 @@ async function renderPackPicker() {
   $('#revertBtn').disabled = !(pack.dirty && pack.hasBase);
   // a level pack's own art goes back to it; any other pack opens the editor
   const lv = $('#levelBtn');
-  lv.textContent = pack.owner ? '← Back to level editor' : 'Open in level editor ↗';
+  lv.textContent = pack.owner ? '🧩 Edit levels' : 'Open in level editor ↗';
   lv.title = pack.owner
-    ? `This is the art of the level pack ${pack.name}: back to the level editor, with these changes in that pack`
+    ? `This is the art of the level pack ${pack.name}: its levels, in the level editor, with these changes`
     : 'Open the level editor on this pack as it stands now';
   const del = $('#deleteBtn');
   del.textContent = pack.dirty ? 'Delete' : 'Remove';
@@ -569,6 +569,34 @@ async function openFromLink(dir, owner, title) {
   toast(`Imported ${pack.name} from ${want} — the asset pack the level editor builds with`);
 }
 
+// ---------- inside the level editor ----------
+// ?embed: this page is the level editor's Edit assets, in a frame under its
+// bar. Its Edit levels asks for the art: saved as that level pack's
+// (lp-<uid>) if it changed since it was opened here, or not, and an answer
+// either way — { done, changed, url, owner }, or { done: false } with what is
+// wrong shown here.
+const EMBED = new URLSearchParams(location.search).has('embed') && parent !== window;
+if (EMBED) document.body.classList.add('embed');
+let editBase = -1;
+addEventListener('message', async e => {
+  if (!EMBED || e.source !== parent || e.origin !== location.origin || !e.data || e.data.wtw !== 'assets' || e.data.do !== 'commit') return;
+  const reply = m => parent.postMessage({ wtw: 'assets', ...m }, location.origin);
+  if (!pack || noPack || !pack.owner || editCount === editBase) { reply({ done: true, changed: false }); return; }
+  const problems = packProblems();
+  if (problems.length) { toast(problems[0], true); reply({ done: false, error: problems[0] }); return; }
+  try {
+    toast('Packing…');
+    await flushPack();
+    const files = await buildPackFiles();
+    const url = await packStore.put('assets', 'lp-' + pack.owner, files, pack.name);
+    editBase = editCount;
+    reply({ done: true, changed: true, url, owner: pack.owner });
+  } catch (err) {
+    toast('Could not save the art: ' + err.message, true);
+    reply({ done: false, error: err.message });
+  }
+});
+
 boot()
   .then(async () => {
     let tab = null;
@@ -581,6 +609,7 @@ boot()
       q.delete('open'); q.delete('owner'); q.delete('title');
       history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
       await openFromLink(open, owner, title);
+      editBase = editCount;
     }
   })
   .catch(err => toast('Could not start: ' + err.message, true));
