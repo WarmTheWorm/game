@@ -2643,6 +2643,7 @@ const optionsScreen = document.getElementById('optionsScreen');
 const achievementsScreen = document.getElementById('achievementsScreen');
 
 function goToScreen(screen) {
+  document.documentElement.classList.remove('play-run');   // a menu shown on purpose: the menu again
   [startScreen2, hiscoreScreen, customLevelScreen, optionsScreen, achievementsScreen].forEach(s => s.classList.add('hidden'));
   screen.classList.remove('hidden');
 }
@@ -2703,6 +2704,7 @@ Promise.all([atlas.loadRoot(), sound.loadRoot()]).then(loadBuiltinLevels).then((
   }
 }).catch(err => {
   console.error('game data load failed:', err);
+  document.documentElement.classList.remove('play-run');
   playBtn.textContent = '⚠ Game data unavailable';
   levelLoadMsg.textContent = location.protocol === 'file:'
     ? 'Objects and levels load from the assets folder, which browsers block over file://. Serve this folder over http — e.g. "python -m http.server" — and open it from there.'
