@@ -270,6 +270,100 @@ const packStore = (() => {
       return this.url(kind, name);
     },
 
+    // Changes some files of a pack — { put: [{ name, data }], remove: [paths] }
+    // — and leaves the rest as they are; a pack not there yet is made. All in
+    // one transaction, so a reader sees the pack before or after, never half;
+    // its manifest is worked out again from its files' records the next time
+    // it is asked for (manifest()), which a transaction can't wait for.
+    async write(kind, name, { put = [], remove = [] } = {}, title) {
+      name = clean(name);
+      const items = await Promise.all(put.map(async f => {
+        const path = f.name.replace(/^\/+/, '');
+        const blob = asBlob(f.data, path);
+        const bytes = await bytesOf(blob);
+        return { path, type: typeOf(path), blob, size: bytes.length, hash: await hashBytes(bytes) };
+      }));
+      const gone = remove.map(p => String(p).replace(/^\/+/, '')).filter(p => !items.some(it => it.path === p));
+      const updated = Date.now();
+      const db = await open();
+      const tx = db.transaction([FILES, BLOBS, PACKS], 'readwrite');
+      const store = tx.objectStore(FILES), blobs = tx.objectStore(BLOBS), packs = tx.objectStore(PACKS);
+      const key = `${kind}/${name}`;
+      let dropped = gone.length > 0;
+      for (const p of gone) store.delete(`${key}/${p}`);
+      for (const it of items) {
+        blobs.getKey(it.hash).onsuccess = e => { if (e.target.result === undefined) blobs.put({ data: it.blob, size: it.size }, it.hash); };
+        store.get(`${key}/${it.path}`).onsuccess = e => { const was = e.target.result; if (was && was.hash !== it.hash) dropped = true; };
+        store.put({ type: it.type, hash: it.hash, size: it.size }, `${key}/${it.path}`);
+      }
+      const range = IDBKeyRange.bound(`${key}/`, `${key}/￿`);
+      packs.get(key).onsuccess = e => {
+        const was = e.target.result;
+        store.count(range).onsuccess = c => {
+          packs.put({ kind, name, title: title || (was && was.title) || name, updated, count: c.target.result }, key);
+        };
+      };
+      await done(tx);
+      if (dropped) await sweep(db);
+      return this.url(kind, name);
+    },
+
+    // A copy of a pack, under another name (and kind, if `toKind`), in place of
+    // anything there: only its files' records are copied — the bytes are
+    // already kept, so it costs next to nothing. The copy keeps the pack's
+    // version. False if there is no such pack.
+    async copy(kind, name, to, { toKind = kind, title } = {}) {
+      name = clean(name); to = clean(to);
+      const from = `${kind}/${name}`, into = `${toKind}/${to}`;
+      if (from === into) return true;
+      const manifest = await this.manifest(kind, name);
+      if (!manifest) return false;
+      const db = await open();
+      const tx = db.transaction([FILES, PACKS], 'readwrite');
+      const store = tx.objectStore(FILES), packs = tx.objectStore(PACKS);
+      let found = false, dropped = false;
+      store.getAllKeys(IDBKeyRange.bound(`${into}/`, `${into}/￿`)).onsuccess = old => {
+        dropped = old.target.result.length > 0;
+        for (const k of old.target.result) store.delete(k);
+        const range = IDBKeyRange.bound(`${from}/`, `${from}/￿`);
+        store.getAllKeys(range).onsuccess = ks => store.getAll(range).onsuccess = vs => {
+          const keys = ks.target.result, recs = vs.target.result;
+          keys.forEach((k, i) => store.put(recs[i], into + k.slice(from.length)));
+          packs.get(from).onsuccess = e => {
+            const src = e.target.result;
+            if (!src) return;
+            found = true;
+            const updated = Date.now();
+            // the manifest goes with it only if the pack is still as it was read
+            const same = manifest.updated === src.updated && src.manifest && src.manifest.v === manifest.v;
+            packs.put({ kind: toKind, name: to, title: title || src.title, updated, count: keys.length, ...(same ? { manifest: { ...manifest, updated } } : {}) }, into);
+          };
+        };
+      };
+      await done(tx);
+      if (dropped) await sweep(db);
+      return found;
+    },
+
+    // Holds a pack as it is now, for as long as something is reading it file
+    // by file (a friend fetching it): { manifest, read(path) → Blob, release() }.
+    // Saves meanwhile change the pack, not this; its bytes stay until release
+    // — or an hour, if the page holding it went away.
+    async pin(kind, name) {
+      const PINS = '~pins', HOUR = 3600 * 1000;
+      try {
+        for (const p of await this.list(PINS)) if (Date.now() - p.updated > HOUR) await this.remove(PINS, p.name);
+      } catch { /* tidied next time */ }
+      const as = clean(`${kind}-${name}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
+      if (!await this.copy(kind, name, as, { toKind: PINS })) return null;
+      const manifest = await this.manifest(PINS, as);
+      return {
+        manifest,
+        read: async path => { const rec = await this.get(PINS, as, path); return rec ? rec.data : null; },
+        release: () => this.remove(PINS, as).catch(() => {})
+      };
+    },
+
     // The packs of a kind, newest first.
     async list(kind) {
       const db = await open();
@@ -345,7 +439,7 @@ const packStore = (() => {
       }
       const kept = blobs.reduce((n, b) => n + (b.size || 0), 0) + oldBytes;
       const kinds = {};
-      for (const p of packs) if (p.kind) kinds[p.kind] = (kinds[p.kind] || 0) + 1;
+      for (const p of packs) if (p.kind && !p.kind.startsWith('~')) kinds[p.kind] = (kinds[p.kind] || 0) + 1;
       return { packs: kinds, files: files.length, blobs: blobs.length, bytes, kept, saved: bytes - kept, unmoved: old };
     },
 

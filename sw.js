@@ -23,6 +23,32 @@ if (new URLSearchParams(location.search).has('play')) {
 <style>.play-run #startScreen { display: none !important; }</style>
 `;
 
+// The game page for a level pack's folder that has none: the built engine
+// (dist/game.html, as npm run build leaves it), its pack roots set to the
+// folder's own files, as a built pack's page has them (editor/index.html's
+// packGame) — so playing it never meets an engine page older than the site.
+const ROOTS_MARKER = '<!-- pack roots -->';
+async function enginePage(name) {
+  const res = await fetch('/dist/game.html', { cache: 'no-cache' });
+  if (!res.ok) return new Response(`the game page is not here: /dist/game.html ${res.status}`, { status: 502, headers: { 'Content-Type': 'text/plain' } });
+  let page = await res.text();
+  const lp = await packStore.get('packs', name, 'levelpack.json');
+  if (!lp) return new Response(`not in the browser's packs: ${packStore.url('packs', name)}levelpack.json`, { status: 404, headers: { 'Content-Type': 'text/plain' } });
+  let data = {};
+  try { data = JSON.parse(await new Response(lp.data).text()); } catch { /* the defaults, then */ }
+  const str = v => JSON.stringify(String(v));
+  const roots = '<script>\n'
+    + `  window.PACK_URL = 'levelpack.json';\n`
+    + `  window.OBJECTS_URL = ${str((data.objects && data.objects.manifest) || 'objects/objects.json')};\n`
+    + `  window.SOUNDS_URL = ${str(data.sounds || 'sounds/default.json')};\n`
+    + `  window.TILES_URL = ${str((data.tileset && data.tileset.texture) || 'tiles/tiles.png')};\n`
+    + '</script>';
+  page = page.includes(ROOTS_MARKER) ? page.replace(ROOTS_MARKER, roots) : page.replace('<head>', '<head>\n' + roots);
+  if (!page.includes('wtwShareHost')) page += '\n<script src="/src/js/sharehost.js"></script>\n';
+  if (page.includes('wtw:play') && !page.includes('play-run') && page.includes('<head>')) page = page.replace('<head>', '<head>\n' + PLAY_RUN);
+  return new Response(page, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+}
+
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 
@@ -34,6 +60,9 @@ self.addEventListener('fetch', e => {
   e.respondWith((async () => {
     try {
       const rec = await packStore.get(want.kind, want.name, want.path);
+      // a level pack's own folder (/__idb/packs/<id>/) keeps no game page: it
+      // is played on the site's engine as it is now, pointed at the folder
+      if (!rec && want.kind === 'packs' && want.path === 'index.html') return await enginePage(want.name);
       if (!rec) return new Response(`not in the browser's packs: ${url.pathname}`, { status: 404, headers: { 'Content-Type': 'text/plain' } });
       const headers = { 'Content-Type': rec.type, 'Cache-Control': 'no-store' };
       // a pack's page built before the game joined this browser's room

@@ -181,6 +181,8 @@ const ShareCore = (() => {
           play: files => playUrl(p.name, files),
           version: async () => (await packStore.manifest('levels', p.name))?.v,
           manifest: () => packStore.manifest('levels', p.name),
+          // held as it is now while a friend fetches it (packStore.pin)
+          pin: () => packStore.pin('levels', p.name),
           read: async path => {
             const rec = await packStore.get('levels', p.name, path);
             if (!rec) throw new Error(`${path} isn't in ${p.name}`);
@@ -341,9 +343,13 @@ const ShareCore = (() => {
   // progress: 0..1 } as it goes.
   function serve(conn, report, pause = () => 0) {
     let pack = null, list = [], title = '', wanted = false, finished = false, answered = null;
+    // the pack as it was when the friend asked, kept while it fetches: a save
+    // here meanwhile changes the pack, not what this friend gets
+    let held = null;
+    const letGo = () => { if (held) { held.release(); held = null; } };
     const tell = (text, state = '', progress) => report({ title, text, state, progress });
     tell('connecting…');
-    const fail = text => { finished = true; tell(text, 'err'); if (answered) answered(); };
+    const fail = text => { finished = true; letGo(); tell(text, 'err'); if (answered) answered(); };
     const cardOf = name => typeof ShareCards !== 'undefined' ? ShareCards.cardOrNull(name) : null;
 
     async function send(paths, at) {
@@ -372,6 +378,7 @@ const ShareCore = (() => {
         } while (i < bytes.length);
       }
       finished = true;
+      letGo();
       conn.send({ t: 'end' });
       tell(files.length === list.length ? `sent, ${fmt(size)}` : files.length ? `sent ${files.length} changed of ${list.length} files, ${fmt(size)}` : 'had it all already', 'ok', 1);
     }
@@ -394,14 +401,24 @@ const ShareCore = (() => {
         const src = isPublic(name) ? await sourceNamed(name) : null;
         if (!src) { conn.send({ t: 'none', name }); fail(`asked for ${name}, which isn't offered`); return; }
         let manifest;
-        try { manifest = await src.manifest(); }
+        try {
+          letGo();
+          held = src.pin ? await src.pin() : null;
+          manifest = held ? held.manifest : await src.manifest();
+        }
         catch (err) { conn.send({ t: 'none', name }); fail('could not read it: ' + err.message); return; }
-        pack = src;
+        if (!manifest) { conn.send({ t: 'none', name }); fail(`asked for ${name}, which isn't offered`); return; }
+        pack = held ? { ...src, read: async path => {
+          const data = await held.read(path);
+          if (!data) throw new Error(`${path} isn't in ${src.name}`);
+          return new Response(data).arrayBuffer();
+        } } : src;
         list = manifest.files;
         title = src.title;
         if (msg.v && msg.v === manifest.v) {
           conn.send({ t: 'same', name: src.name, title: src.title, v: manifest.v, card: await cardOf(src.key) });
           finished = true;
+          letGo();
           tell('had this version already', 'ok', 1);
           return;
         }
@@ -419,7 +436,7 @@ const ShareCore = (() => {
     conn.on('close', () => {
       if (finished) return;
       // &diff: it read the list and fetched nothing
-      if (list.length && !wanted) { finished = true; tell('only looked at what it would fetch'); return; }
+      if (list.length && !wanted) { finished = true; letGo(); tell('only looked at what it would fetch'); return; }
       fail('left before the end');
     });
     conn.on('error', err => fail('failed: ' + err.message));
