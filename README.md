@@ -73,37 +73,40 @@ serves under `/__idb/<kind>/<name>/` exactly as if they were folders. So
 every tool reads a pack the same way, from a URL, whether it is on disk or
 kept in the browser:
 
-- a level pack owns its art: its tiles, objects, backgrounds and sounds are
-  kept for it alone as `/__idb/assets/lp-<its id>/`, so changing one pack's
-  art changes no other. The level editor has no asset pack picker:
-  **🎨 Edit assets** shows the Asset Editor (the asset pack creator) in the
-  same page, under the same bar, on the open level pack's art (the first
-  time, on a copy of what it was built with); the button turns into
-  **🧩 Edit levels**, which saves the art as that pack's if it changed and
-  shows the levels again. Meanwhile Export, Share, Import, Revert, Remove and
-  the level pack list wait, since they would read the art as it was. **+ New level pack** asks whose art to start with — the open one's,
-  another level pack's, an asset pack on disk or one the creator made — and
-  copies it; **⧉ Duplicate** copies the art too. A level pack from before
-  this takes its own copy the first time its art is edited;
+- **a level pack is one folder in the browser** (`editor/folders.js`): its
+  art as an asset pack lays it out (`assetpack.json`, `tiles/`, `objects/`,
+  `backgrounds/`, `sounds/`), its levels as the game reads them
+  (`levelpack.json`, `levels/`), and `.wtw/pack.json` (its name, its levels'
+  order, the name its shared copy goes by). It is kept twice, which costs
+  next to nothing since files are kept once:
+  `/__idb/packs/<its id>/` as last saved — what Play, Share and friends get —
+  and `/__idb/drafts/<its id>/`, being edited. Both editors write into the
+  draft a moment after each change; **💾 Save** (Ctrl+S) makes it the level
+  pack (and its shared copy, `/__idb/levels/<share name>/`, with it),
+  **⟲ Revert** lets it go — art too. A `*` marks a draft with changes not
+  saved. Its game page is the site's own engine, pointed at the folder;
+- **🎨 Edit assets** shows the Asset Editor in the same page, under the same
+  bar, on the open level pack's folder; the button turns into **🧩 Edit
+  levels**, which writes the art into the draft if it changed and shows the
+  levels again. **+ New level pack** asks whose art to start with — another
+  level pack's, an asset pack on disk or one the creator made — and copies
+  it; **⧉ Duplicate** copies the whole folder. **Delete** asks, and takes the
+  folder, its draft, its shared copy and the Asset Editor's working copy;
 - the creator's **Open in level editor**, on an asset pack that is no level
-  pack's, saves it as `/__idb/assets/<name>/` and starts a new level pack in
-  the editor with a copy of it; its **Import** offers the packs
-  `assetpacks/index.json` lists;
-- the level editor keeps every level pack in the browser as you work, the
-  open one also as
-  `/__idb/levels/<name>/`, built as its download would be, which the game
-  plays (`/src/index.html?pack=/__idb/levels/<name>/levelpack.json&assets=...`).
-  Its **level pack** button lists them, with **+ New**, **⧉ Duplicate** and
-  **✎ Rename** (or double-click it) first, as the creator's pack button;
-  **Import…** adds one from `levelpacks/index.json`, a `.zip`, or another
-  browser's share link (fetched through `share/` in a hidden frame), and **⬇ Export .zip** saves the open one
-  with all its art. As in the creator, a `*` marks changes never
-  exported: **Remove** takes a level pack without one out at once, a red
-  **Delete** asks first; with none left, only Import is offered;
-- the level editor's level pack button also lists the level packs kept in
-  the browser that the editor hasn't opened (from friends, uploaded, or left
-  from before): a click opens one, and its copy in the store becomes that
-  pack's own, under the name it has there, rather than a second copy;
+  pack's, starts a new level pack with a copy of it; its **Import** offers
+  the packs `assetpacks/index.json` lists;
+- the editor's **level pack** button lists the level packs, with **+ New**,
+  **⧉ Duplicate** and **✎ Rename** (or double-click it) first; opening one
+  opens the page again on its folder. **Import…** brings one in — from
+  `levelpacks/index.json`, a `.zip`, or another browser's share link
+  (fetched through `share/` in a hidden frame) — as a folder of its own, its
+  art with it, and **⬇ Export .zip** downloads the open one. Below them are
+  the level packs kept in the browser the editor hasn't opened (from
+  friends, uploaded): a click brings one in, under the share name it has, so
+  links to it go on working;
+- level packs the editor kept before folders (in localStorage) are moved
+  into folders the first time the new editor opens, one at each opening of
+  the page; the old list is kept aside as `warmWormEditorLevelBackup`;
 - the game plays whatever `?pack=` and `?assets=` name;
 - **share/** hands a level pack to another browser, peer to peer: pick one
   (from `levelpacks/` or the browser's store), send the link it gives, and the
@@ -167,12 +170,11 @@ saves. Bytes no pack names any more are swept away when a pack is saved
 again or removed: nothing counts how many packs hold a file — after each
 removal, whatever no pack names is gone.
 
-A level pack's own art goes with it when it is deleted in the level editor:
-its copy in the store and the Asset Editor's working copy of it
-(`src/js/arttidy.js`). `share del` deletes only the browser's copies of
-level packs — the level editor's own are untouched, and keep their art.
-`share tidy` clears art that no level pack of the level editor uses any
-more (left by older versions); `-dry` only lists it.
+`share del` deletes only the browser's shared copies of level packs
+(`levels/`) — the level editor's own folders are untouched. `share tidy`
+clears art no level pack uses any more (left by older versions) and the
+Asset Editor's working copies of level packs that are gone
+(`src/js/arttidy.js`); `-dry` only lists it.
 
 A static server cannot list folders, so the packs on disk are listed in
 `assetpacks/index.json` and `levelpacks/index.json`, which `npm run build`

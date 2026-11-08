@@ -296,8 +296,9 @@
   <button id="shareBtn" class="packOnly" title="Share the open level pack with a friend, peer to peer: a link they open to fetch it into their browser and play it">🔗 Share</button>
   <button id="visBtn" class="packOnly"></button>
   <button id="sharingBtn"></button>
-  <button id="downloadBtn" class="go packOnly" title="Save the open level pack, with its art, as a .zip — clears its *">⬇ Export .zip</button>
-  <button id="revertBtn" class="packOnly" title="Put the open level pack back as it was when it was last exported or imported" disabled>⟲ Revert</button>
+  <button id="savePackBtn" class="go packOnly" title="Save the open level pack (Ctrl+S): what Play, Share and friends get from now on" disabled>💾 Save</button>
+  <button id="downloadBtn" class="packOnly" title="Download the open level pack, with its art, as a .zip">⬇ Export .zip</button>
+  <button id="revertBtn" class="packOnly" title="Put the open level pack back as it was when it was last saved, its art too" disabled>⟲ Revert</button>
   <button id="delPackBtn" class="packOnly">Remove</button>
 </header>
 
@@ -486,6 +487,7 @@
 <script src="../src/js/packstore.js"></script>
 <script>packStore.boot();</script>
 <script src="../src/js/arttidy.js"></script>
+<script src="folders.js"></script>
 <script src="../src/js/sharehost.js"></script>
 <script src="../share/core.js"></script>
 <script src="../src/js/tileset.js"></script>
@@ -544,7 +546,28 @@ const ASKED_ASSETS = new URLSearchParams(location.search).get('assets');
 // ?new: its Open in level editor, on an asset pack no level pack owns
 const FOR_PACK = new URLSearchParams(location.search).get('for');
 const NEW_PACK = new URLSearchParams(location.search).has('new');
+// The editor's level packs from before each was a folder (editor/folders.js),
+// all in localStorage: moved into folders one by one, a pack at each opening
+// of the page (migrateOpen), and then let go of.
+const LEGACY = (() => {
+  try {
+    const d = JSON.parse(localStorage.getItem('warmWormEditorLevel') || 'null');
+    return d && Array.isArray(d.packs) && d.packs.length ? d : null;
+  } catch (err) { return null; }
+})();
+const FOLDERS = !LEGACY;
+// The level pack the page is open on: ?open=<uid> (?for=, the Asset Editor's
+// way back), else the one open last.
+const OPEN_KEY = 'warmWormEditorOpen';
+const AT_KEY = 'warmWormEditorAt';         // uid -> the level open in it
+const OPEN_UID = new URLSearchParams(location.search).get('open') || FOR_PACK
+  || (() => { try { return localStorage.getItem(OPEN_KEY); } catch (err) { return null; } })();
 const EDITOR_DIR = (() => {
+  // a level pack's own folder — its draft — unless ?assets=&new: art for a new one
+  if (FOLDERS) {
+    const want = ASKED_ASSETS && NEW_PACK ? ASKED_ASSETS : OPEN_UID ? Folders.dir(OPEN_UID) : DEFAULT_ASSETS;
+    return want.endsWith('/') ? want : want + '/';
+  }
   let want = ASKED_ASSETS;
   if (!want) {
     try {
@@ -759,6 +782,10 @@ const exitOk = t => isShareLink(t) ? !!shareLinkParts(t) : t !== null && t !== u
 // downloaded folder stands on its own too.
 let bgDir = new URL(EDITOR_DIR + 'backgrounds/', location.href).href;
 let bgLibrary = [];      // [{ file, name, color, scroll }]
+// The library read whole: until it is, a level read in would lose the
+// backgrounds and tracks it names — so a level pack is neither read nor
+// written without it (bootFolders).
+let libraryOk = false;
 let soundDir = new URL(EDITOR_DIR + 'sounds/', location.href).href;
 let soundLibrary = [];   // [{ file, name }]
 let soundDefault = 'default.json';
@@ -844,7 +871,10 @@ function stashLevel() {
 function stashPack() {
   if (noPack) return;
   stashLevel();
-  packs[packIndex] = { ...packs[packIndex], name: packName, levels, current };
+  // with folders, the same record (what is worked out about it — its * —
+  // lands on it whenever it is worked out)
+  if (FOLDERS) Object.assign(packs[packIndex], { name: packName, levels, current });
+  else packs[packIndex] = { ...packs[packIndex], name: packName, levels, current };
 }
 
 // What a level pack holds, as one number: its * is this differing from the
@@ -855,7 +885,10 @@ function packSum(p) {
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
   return (h >>> 0).toString(36);
 }
-const packDirty = p => !p.sum || p.sum !== packSum(p);
+// With folders, its * is its draft differing from what was last saved
+// (worked out after each write: `dirty`); before, a sum of what it held
+// when last exported or imported.
+const packDirty = p => FOLDERS ? !!p.dirty : (!p.sum || p.sum !== packSum(p));
 // What the browser's copy of a level pack was built from: what it holds, the
 // art it was built with, and that art's version — Edit levels gives it a new
 // one each time the art changes, so the copy friends fetch has the new art
@@ -873,6 +906,7 @@ function applyPack(pack) {
 
 function openPack(i) {
   if (i === packIndex || !packs[i]) return;
+  if (FOLDERS) { flushFolder().then(() => reopenFolder(packs[i].uid)); return; }
   stashPack();
   packIndex = i;
   // built with another asset pack: the page opens again on that one
@@ -898,6 +932,13 @@ function reopenOn(assets) {
   q.delete('new');
   q.set('assets', assets);
   location.search = q.toString();
+}
+
+// The page again, on the level pack `uid` — its folder is the art it draws with.
+function reopenFolder(uid) {
+  try { localStorage.setItem(OPEN_KEY, uid); } catch (err) { /* ?open= says it */ }
+  try { sessionStorage.setItem('wtwEditorMode', ''); } catch (err) { /* not kept */ }
+  location.href = location.pathname + '?open=' + encodeURIComponent(uid);
 }
 
 function openLevel(i) {
@@ -1010,10 +1051,10 @@ function toBlockMap() {
 // one string per line, and whatever else the editor knows. The tileset and
 // object blocks are left out on purpose — inside a pack a level takes the
 // pack's, and on its own it takes the defaults, which is what was drawn here.
-function levelJson(i) {
+function levelJson(i, draft = false) {
   const src = levels[i];
   const level = { name: levelTitle(src, i) };
-  const exit = exitPaths(src);
+  const exit = draft ? draftExits(src) : exitPaths(src);
   if (exit.length) level.exit = exit;
   level.background = bgSpec(src);
   if (src.music) level.music = src.music;
@@ -1048,6 +1089,19 @@ function readBgSpec(spec) {
 // The game walks a level's `exit` list in order and refuses an entry that
 // names nothing, so the list has to be solid up to the last flag that leads
 // anywhere. `packProblems()` is what tells her when it isn't.
+// The same, for a draft: a flag not set yet (or a share link not pasted yet)
+// is kept as null in its place, so the others keep theirs when it is read back.
+function draftExits(src) {
+  const want = src.exits || [];
+  let last = -1;
+  want.forEach((t, d) => { if (exitOk(t)) last = d; });
+  const out = [];
+  for (let d = 0; d <= last; d++) {
+    const t = want[d];
+    out.push(!exitOk(t) ? null : isShareLink(t) ? shareLinkParts(t).href : levelFile(t));
+  }
+  return out;
+}
 function exitPaths(src) {
   const want = src.exits || [];
   let last = -1;
@@ -1794,7 +1848,7 @@ async function artChoices() {
   const opts = new Map();
   const add = (dir, label) => { if (dir && !opts.has(dir)) opts.set(dir, label); };
   if (!noPack) add(EDITOR_DIR, `${packName || 'this level pack'} — the one open`);
-  packs.forEach((p, i) => { if (i !== packIndex || noPack) add(p.assets || DEFAULT_ASSETS, `${p.name || `Level pack ${i + 1}`} — a level pack here`); });
+  packs.forEach((p, i) => { if (i !== packIndex || noPack) add(FOLDERS ? Folders.dir(p.uid) : p.assets || DEFAULT_ASSETS, `${p.name || `Level pack ${i + 1}`} — a level pack here`); });
   try {
     const res = await fetch('/assetpacks/index.json', { cache: 'no-store' });
     // a zipped one can't be read here
@@ -1817,7 +1871,7 @@ async function artChoices() {
 // would read the art as it was — Export, Share, another pack — waits.
 const assetFrame = document.getElementById('assetFrame');
 const editAssetsBtn = document.getElementById('editAssetsBtn');
-const ART_WAITS = ['packPick', 'importBtn', 'shareBtn', 'downloadBtn', 'revertBtn', 'delPackBtn'];
+const ART_WAITS = ['packPick', 'importBtn', 'shareBtn', 'downloadBtn', 'revertBtn', 'delPackBtn', 'savePackBtn'];
 const MODE_KEY = 'wtwEditorMode';
 let assetsMode = false;
 function showAssetsMode(on) {
@@ -1838,12 +1892,13 @@ function showAssetsMode(on) {
 }
 editAssetsBtn.title = "Change this level pack's art — its tiles, sprites, objects, backgrounds and sounds — in the Asset Editor. The art is this level pack's own: no other pack changes with it";
 function enterAssets() {
-  if (noPack) return;
+  if (noPack || (FOLDERS && !booted)) return;
   closePackList();
   stashPack();
   const p = packs[packIndex];
   if (!p.uid) p.uid = newUid();
   save();
+  if (FOLDERS) flushFolder();
   if (assetFrame.dataset.owner !== p.uid) {
     const q = new URLSearchParams({ open: EDITOR_DIR, owner: p.uid, title: packName || p.name || 'Level pack', embed: '1' });
     assetFrame.src = '/assetpack-editor/?' + q;
@@ -1869,6 +1924,8 @@ async function leaveAssets() {
   if (!r.changed) { showAssetsMode(false); return; }
   const p = packs.find(x => x.uid === r.owner);
   if (!p) { showAssetsMode(false); return; }
+  // the art is in this pack's folder now: the page opens again on it
+  if (FOLDERS) { await flushFolder(); reopenFolder(r.owner); return; }
   stashPack();
   const back = packs.find(x => x.uid === r.owner);
   back.assets = r.url;
@@ -2067,6 +2124,16 @@ function refreshPacks() {
   // nothing unexported: it is in a file somewhere, and only leaves the
   // browser; with a *, its changes go with it, so it asks
   const dirty = packDirty({ ...packs[packIndex], name: packName, levels });
+  if (FOLDERS) {
+    delPackBtn.textContent = 'Delete';
+    delPackBtn.classList.add('warn');
+    delPackBtn.title = 'Delete this level pack — its levels, its art and its shared copy';
+    if (!assetsMode) {
+      document.getElementById('revertBtn').disabled = !dirty;
+      document.getElementById('savePackBtn').disabled = !dirty;
+    }
+    return;
+  }
   delPackBtn.textContent = dirty ? 'Delete' : 'Remove';
   delPackBtn.classList.toggle('warn', dirty);
   delPackBtn.title = dirty ? 'Delete this level pack — it has changes never exported' : 'Remove this level pack from the browser — nothing in it is lost';
@@ -2096,6 +2163,7 @@ function closePackList() { document.querySelectorAll('.packlist').forEach(l => l
 // The browser's level packs that aren't the copies of the editor's own.
 async function storePacksNotHere() {
   const mine = new Set(packs.map(p => p.mirror).filter(Boolean));
+  if (FOLDERS) try { for (const f of await Folders.list()) if (f.shareName) mine.add(f.shareName); } catch (err) { /* as listed */ }
   try { return (await ShareCore.listPacks()).filter(p => !mine.has(p.name)); } catch { return []; }
 }
 packPick.addEventListener('click', async e => {
@@ -2114,7 +2182,7 @@ packPick.addEventListener('click', async e => {
     noPack ? '' : `<button type="button" role="option" class="new" data-packact="rename"><span>✎ Rename ${name}…</span><small>or double-click</small></button>`,
     ...(noPack ? [] : packs.map((p, i) => {
       const live = i === packIndex ? { ...p, name: packName, levels } : p;
-      const count = live.levels.length;
+      const count = live.levels ? live.levels.length : (live.count || 0);
       return `<button type="button" role="option" class="${i === packIndex ? 'on' : ''}" data-packi="${i}" aria-selected="${i === packIndex}">
         <span>${escHtml(live.name || `Level pack ${i + 1}`)}${packDirty(live) ? ' *' : ''}</span><small>${count} ${count === 1 ? 'level' : 'levels'}${i === packIndex ? ' · open' : ''}</small></button>`;
     })),
@@ -2177,6 +2245,7 @@ packNameInput.addEventListener('blur', () => endRename(true));
 
 // A level pack made here, not read in: a copy of the open one, or an empty one.
 async function makeLevelPack(kind) {
+  if (FOLDERS) return makeFolderPack(kind);
   if (kind === 'copy') {
     stashPack();
     const copy = JSON.parse(JSON.stringify(packs[packIndex]));
@@ -2211,6 +2280,7 @@ async function dropStored(p) {
 
 const delPackBtn = document.getElementById('delPackBtn');
 delPackBtn.addEventListener('click', async () => {
+  if (FOLDERS) { deleteFolderPack(); return; }
   stashPack();
   const gone = packIndex, p = packs[gone];
   const name = p.name || `Level pack ${gone + 1}`;
@@ -2245,7 +2315,7 @@ function enterNoPack() {
   levels = only.levels;
   current = 0;
   applyState(levels[0]);
-  try { localStorage.setItem(STORE_KEY, JSON.stringify({ packs: [], packIndex: 0, objGlyphs: OBJECTS.map(o => o.glyph) })); } catch (err) { /* ignore */ }
+  if (!FOLDERS) try { localStorage.setItem(STORE_KEY, JSON.stringify({ packs: [], packIndex: 0, objGlyphs: OBJECTS.map(o => o.glyph) })); } catch (err) { /* ignore */ }
   refreshPacks(); refreshOpenPacks(); render();
 }
 
@@ -2287,6 +2357,7 @@ function keepBase(p) {
 // Back to how the open level pack was when it was last exported or imported,
 // all that changed since let go of — asked first, since it cannot be undone.
 document.getElementById('revertBtn').addEventListener('click', async () => {
+  if (FOLDERS) { revertFolderPack(); return; }
   stashPack();
   const p = packs[packIndex];
   if (!p.base || !packDirty(p)) return;
@@ -2674,9 +2745,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     }
     // what is on disk now matches it: no * until it changes again
-    stashPack();
-    keepBase(packs[packIndex]);
-    save();
+    if (!FOLDERS) { stashPack(); keepBase(packs[packIndex]); save(); }
     levelMsg.textContent = `${handle ? 'Saved ' + handle.name : 'Downloaded ' + zipName} — ${files.length} files, its art with it. Unzip it anywhere and open index.html.`;
   } catch (err) {
     levelMsg.textContent = 'Could not build the level pack: ' + err.message;
@@ -2996,7 +3065,8 @@ function useSheet(spec) {
     cell.pi = remap(cell.pi);
   }
   tileIndex = Math.min(remap(tileIndex), PALETTE.length - 1);
-  applyPack(packs[packIndex]);
+  // (none yet: with folders, the levels are read once the art is)
+  if (!noPack && packs[packIndex] && packs[packIndex].levels) applyPack(packs[packIndex]);
   buildTileSwatches();
   textureReady(sheet.img).then(() => { refreshSelection(); render(); });
 }
@@ -3181,6 +3251,14 @@ document.addEventListener('keydown', e => {
 // ---------- keeping the work ----------
 function save() {
   if (noPack) return;
+  if (FOLDERS) {
+    if (!booted) return;
+    try { stashPack(); } catch (err) { /* written as it is, then */ }
+    journal();
+    scheduleFolderWrite();
+    refreshPacks();
+    return;
+  }
   try { stashPack(); } catch (err) { /* written as it is, then */ }
   persist();
   refreshPacks();
@@ -3191,6 +3269,7 @@ function save() {
 // by then packIndex names the level pack it is going to, and what is still on
 // screen is the one it left — save()'s stash would copy that over it.
 function persist() {
+  if (FOLDERS) return;
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({ packs, packIndex, objGlyphs: OBJECTS.map(o => o.glyph) }));
   } catch (err) { /* private mode, etc. */ }
@@ -3265,7 +3344,7 @@ document.getElementById('visBtn').addEventListener('click', () => {
   const secret = !packIsPrivate(p);
   p.private = secret;
   try { if (p.mirror) ShareCore.setPublic(p.mirror, !secret); } catch (err) { levelMsg.textContent = err.message; }
-  persist();
+  if (!FOLDERS) persist();
   drawSharing();
 });
 document.getElementById('sharingBtn').addEventListener('click', () => {
@@ -3295,10 +3374,17 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   stashPack();
   clearTimeout(mirrorTimer);
   levelMsg.textContent = 'Making the link…';
-  await mirrorNow();
   const p = packs[packIndex];
   let link = '', why = '';
-  if (!p.mirror || p.mirrorSum !== mirrorKey(p)) why = await storeTrouble() || mirrorError || 'no reason given';
+  if (FOLDERS) {
+    // its shared copy is what was last saved: made now if there is none yet
+    try {
+      await flushFolder();
+      if (!await packStore.manifest('levels', p.shareName)) await publishShare(p);
+    } catch (err) { why = err.message; }
+  } else await mirrorNow();
+  if (why) { /* said below */ }
+  else if (!p.mirror || (!FOLDERS && p.mirrorSum !== mirrorKey(p))) why = await storeTrouble() || mirrorError || 'no reason given';
   else {
     try {
       const m = await packStore.manifest('levels', p.mirror);
@@ -3314,7 +3400,8 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   shareLink.value = link;
   document.getElementById('shareNote').textContent = packIsPrivate(p)
     ? 'It is private: friends with the link get nothing until you make it public (🔒 Private, beside Share).'
-    : !ShareCore.sharingOn() ? 'Sharing is off in this browser: friends get nothing until you switch it on (📡 Sharing off).' : '';
+    : !ShareCore.sharingOn() ? 'Sharing is off in this browser: friends get nothing until you switch it on (📡 Sharing off).'
+    : FOLDERS && packDirty(p) ? 'Friends get it as it was last saved: 💾 Save to give them your changes.' : '';
   shareOverlay.classList.remove('hidden');
   shareLink.focus();
   shareLink.select();
@@ -3353,6 +3440,7 @@ function load() {
 // to it go on working however it is renamed here. It is built again only once
 // something in it changes, with this editor's asset pack.
 async function openStorePack(name) {
+  if (FOLDERS) { await openLevelPack(packStore.url('levels', name) + 'levelpack.json', { shareName: name }); return; }
   const before = noPack ? 0 : packs.length;
   await openLevelPack(packStore.url('levels', name) + 'levelpack.json');
   if (noPack || packs.length === before) return;      // not added
@@ -3521,7 +3609,7 @@ async function readZip(buf) {
 // Reads a level pack — its levelpack.json and every level it reaches from its
 // first through their flags — into a new pack here, the levels in the order
 // they are reached and each flag pointing at the level it leads to.
-async function openLevelPack(url) {
+async function openLevelPack(url, { shareName } = {}) {
   levelMsg.textContent = 'Reading the level pack…';
   try {
     const packUrl = new URL(url, location.href);
@@ -3542,6 +3630,7 @@ async function openLevelPack(url) {
         if (!order.includes(href)) order.push(href);
       }
     }
+    if (FOLDERS) { await importFolder(packUrl, manifest, order, datas, shareName); return; }
     stashPack();
     const read = [];
     for (let i = 0; i < datas.length; i++) {
@@ -3721,12 +3810,356 @@ document.getElementById('stopTestBtn').addEventListener('click', () => {
   }
 });
 
+// ---------- level packs as folders ----------
+// Each level pack is a folder in the browser (editor/folders.js): this page
+// is open on one — its draft is the art it draws with — and writes its levels
+// there a moment after each change. 💾 Save makes the draft what Play, Share
+// and friends get; ⟲ Revert lets the draft go. The other packs are only
+// listed: opening one opens the page again on it.
+let booted = false;          // the open one's levels read in: saving may start
+let writeTimer = 0;
+let writing = null;
+// What is about to be written, kept at once where nothing is lost if the tab
+// closes first — the folder's writes wait on hashing — and written on the
+// next opening if it was not.
+const JOURNAL_KEY = 'warmWormEditorJournal';
+let journalStamp = 0;
+
+// The open pack's files as its draft holds them: levelpack.json, its levels,
+// and (with `withMeta`) .wtw/pack.json.
+function draftFiles(withMeta = true) {
+  const p = packs[packIndex];
+  const order = levels.map((s, i) => PACK_LEVELS + levelFile(i));
+  const files = [{ name: 'levelpack.json', data: packJson() }];
+  levels.forEach((s, i) => files.push({ name: order[i], data: JSON.stringify(levelJson(i, true), null, 2) }));
+  if (withMeta) files.push({ name: Folders.META, data: JSON.stringify({ v: 1, uid: p.uid, name: packName || p.name || 'Level pack', order, shareName: p.shareName || '', made: p.made || Date.now() }, null, 2) });
+  return files;
+}
+const levelOrder = () => levels.map((s, i) => PACK_LEVELS + levelFile(i));
+
+function journal() {
+  const p = packs[packIndex];
+  if (!p) return;
+  journalStamp = Date.now();
+  try {
+    localStorage.setItem(JOURNAL_KEY, JSON.stringify({ uid: p.uid, stamp: journalStamp, files: draftFiles() }));
+    const at = JSON.parse(localStorage.getItem(AT_KEY) || '{}');
+    at[p.uid] = current;
+    localStorage.setItem(AT_KEY, JSON.stringify(at));
+  } catch (err) { /* written to the folder all the same */ }
+}
+function savedAt(uid, count) {
+  try { const n = JSON.parse(localStorage.getItem(AT_KEY) || '{}')[uid]; return Number.isInteger(n) && n >= 0 && n < count ? n : 0; } catch (err) { return 0; }
+}
+async function replayJournal() {
+  let j = null;
+  try { j = JSON.parse(localStorage.getItem(JOURNAL_KEY) || 'null'); } catch (err) { /* none */ }
+  if (!j || !j.uid || !Array.isArray(j.files)) return;
+  try { if (await Folders.meta(j.uid)) await Folders.writeDraft(j.uid, j.files); } catch (err) { return; }
+  try { localStorage.removeItem(JOURNAL_KEY); } catch (err) { /* written anyway */ }
+}
+
+function scheduleFolderWrite() {
+  clearTimeout(writeTimer);
+  writeTimer = setTimeout(flushFolder, 500);
+}
+// The open pack's draft written now; resolves once it is, with its * worked out.
+async function flushFolder() {
+  clearTimeout(writeTimer);
+  if (!FOLDERS || !booted || noPack) return;
+  while (writing) await writing;
+  const p = packs[packIndex];
+  stashPack();
+  const files = draftFiles(), stamp = journalStamp;
+  writing = (async () => {
+    await Folders.writeDraft(p.uid, files, packName || p.name);
+    try {
+      const j = JSON.parse(localStorage.getItem(JOURNAL_KEY) || 'null');
+      if (j && j.uid === p.uid && j.stamp === stamp) localStorage.removeItem(JOURNAL_KEY);
+    } catch (err) { /* left for next time: written again, the same */ }
+    p.dirty = await Folders.dirty(p.uid);
+    refreshPacks();
+  })().catch(err => { levelMsg.textContent = 'Could not keep the level pack: ' + err.message; }).finally(() => { writing = null; });
+  return writing;
+}
+addEventListener('pagehide', () => { flushFolder(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushFolder(); });
+
+// A name for a pack's shared copy no other has: its own name, made a path.
+async function freeShareName(name) {
+  const base = ShareCore.clean(String(name || 'level-pack').toLowerCase()) || 'level-pack';
+  const taken = new Set();
+  try { for (const p of await packStore.list('levels')) taken.add(p.name); } catch (err) { /* none */ }
+  try { for (const f of await Folders.list()) if (f.shareName) taken.add(f.shareName); } catch (err) { /* none */ }
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}
+
+// Its shared copy (levels/<shareName>/) made again from what was last saved.
+async function publishShare(p) {
+  if (!p.shareName) return;
+  const fetchOk = async url => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${new URL(url, location.href).pathname}: HTTP ${res.status}`);
+    return res;
+  };
+  let page = null;
+  try { page = (await packGame(fetchOk))[0].data; } catch (err) { /* played through /src/index.html?pack= instead */ }
+  ShareCore.setPublic(p.shareName, !packIsPrivate(p));
+  await Folders.publish(p.uid, p.shareName, page);
+}
+
+// Boot: the level packs listed, the open one's levels read in — once the art
+// they are drawn with is (fromText reads codes, backgrounds and tracks by it).
+async function bootFolders() {
+  if (!await storeReady(5000)) {
+    levelMsg.textContent = 'The level packs are kept in the browser, which needs its service worker: ' + (await storeTrouble() || 'it is not running') + '.';
+    return false;
+  }
+  await replayJournal();
+  // the Asset Editor's Open in level editor, on art no level pack has: a new one with it
+  if (ASKED_ASSETS && NEW_PACK) {
+    const uid = newUid();
+    const list = await Folders.list();
+    const named = (storedArt(EDITOR_DIR) || EDITOR_DIR.replace(/\/$/, '').split('/').pop() || 'Level pack').replace(/[-_]+/g, ' ');
+    const taken = new Set(list.map(f => f.name));
+    let name = named, n = 2;
+    while (taken.has(name)) name = `${named} ${n++}`;
+    try { await Folders.create(uid, EDITOR_DIR, { name, order: [], shareName: await freeShareName(name), fresh: true }); }
+    catch (err) { levelMsg.textContent = 'Could not make a level pack with that art: ' + err.message; return false; }
+    reopenFolder(uid);
+    return false;
+  }
+  const list = await Folders.list();
+  if (list.length && !libraryOk && list.some(f => Folders.dir(f.uid) === EDITOR_DIR)) {
+    levelMsg.textContent = "This level pack's art could not be read, so it is left as it is — nothing is changed. Reload to try again.";
+    return false;
+  }
+  if (!list.length) {
+    try { localStorage.removeItem(OPEN_KEY); } catch (err) { /* none */ }
+    if (EDITOR_DIR !== DEFAULT_ASSETS) { location.href = location.pathname; return false; }
+    booted = true;
+    enterNoPack();
+    return true;
+  }
+  const open = list.find(f => f.uid === OPEN_UID) || list[0];
+  if (Folders.dir(open.uid) !== EDITOR_DIR) { reopenFolder(open.uid); return false; }
+  if (new URLSearchParams(location.search).has('for')) history.replaceState(null, '', location.pathname + '?open=' + encodeURIComponent(open.uid));
+  try { localStorage.setItem(OPEN_KEY, open.uid); } catch (err) { /* ?open= says it */ }
+  packs = list.map(f => ({ uid: f.uid, name: f.name, count: f.count, shareName: f.shareName, mirror: f.shareName, made: f.made, levels: null }));
+  packIndex = packs.findIndex(p => p.uid === open.uid);
+  const p = packs[packIndex];
+  let read = [], meta = {};
+  try {
+    const got = await Folders.levels(open.uid);
+    meta = got.meta;
+    const base = new URL(Folders.dir(open.uid), location.href);
+    const urls = got.levels.map(f => new URL(f.path, base).href);
+    for (const f of got.levels) {
+      blankLevel();
+      const error = fromText(JSON.stringify(f.data));
+      if (error) { levelMsg.textContent = `${f.path}: ${error}`; blankLevel(); }
+      const at = new URL(f.path, base);
+      exits = (f.data.exit || []).map(e => {
+        if (e === null || e === undefined) return null;
+        if (shareLinkParts(e)) return e;
+        const i = urls.indexOf(new URL(e, at).href);
+        return i < 0 ? null : i;
+      });
+      read.push(JSON.parse(snapshot()));
+    }
+  } catch (err) { levelMsg.textContent = 'Could not read the level pack: ' + err.message; }
+  if (!read.length) read = blankPack().levels;
+  p.levels = read;
+  p.name = meta.name || p.name;
+  p.made = meta.made || p.made;
+  p.current = savedAt(p.uid, read.length);
+  noPack = false;
+  booted = true;
+  undoStack.length = 0;
+  applyPack(p);
+  resize(cols, rows, true);
+  refreshPacks(); refreshLevels(); renderProps(); render(); updateStatus(null);
+  // written back as the editor writes it — what the art says now, and a pack
+  // just made or brought in tidied as it was read; that is its saved state too
+  await flushFolder();
+  if (meta.fresh) {
+    await Folders.save(p.uid);
+    await publishShare(p).catch(() => {});
+    p.dirty = false;
+    refreshPacks();
+  }
+  try { if (sessionStorage.getItem(MODE_KEY) === 'assets') enterAssets(); } catch (err) { /* not kept */ }
+  return true;
+}
+
+// ⧉ Duplicate and + New: a folder of its own, and the page opened on it.
+async function makeFolderPack(kind) {
+  if (kind === 'copy') {
+    if (noPack) return;
+    await flushFolder();
+    const p = packs[packIndex];
+    const to = newUid();
+    const name = freeLevelPackName((packName || 'Level pack') + ' copy');
+    levelMsg.textContent = 'Copying…';
+    try { await Folders.duplicate(p.uid, to, name, await freeShareName(name)); }
+    catch (err) { levelMsg.textContent = 'Could not copy it: ' + err.message; return; }
+    reopenFolder(to);
+    return;
+  }
+  const art = await choose('New level pack', 'Start with the art of', await artChoices(), noPack ? DEFAULT_ASSETS : EDITOR_DIR, 'Make it',
+    'Its tiles, objects, backgrounds and sounds, copied: change them with 🎨 Edit assets, and no other pack changes.');
+  if (!art) return;
+  await flushFolder();
+  const uid = newUid();
+  const name = freeLevelPackName('Level pack');
+  levelMsg.textContent = 'Making it…';
+  try { await Folders.create(uid, art, { name, order: [], shareName: await freeShareName(name), fresh: true }); }
+  catch (err) { levelMsg.textContent = 'Could not make it: ' + err.message; return; }
+  reopenFolder(uid);
+}
+
+// Delete: its folder, its draft, its shared copy, and the Asset Editor's
+// working copy of its art — asked first, since nothing brings it back.
+async function deleteFolderPack() {
+  if (noPack) return;
+  const p = packs[packIndex];
+  const name = packName || p.name || 'this level pack';
+  const ok = await ask('Delete level pack',
+    `“${name}” goes from this browser — its ${levels.length === 1 ? 'level' : `${levels.length} levels`}, its art, and the copy friends fetch. This cannot be undone.`,
+    'Delete it');
+  if (!ok) return;
+  clearTimeout(writeTimer);
+  booted = false;              // nothing more written to it
+  try { localStorage.removeItem(JOURNAL_KEY); } catch (err) { /* none */ }
+  try {
+    await Folders.remove(p.uid);
+    if (p.shareName) { await packStore.remove('levels', p.shareName); ShareCore.setPublic(p.shareName, true); }
+    await ArtTidy.forPack(p.uid);
+  } catch (err) { levelMsg.textContent = 'Could not delete all of it: ' + err.message; }
+  const rest = packs.filter(x => x !== p);
+  if (!rest.length) { try { localStorage.removeItem(OPEN_KEY); } catch (err) { /* none */ } location.href = location.pathname; return; }
+  reopenFolder(rest[Math.min(packIndex, rest.length - 1)].uid);
+}
+
+// ⟲ Revert: the draft let go of, back to what was last saved — art too.
+async function revertFolderPack() {
+  if (noPack) return;
+  const p = packs[packIndex];
+  if (!packDirty(p)) return;
+  const ok = await ask('Revert level pack',
+    `“${packName || p.name}” goes back to how it was when it was last saved, its art too. Everything changed since is lost, and Undo can't bring it back.`,
+    'Revert');
+  if (!ok) return;
+  clearTimeout(writeTimer);
+  booted = false;
+  try { localStorage.removeItem(JOURNAL_KEY); } catch (err) { /* none */ }
+  try {
+    await Folders.revert(p.uid);
+    await ArtTidy.forPack(p.uid);     // the Asset Editor reads the art again
+  } catch (err) { levelMsg.textContent = 'Could not revert it: ' + err.message; booted = true; return; }
+  reopenFolder(p.uid);
+}
+
+// 💾 Save: the draft becomes the level pack — and its shared copy with it.
+async function saveFolderPack() {
+  if (noPack || !booted) return;
+  const p = packs[packIndex];
+  levelMsg.textContent = 'Saving…';
+  try {
+    await flushFolder();
+    await Folders.save(p.uid);
+    await publishShare(p);
+    p.dirty = await Folders.dirty(p.uid);
+    refreshPacks();
+    levelMsg.textContent = `Saved “${packName || p.name}”.`;
+  } catch (err) { levelMsg.textContent = 'Could not save it: ' + err.message; }
+}
+document.getElementById('savePackBtn').addEventListener('click', saveFolderPack);
+addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's' && FOLDERS) {
+    e.preventDefault();
+    if (!assetsMode) saveFolderPack();
+  }
+});
+
+// Import, with folders: the level pack read in becomes a folder of its own —
+// its files as they are, its art with it — and the page opens on it.
+async function importFolder(packUrl, manifest, order, datas, shareName) {
+  let name = manifest.name || 'Level Pack';
+  const same = packs.findIndex((p, i) => (i === packIndex ? packName : p.name) === name);
+  if (same >= 0 && !noPack) {
+    const replace = await ask(`A level pack called “${name}” is here already`,
+      'Replace it with the one being imported? Cancel keeps both.', 'Replace it');
+    if (replace) {
+      const was = packs[same];
+      try {
+        await Folders.remove(was.uid);
+        if (was.shareName && was.shareName !== shareName) { await packStore.remove('levels', was.shareName); ShareCore.setPublic(was.shareName, true); }
+        await ArtTidy.forPack(was.uid);
+      } catch (err) { /* what is left goes with the next tidy */ }
+      if (same === packIndex) { booted = false; clearTimeout(writeTimer); }
+    } else name = freeLevelPackName(name);
+  }
+  const folder = new URL('./', packUrl).href;
+  const paths = order.map(u => u.startsWith(folder) ? decodeURIComponent(u.slice(folder.length)) : null);
+  if (paths.some(x => !x)) throw new Error('its levels reach outside its folder');
+  await flushFolder();
+  const uid = newUid();
+  levelMsg.textContent = 'Bringing it in…';
+  const files = paths.map((path, i) => ({ name: path, data: JSON.stringify(datas[i], null, 2) }));
+  // the backgrounds its levels name, for a pack from before its levelpack.json listed them
+  const backgrounds = datas.map(d => d.background && typeof d.background === 'object' && typeof d.background.texture === 'string' ? d.background.texture.split('/').pop() : null).filter(Boolean);
+  await Folders.create(uid, folder, { name, order: paths, shareName: shareName || await freeShareName(name), fresh: true }, files, { backgrounds });
+  reopenFolder(uid);
+}
+
+// The level packs from before folders, moved: the open one now — the page is
+// on its art, which reading its levels needs — then the page opens again on
+// the next, until none is left; then the old list goes.
+const MIGRATE_OPEN_KEY = 'warmWormEditorMigrateOpen';
+async function migrateOpen() {
+  if (noPack || !packs.length) return;
+  if (!await storeReady(5000)) return;          // stays as it was, for now
+  stashPack();
+  for (const x of packs) if (!x.uid) x.uid = newUid();
+  // the old list kept aside as it was, in case anything goes wrong
+  try { if (!localStorage.getItem(STORE_KEY + 'Backup')) localStorage.setItem(STORE_KEY + 'Backup', localStorage.getItem(STORE_KEY)); } catch (err) { /* no room: moved all the same */ }
+  try { if (!localStorage.getItem(MIGRATE_OPEN_KEY)) localStorage.setItem(MIGRATE_OPEN_KEY, packs[LEGACY.packIndex || 0] ? packs[LEGACY.packIndex || 0].uid : packs[0].uid); } catch (err) { /* the first, then */ }
+  const p = packs[packIndex];
+  const done = packs.filter(x => x.moved).length;
+  levelMsg.textContent = `Moving your level packs to their new home: ${done + 1} of ${packs.length}…`;
+  try {
+    if (!await Folders.meta(p.uid)) {
+      p.shareName = p.mirror || await freeShareName(p.name);
+      p.made = packs.indexOf(p) + 1;
+      await Folders.create(p.uid, EDITOR_DIR, { name: packName || p.name || 'Level pack', order: levelOrder(), shareName: p.shareName, made: p.made }, draftFiles(false));
+      if (p.mirror) await publishShare(p).catch(() => {});
+    }
+  } catch (err) {
+    levelMsg.textContent = `Could not move “${p.name}”: ${err.message}. It stays as it was.`;
+    return;
+  }
+  p.moved = true;
+  persist();
+  const next = packs.findIndex(x => !x.moved);
+  if (next >= 0) { packIndex = next; persist(); reopenOn(packs[next].assets || DEFAULT_ASSETS); return; }
+  // all moved: the old copies of their art, and the old list, go
+  for (const x of packs) { try { await packStore.remove('assets', 'lp-' + x.uid); } catch (err) { /* left for share tidy */ } }
+  let openUid = packs[0].uid;
+  try { openUid = localStorage.getItem(MIGRATE_OPEN_KEY) || openUid; localStorage.removeItem(MIGRATE_OPEN_KEY); localStorage.removeItem(STORE_KEY); } catch (err) { /* as is */ }
+  reopenFolder(openUid);
+}
+
 // ---------- boot ----------
 // The sheet and the object atlas are images like any other, so the first full
 // paint waits for them. The editor is usable before they land — blocks show as
 // labelled placeholders until the art arrives.
 // None kept — a first start, or all removed — leaves only Import.
-if (!load()) {
+if (FOLDERS || !load()) {
+  // with folders, nothing until the open one is read (bootFolders)
   noPack = true;
   const only = blankPack();
   levels = only.levels;
@@ -3748,8 +4181,8 @@ if (!load()) {
 // ?assets= alone — the creator's Open in level editor, on an asset pack that
 // is no level pack's — starts a new level pack with a copy of that art,
 // rather than changing the art of one already here
-const artNotOwned = ASKED_ASSETS && NEW_PACK && !FOR_PACK;
-if (FOR_PACK || NEW_PACK) {
+const artNotOwned = !FOLDERS && ASKED_ASSETS && NEW_PACK && !FOR_PACK;
+if (!FOLDERS && (FOR_PACK || NEW_PACK)) {
   const q = new URLSearchParams(location.search);
   q.delete('for');
   q.delete('new');
@@ -3764,13 +4197,11 @@ if (artNotOwned) {
 } else if (!noPack) {
   const open = packs[packIndex];
   // the page opens again on the open one's own art (?for= named one gone)
+  // (on it, it is moved into its folder: migrateOpen)
   if (open.assets !== EDITOR_DIR) { persist(); reopenOn(open.assets); }
-  // art the creator kept in the browser that is not this pack's own — from
-  // before level packs owned their art: a copy of it becomes its own
-  else if (storedArt(EDITOR_DIR) && storedArt(EDITOR_DIR) !== ownArtName(open)) adoptLater(open.uid, EDITOR_DIR);
 }
 resize(cols, rows, true);
-try { if (!noPack && sessionStorage.getItem(MODE_KEY) === 'assets') setTimeout(enterAssets); } catch (err) { /* not kept */ }
+try { if (!FOLDERS && !noPack && sessionStorage.getItem(MODE_KEY) === 'assets') setTimeout(enterAssets); } catch (err) { /* not kept */ }
 
 refreshPacks();
 refreshLevels();
@@ -3832,14 +4263,15 @@ const libraryReady = fetch(EDITOR_LIBRARY)
     refreshMusic();
     refreshSounds();
     render();
+    libraryOk = true;
     save();
   })
-  .catch(() => { /* the colour picker still works without the library */ });
+  .catch(err => { console.warn('The asset pack library could not be read:', err); /* the colour picker still works without it */ });
 
 // a level pack just imported, the page opened again on its own art: taken
 // in now, it matches what it was read from — no *
 libraryReady.then(() => {
-  const p = !noPack && packs[packIndex];
+  const p = !FOLDERS && !noPack && packs[packIndex];
   if (!p || !p.fresh) return;
   stashPack();
   delete packs[packIndex].fresh;
@@ -3857,7 +4289,9 @@ const objectsReady = atlas.loadRoot(EDITOR_OBJECTS)
 
 // once the sheet and the objects are known, so its blocks read as them
 refreshOpenPacks();
-Promise.allSettled([libraryReady, objectsReady]).then(() => {
+Promise.allSettled([libraryReady, objectsReady]).then(async () => {
+  if (!FOLDERS) { migrateOpen(); return; }
+  if (!await bootFolders()) return;
   const q = new URLSearchParams(location.search);
   const asked = q.get('pack');
   if (asked) {

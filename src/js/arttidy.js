@@ -6,8 +6,9 @@
 // versions that didn't do that, or by a delete that never finished, is found
 // and cleared by unused() / tidy() — what the share shell's "share tidy" runs.
 //
-// What is in use is read from the editor's own list in localStorage, so this
-// runs on any page of the site. Art made in the last minutes is let be: a
+// What is in use is read from the editor's level packs — the folders in the
+// store, and the list in localStorage of a browser not moved to folders yet —
+// so this runs on any page of the site. Art made in the last minutes is let be: a
 // level pack being made right now has its art before it is in the list.
 const ArtTidy = (() => {
   const EDITOR_KEY = 'warmWormEditorLevel';     // editor/index.html's STORE_KEY
@@ -84,6 +85,10 @@ const ArtTidy = (() => {
   async function unused() {
     const use = inUse();
     if (!use) return null;
+    // the level packs that are folders (editor/folders.js), by their ids
+    try {
+      for (const kind of ['drafts', 'packs']) for (const p of await packStore.list(kind)) use.uids.add(p.name);
+    } catch { return null; }
     const now = Date.now();
     const art = (await packStore.list('assets'))
       .filter(p => /^lp-/.test(p.name) && !use.uids.has(p.name.slice(3)) && !use.names.has(p.name) && now - (p.updated || 0) > RECENT)

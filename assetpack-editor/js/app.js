@@ -575,6 +575,18 @@ async function openFromLink(dir, owner, title) {
 // (lp-<uid>) if it changed since it was opened here, or not, and an answer
 // either way — { done, changed, url, owner }, or { done: false } with what is
 // wrong shown here.
+// A level pack's art, written where it is kept: into the level pack's folder
+// (its draft, drafts/<uid>/ — editor/folders.js), the art's files replaced and
+// the levels left as they are; or, a level pack from before folders, as
+// lp-<uid>. Its address.
+async function putOwnedArt(owner, files, title) {
+  const m = await packStore.manifest('drafts', owner);
+  if (!m) return packStore.put('assets', 'lp-' + owner, files, title);
+  const art = /^(assetpack\.json$|tiles\/|objects\/|backgrounds\/|sounds\/)/;
+  const names = new Set(files.map(f => f.name));
+  await packStore.write('drafts', owner, { put: files, remove: m.files.map(f => f.path).filter(p => art.test(p) && !names.has(p)) });
+  return packStore.url('drafts', owner);
+}
 const EMBED = new URLSearchParams(location.search).has('embed') && parent !== window;
 if (EMBED) document.body.classList.add('embed');
 let editBase = -1;
@@ -588,7 +600,7 @@ addEventListener('message', async e => {
     toast('Packing…');
     await flushPack();
     const files = await buildPackFiles();
-    const url = await packStore.put('assets', 'lp-' + pack.owner, files, pack.name);
+    const url = await putOwnedArt(pack.owner, files, pack.name);
     editBase = editCount;
     reply({ done: true, changed: true, url, owner: pack.owner });
   } catch (err) {

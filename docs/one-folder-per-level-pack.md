@@ -86,6 +86,15 @@ Each phase lands on its own, and the site keeps working after each one.
   - **One catch:** import finds levels by walking the flags from the first level. Level **order**, and any level no flag reaches, aren't in the files. The order goes in `.wtw/pack.json`.
 
 ### Phase 1: the level editor works in the folder
+
+**Done.** Notes from building it:
+- The editor page is open on one folder at a time (`?open=<uid>`, its draft is the art it draws with). Switching packs opens the page again, as before.
+- Levels are read only once the art library has loaded. If it fails to load, the pack is neither read nor written, because reading without it drops the backgrounds and tracks its levels name.
+- A journal in localStorage keeps the latest draft until the folder write lands, and it is replayed on the next opening.
+- In a draft, a flag not set yet is kept as `null`, so the flags after it keep their places.
+- Packs from before a `levelpack.json` listed its backgrounds get the backgrounds their levels name.
+- The share copy (`levels/<share name>`) is still a separate pack, now copied from the saved folder on Save, with the game page added. Sharing straight from `packs/` is left for later.
+- The Asset Editor writes its art into the draft (`putOwnedArt`). Its own working-copy database is still there; that is Phase 2.
 - **One store for all level packs.** The editor's list is read from `packs/` (`.wtw/pack.json` of each folder) instead of localStorage.
   - "Also in this browser" disappears: a pack fetched from a friend is a folder like any other, editable straight away. Opening it no longer imports a copy.
 - **Saving.** A level change writes `levels/NN-….json` (and the source, if needed) and `levelpack.json` on a short debounce. It also flushes on `pagehide` and `visibilitychange`, because IndexedDB is asynchronous and localStorage was not.
