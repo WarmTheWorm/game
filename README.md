@@ -164,7 +164,15 @@ The store keeps a file's bytes once, under its SHA-256, however many packs
 hold it — level packs carry their asset pack's art and sounds, so most of
 their megabytes are the same few files; `share store` says how much that
 saves. Bytes no pack names any more are swept away when a pack is saved
-again or removed.
+again or removed: nothing counts how many packs hold a file — after each
+removal, whatever no pack names is gone.
+
+A level pack's own art goes with it when it is deleted in the level editor:
+its copy in the store and the Asset Editor's working copy of it
+(`src/js/arttidy.js`). `share del` deletes only the browser's copies of
+level packs — the level editor's own are untouched, and keep their art.
+`share tidy` clears art that no level pack of the level editor uses any
+more (left by older versions); `-dry` only lists it.
 
 A static server cannot list folders, so the packs on disk are listed in
 `assetpacks/index.json` and `levelpacks/index.json`, which `npm run build`
