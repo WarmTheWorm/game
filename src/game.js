@@ -1594,6 +1594,9 @@ const downloadTitle = document.getElementById('downloadTitle');
 const downloadNote = document.getElementById('downloadNote');
 const downloadBar = document.getElementById('downloadBar').firstElementChild;
 const downloadBack = document.getElementById('downloadBack');
+// How long a flag into another browser's pack waits for that browser to
+// answer when a copy of the pack is here already, before playing that copy.
+const SHARED_ANSWER_MS = 7000;
 async function enterSharedPack(link) {
   const s = linkState(link);
   gameState = 'download';
@@ -1607,12 +1610,22 @@ async function enterSharedPack(link) {
     const name = C.clean(link.name);
     let key = 'idb:' + name;
     try {
-      const r = await C.fetchPack({ from: link.from, name, v: link.v }, d => {
+      // the newest the other browser has, whatever version the link was
+      // made at: only what changed comes, and nothing if it hasn't changed
+      let answered = false;
+      const asked = C.fetchPack({ from: link.from, name }, d => {
+        answered = true;
         if (d.title) downloadTitle.textContent = d.title;
         if (d.note) downloadNote.textContent = d.note;
         else if (d.text) downloadNote.textContent = d.text;
         if (d.total) downloadBar.style.width = `${(100 * d.got / d.total).toFixed(1)}%`;
       });
+      // with a copy here, its browser gets a few moments to answer before
+      // that copy is played instead; once it answers, it is waited for
+      const r = !s.here ? await asked : await Promise.race([asked, new Promise((ok, no) => {
+        const wait = () => setTimeout(() => { if (answered) wait(); else no(new Error('no answer')); }, SHARED_ANSWER_MS);
+        wait();
+      })]);
       key = r.key;
     } catch (err) {
       // nobody answers now: a copy here, of any version, will do
