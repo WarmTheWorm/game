@@ -136,8 +136,8 @@ const ShareCore = (() => {
   // Where a pack here starts playing at its first level, its menu skipped
   // (?play=1): its own page — unless that page is from before ?play, when it
   // would open at its menu, and this engine plays the pack instead.
-  async function startUrl(key) {
-    const src = await sourceNamed(key);
+  async function startUrl(key, { received = false } = {}) {
+    const src = await sourceNamed(key, { received });
     if (!src) throw error('missing', `There is no level pack called ${key} here.`);
     const files = (await src.manifest()).files;
     let page = src.play(files);
@@ -241,8 +241,10 @@ const ShareCore = (() => {
     try {
       for (const p of await packStore.list('levels')) {
         if (p.name.startsWith('__')) continue;     // the editor's passing copies
-        if (own.has(p.name)) continue;             // an old copy of one of the editor's
-        out.push({ key: 'idb:' + p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — in this browser`, count: p.count,
+        // one of the same name as one of the editor's own comes after it: the
+        // editor's is what friends get by that name (sourceNamed), and this
+        // stays what a flag into another browser's pack of that name plays
+        out.push({ key: 'idb:' + p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — in this browser`, count: p.count, received: true,
           dir: packStore.url('levels', p.name),
           play: files => playUrl(p.name, files),
           version: async () => (await packStore.manifest('levels', p.name))?.v,
@@ -262,8 +264,11 @@ const ShareCore = (() => {
 
   // A pack by its key (idb:<name>, or a name on disk), or by its name alone:
   // one in the pack store before one on disk of the same name.
-  async function sourceNamed(name) {
-    const all = await sources();
+  // `received`: only a pack received from another browser (levels/), never
+  // the level editor's own of that name — what a flag into another browser's
+  // pack plays.
+  async function sourceNamed(name, { received = false } = {}) {
+    const all = (await sources()).filter(s => !received || s.received);
     const exact = all.find(s => s.key === name);
     if (exact) return exact;
     const list = all.filter(s => clean(s.name) === clean(String(name).replace(/^idb:/, '')));
@@ -286,10 +291,12 @@ const ShareCore = (() => {
 
   // Every level pack kept in this browser — not those on disk, which aren't
   // this browser's to delete.
-  async function listPacks() {
+  // `received`: only those received from other browsers (levels/), the
+  // level editor's own left out — and none hidden behind one of its names.
+  async function listPacks({ received = false } = {}) {
     const out = [];
     const own = new Set();
-    for (const f of await folderPacks()) {
+    for (const f of received ? [] : await folderPacks()) {
       own.add(f.name);
       const src = folderSource(f);
       let m = null;

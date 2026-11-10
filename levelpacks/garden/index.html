@@ -3669,7 +3669,9 @@ async function checkLink(link) {
     const C = window.wtwShare ? await window.wtwShare.code() : null;
     if (!C) { s.state = 'closed'; return; }
     const name = C.clean(link.name);
-    const kept = (await C.listPacks()).find(p => p.name === name);
+    // a copy received from another browser — the level editor's own pack
+    // of the same name here is another pack
+    const kept = (await C.listPacks({ received: true })).find(p => p.name === name);
     s.here = !!kept;
     if (kept) s.title = kept.title;
     // its very version here: nothing to ask anybody
@@ -3751,7 +3753,7 @@ async function enterSharedPack(link) {
     downloadBar.style.width = '100%';
     downloadNote.textContent = 'Starting it…';
     // its own page (or this engine, for a page from before ?play)
-    const page = await C.startUrl(key);
+    const page = await C.startUrl(key, { received: true });
     // a pack kept in the browser is served by its service worker
     if (page.startsWith(packStore.PREFIX) || page.includes(encodeURIComponent(packStore.PREFIX))) {
       packStore.boot();

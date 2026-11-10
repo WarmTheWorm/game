@@ -2186,7 +2186,7 @@ packPick.addEventListener('click', async e => {
       return `<button type="button" role="option" class="${i === packIndex ? 'on' : ''}" data-packi="${i}" aria-selected="${i === packIndex}">
         <span>${escHtml(live.name || `Level pack ${i + 1}`)}${packDirty(live) ? ' *' : ''}</span><small>${count} ${count === 1 ? 'level' : 'levels'}${i === packIndex ? ' · open' : ''}</small></button>`;
     })),
-    others.length ? '<div class="packlistHead">Also in this browser — click to edit</div>' : '',
+    others.length ? '<div class="packlistHead">From other browsers — click to make your own copy</div>' : '',
     ...others.map(p => `<button type="button" role="option" data-store="${escHtml(p.name)}">
       <span>${escHtml(p.title)}</span><small>${p.files} files${p.public ? '' : ' · private'}</small></button>`)
   ].join('');
@@ -3442,7 +3442,7 @@ function load() {
 // to it go on working however it is renamed here. It is built again only once
 // something in it changes, with this editor's asset pack.
 async function openStorePack(name) {
-  if (FOLDERS) { await openLevelPack(packStore.url('levels', name) + 'levelpack.json', { shareName: name }); return; }
+  if (FOLDERS) { await openLevelPack(packStore.url('levels', name) + 'levelpack.json'); return; }
   const before = noPack ? 0 : packs.length;
   await openLevelPack(packStore.url('levels', name) + 'levelpack.json');
   if (noPack || packs.length === before) return;      // not added
@@ -3900,8 +3900,8 @@ async function freeShareName(name) {
 }
 
 // Friends fetch a level pack straight from its folder, as last saved, by its
-// share name (share/core.js): a shared copy of it from before
-// (levels/<shareName>/) — or the one it was brought in from — goes.
+// share name (share/core.js): the shared copy the editor kept of it before
+// folders (levels/<shareName>/) goes when it is moved into one.
 async function tidyShare(p) {
   if (!p.shareName) return;
   try { if (await packStore.manifest('levels', p.shareName)) await packStore.remove('levels', p.shareName); } catch (err) { /* left as it is */ }
@@ -3981,7 +3981,6 @@ async function bootFolders() {
   // written back as the editor writes it — what the art says now, and a pack
   // just made or brought in tidied as it was read; that is its saved state too
   await flushFolder();
-  await tidyShare(p);
   if (meta.fresh) {
     await Folders.save(p.uid);
     p.dirty = false;
@@ -4099,13 +4098,9 @@ async function importFolder(packUrl, manifest, order, datas, shareName) {
     } else name = freeLevelPackName(name);
   }
   const folder = new URL('./', packUrl).href;
-  // one received into the browser's store (a share link, a friend, an
-  // upload) is that very pack, under the name it came by: its copy there goes
-  // once it is opened here (tidyShare), and links to it go on working
-  const kept = Folders.storeAt(folder);
-  if (!shareName && kept && kept.kind === 'levels' && !kept.name.startsWith('__')) shareName = kept.name;
-  // ... unless a level pack here goes by it already (the same link, brought in twice)
-  if (shareName && (await Folders.list()).some(f => f.shareName === shareName)) shareName = await freeShareName(name);
+  // a level pack of its own, under a share name of its own: one received from
+  // another browser stays that browser's — its copy here (levels/) is what
+  // a flag into it plays when that browser doesn't answer
   const paths = order.map(u => u.startsWith(folder) ? decodeURIComponent(u.slice(folder.length)) : null);
   if (paths.some(x => !x)) throw new Error('its levels reach outside its folder');
   await flushFolder();
@@ -4138,6 +4133,7 @@ async function migrateOpen() {
       p.shareName = p.mirror || await freeShareName(p.name);
       p.made = packs.indexOf(p) + 1;
       await Folders.create(p.uid, EDITOR_DIR, { name: packName || p.name || 'Level pack', order: levelOrder(), shareName: p.shareName, made: p.made }, draftFiles(false));
+      await tidyShare(p);
     }
   } catch (err) {
     levelMsg.textContent = `Could not move “${p.name}”: ${err.message}. It stays as it was.`;
