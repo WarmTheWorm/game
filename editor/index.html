@@ -4099,6 +4099,13 @@ async function importFolder(packUrl, manifest, order, datas, shareName) {
     } else name = freeLevelPackName(name);
   }
   const folder = new URL('./', packUrl).href;
+  // one received into the browser's store (a share link, a friend, an
+  // upload) is that very pack, under the name it came by: its copy there goes
+  // once it is opened here (tidyShare), and links to it go on working
+  const kept = Folders.storeAt(folder);
+  if (!shareName && kept && kept.kind === 'levels' && !kept.name.startsWith('__')) shareName = kept.name;
+  // ... unless a level pack here goes by it already (the same link, brought in twice)
+  if (shareName && (await Folders.list()).some(f => f.shareName === shareName)) shareName = await freeShareName(name);
   const paths = order.map(u => u.startsWith(folder) ? decodeURIComponent(u.slice(folder.length)) : null);
   if (paths.some(x => !x)) throw new Error('its levels reach outside its folder');
   await flushFolder();
