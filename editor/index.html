@@ -3377,13 +3377,15 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   const p = packs[packIndex];
   let link = '', why = '';
   if (FOLDERS) {
-    // its shared copy is what was last saved: made now if there is none yet
+    // what friends get is what was last saved, straight from its folder
     try {
       await flushFolder();
-      if (!await packStore.manifest('levels', p.shareName)) await publishShare(p);
+      const src = await ShareCore.sourceNamed('idb:' + p.shareName);
+      if (!src || !src.uid) throw new Error('it is not among the packs this browser shares');
+      link = ShareCore.linkFor(p.shareName, await src.version()).replace(/&v=$/, '');
     } catch (err) { why = err.message; }
   } else await mirrorNow();
-  if (why) { /* said below */ }
+  if (why || link) { /* said below */ }
   else if (!p.mirror || (!FOLDERS && p.mirrorSum !== mirrorKey(p))) why = await storeTrouble() || mirrorError || 'no reason given';
   else {
     try {
@@ -3897,18 +3899,12 @@ async function freeShareName(name) {
   return `${base}-${n}`;
 }
 
-// Its shared copy (levels/<shareName>/) made again from what was last saved.
-async function publishShare(p) {
+// Friends fetch a level pack straight from its folder, as last saved, by its
+// share name (share/core.js): a shared copy of it from before
+// (levels/<shareName>/) — or the one it was brought in from — goes.
+async function tidyShare(p) {
   if (!p.shareName) return;
-  const fetchOk = async url => {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`${new URL(url, location.href).pathname}: HTTP ${res.status}`);
-    return res;
-  };
-  let page = null;
-  try { page = (await packGame(fetchOk))[0].data; } catch (err) { /* played through /src/index.html?pack= instead */ }
-  ShareCore.setPublic(p.shareName, !packIsPrivate(p));
-  await Folders.publish(p.uid, p.shareName, page);
+  try { if (await packStore.manifest('levels', p.shareName)) await packStore.remove('levels', p.shareName); } catch (err) { /* left as it is */ }
 }
 
 // Boot: the level packs listed, the open one's levels read in — once the art
@@ -3985,9 +3981,9 @@ async function bootFolders() {
   // written back as the editor writes it — what the art says now, and a pack
   // just made or brought in tidied as it was read; that is its saved state too
   await flushFolder();
+  await tidyShare(p);
   if (meta.fresh) {
     await Folders.save(p.uid);
-    await publishShare(p).catch(() => {});
     p.dirty = false;
     refreshPacks();
   }
@@ -4071,7 +4067,6 @@ async function saveFolderPack() {
   try {
     await flushFolder();
     await Folders.save(p.uid);
-    await publishShare(p);
     p.dirty = await Folders.dirty(p.uid);
     refreshPacks();
     levelMsg.textContent = `Saved “${packName || p.name}”.`;
@@ -4136,7 +4131,6 @@ async function migrateOpen() {
       p.shareName = p.mirror || await freeShareName(p.name);
       p.made = packs.indexOf(p) + 1;
       await Folders.create(p.uid, EDITOR_DIR, { name: packName || p.name || 'Level pack', order: levelOrder(), shareName: p.shareName, made: p.made }, draftFiles(false));
-      if (p.mirror) await publishShare(p).catch(() => {});
     }
   } catch (err) {
     levelMsg.textContent = `Could not move “${p.name}”: ${err.message}. It stays as it was.`;

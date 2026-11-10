@@ -147,6 +147,67 @@ const ShareCore = (() => {
     return page + (page.includes('?') ? '&' : '?') + 'play=1';
   }
 
+  // ---------- the level editor's level packs ----------
+  // Each a folder, packs/<uid>/ as last saved (editor/folders.js), sent to
+  // friends as it is under its share name (.wtw/pack.json's shareName): its
+  // files but what only the editor reads (.wtw/), and its game page — the
+  // site's engine pointed at it, as the service worker serves it.
+  async function folderPacks() {
+    const out = [];
+    let saved = [];
+    try { saved = await packStore.list('packs'); } catch { return out; }
+    for (const p of saved) {
+      let meta = null;
+      try { const r = await packStore.get('packs', p.name, '.wtw/pack.json'); meta = r && JSON.parse(await new Response(r.data).text()); } catch { /* not one */ }
+      if (meta && meta.shareName) out.push({ uid: p.name, name: clean(meta.shareName), title: meta.name || p.title || meta.shareName, count: p.count, updated: p.updated });
+    }
+    return out;
+  }
+  async function enginePageOf(uid) {
+    const r = await fetch(packStore.url('packs', uid) + 'index.html', { cache: 'no-store' });
+    if (!r.ok) throw new Error(`its game page: HTTP ${r.status}`);
+    return new Uint8Array(await r.arrayBuffer());
+  }
+  // A folder's files as a friend gets them, from its manifest `m`, with its page.
+  async function friendView(m, page) {
+    const files = m.files.filter(f => !f.path.startsWith('.wtw/') && f.path !== 'index.html');
+    files.push({ path: 'index.html', size: page.length, hash: await packStore.hash(page) });
+    return packStore.manifestFrom(files);
+  }
+  function folderSource(f) {
+    const dir = packStore.url('packs', f.uid);
+    const view = async () => {
+      const page = await enginePageOf(f.uid);
+      return { page, manifest: await friendView(await packStore.manifest('packs', f.uid), page) };
+    };
+    const reader = (page, get) => async path => {
+      if (path === 'index.html') return page.slice().buffer;
+      const data = await get(path);
+      if (!data) throw new Error(`${path} isn't in ${f.name}`);
+      return new Response(data).arrayBuffer();
+    };
+    return { key: 'idb:' + f.name, name: f.name, title: f.title, label: `${f.title} — in this browser`, count: f.count, dir, uid: f.uid,
+      play: () => dir + 'index.html',
+      version: async () => (await view()).manifest.v,
+      manifest: async () => (await view()).manifest,
+      read: async path => {
+        const page = path === 'index.html' ? await enginePageOf(f.uid) : null;
+        return reader(page, async p => { const rec = await packStore.get('packs', f.uid, p); return rec && rec.data; })(path);
+      },
+      load: async () => {
+        const { page, manifest } = await view();
+        const read = reader(page, async p => { const rec = await packStore.get('packs', f.uid, p); return rec && rec.data; });
+        return Promise.all(manifest.files.map(async x => ({ path: x.path, data: await read(x.path) })));
+      },
+      // held as it is now while a friend fetches it (packStore.pin)
+      pin: async () => {
+        const held = await packStore.pin('packs', f.uid);
+        if (!held) return null;
+        const page = await enginePageOf(f.uid);
+        return { manifest: await friendView(held.manifest, page), read: async path => path === 'index.html' ? new Blob([page]) : held.read(path), release: held.release };
+      } };
+  }
+
   // ---------- what this browser has ----------
   // The level packs this browser can send: those on disk (levelpacks/index.json
   // lists their files) and those in its pack store — the level editor's, and
@@ -173,9 +234,14 @@ const ShareCore = (() => {
           })) });
       }
     } catch { /* none on disk */ }
+    const own = new Set();
+    try {
+      for (const f of await folderPacks()) { own.add(f.name); out.push(folderSource(f)); }
+    } catch { /* no store */ }
     try {
       for (const p of await packStore.list('levels')) {
         if (p.name.startsWith('__')) continue;     // the editor's passing copies
+        if (own.has(p.name)) continue;             // an old copy of one of the editor's
         out.push({ key: 'idb:' + p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — in this browser`, count: p.count,
           dir: packStore.url('levels', p.name),
           play: files => playUrl(p.name, files),
@@ -222,8 +288,19 @@ const ShareCore = (() => {
   // this browser's to delete.
   async function listPacks() {
     const out = [];
+    const own = new Set();
+    for (const f of await folderPacks()) {
+      own.add(f.name);
+      const src = folderSource(f);
+      let m = null;
+      try { m = await src.manifest(); } catch { /* unreadable */ }
+      const e = typeof ShareCards !== 'undefined' && ShareCards.stored(f.name);
+      const card = e && m && e.card.v === m.v ? e.card : null;
+      out.push({ name: f.name, title: f.title, files: m ? m.files.length : f.count, size: m ? m.files.reduce((n, x) => n + x.size, 0) : null,
+        v: m ? m.v : null, id: card ? card.id : null, seq: card ? card.seq : null, public: isPublic(f.name), updated: new Date(f.updated).toISOString(), url: src.dir, editor: true });
+    }
     for (const p of await packStore.list('levels')) {
-      if (p.name.startsWith('__')) continue;
+      if (p.name.startsWith('__') || own.has(p.name)) continue;
       let m = null;
       try { m = await packStore.manifest('levels', p.name); } catch { /* unreadable */ }
       const e = typeof ShareCards !== 'undefined' && ShareCards.stored(p.name);
@@ -239,7 +316,7 @@ const ShareCore = (() => {
     const src = await sourceNamed(name);
     if (!src) throw error('missing', `There is no level pack called ${name} here.`);
     // one kept here has its manifest saved with it; one on disk is read
-    const m = src.key.startsWith('idb:') ? await packStore.manifest('levels', src.name) : await packStore.manifestOf(await src.load());
+    const m = src.uid || !src.key.startsWith('idb:') ? await src.manifest() : await packStore.manifest('levels', src.name);
     return { name: src.name, title: src.title, key: src.key, where: src.key.startsWith('idb:') ? 'browser' : 'disk', url: src.dir,
       public: isPublic(src.name), v: m.v, size: m.files.reduce((n, f) => n + f.size, 0), files: m.files };
   }
@@ -277,7 +354,16 @@ const ShareCore = (() => {
   // Deletes from this browser's store one pack, or every one; the names gone.
   async function deletePacks(names) {
     const gone = [];
+    const folders = await folderPacks().catch(() => []);
     for (const name of names) {
+      // one of the level editor's: the level pack itself — saved, draft, and
+      // the Asset Editor's working copy of its art
+      const f = folders.find(x => x.name === name);
+      if (f) {
+        await packStore.remove('drafts', f.uid);
+        await packStore.remove('packs', f.uid);
+        try { if (typeof ArtTidy !== 'undefined') await ArtTidy.forPack(f.uid); } catch { /* left for share tidy */ }
+      }
       await packStore.remove('levels', name);
       try { setPublic(name, true); } catch { /* not kept anyway */ }
       try { if (typeof ShareCards !== 'undefined') ShareCards.forget(name); } catch { /* as above */ }

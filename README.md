@@ -77,14 +77,15 @@ kept in the browser:
   art as an asset pack lays it out (`assetpack.json`, `tiles/`, `objects/`,
   `backgrounds/`, `sounds/`), its levels as the game reads them
   (`levelpack.json`, `levels/`), and `.wtw/pack.json` (its name, its levels'
-  order, the name its shared copy goes by). It is kept twice, which costs
-  next to nothing since files are kept once:
-  `/__idb/packs/<its id>/` as last saved — what Play, Share and friends get —
-  and `/__idb/drafts/<its id>/`, being edited. Both editors write into the
-  draft a moment after each change; **💾 Save** (Ctrl+S) makes it the level
-  pack (and its shared copy, `/__idb/levels/<share name>/`, with it),
-  **⟲ Revert** lets it go — art too. A `*` marks a draft with changes not
-  saved. Its game page is the site's own engine, pointed at the folder;
+  order, the name friends fetch it by). It is `/__idb/packs/<its id>/` as
+  last saved — what Play, Share and friends get, straight from it — and,
+  only while it has changes not saved, `/__idb/drafts/<its id>/` (which
+  costs next to nothing: files are kept once). Both editors read and write
+  the pack at its draft's address, and write a moment after each change; with
+  no draft the service worker answers from the saved pack. **💾 Save**
+  (Ctrl+S) makes the draft the level pack, **⟲ Revert** lets it go — art too;
+  a draft changed back to what was saved goes by itself. A `*` marks a pack
+  with a draft. Its game page is the site's own engine, pointed at the folder;
 - **🎨 Edit assets** shows the Asset Editor in the same page, under the same
   bar, on the open level pack's folder; the button turns into **🧩 Edit
   levels**, which writes the art into the draft if it changed and shows the
@@ -170,8 +171,9 @@ saves. Bytes no pack names any more are swept away when a pack is saved
 again or removed: nothing counts how many packs hold a file — after each
 removal, whatever no pack names is gone.
 
-`share del` deletes only the browser's shared copies of level packs
-(`levels/`) — the level editor's own folders are untouched. `share tidy`
+`share list` lists the level editor's level packs (by the names friends
+fetch them by) and the level packs received from friends; `share del`
+deletes them — one of the editor's goes whole, as its Delete would. `share tidy`
 clears art no level pack uses any more (left by older versions) and the
 Asset Editor's working copies of level packs that are gone
 (`src/js/arttidy.js`); `-dry` only lists it.

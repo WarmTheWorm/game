@@ -28,12 +28,12 @@ if (new URLSearchParams(location.search).has('play')) {
 // folder's own files, as a built pack's page has them (editor/index.html's
 // packGame) — so playing it never meets an engine page older than the site.
 const ROOTS_MARKER = '<!-- pack roots -->';
-async function enginePage(name) {
+async function enginePage(kind, name) {
   const res = await fetch('/dist/game.html', { cache: 'no-cache' });
   if (!res.ok) return new Response(`the game page is not here: /dist/game.html ${res.status}`, { status: 502, headers: { 'Content-Type': 'text/plain' } });
   let page = await res.text();
-  const lp = await packStore.get('packs', name, 'levelpack.json');
-  if (!lp) return new Response(`not in the browser's packs: ${packStore.url('packs', name)}levelpack.json`, { status: 404, headers: { 'Content-Type': 'text/plain' } });
+  const lp = await packStore.get(kind, name, 'levelpack.json');
+  if (!lp) return new Response(`not in the browser's packs: ${packStore.url(kind, name)}levelpack.json`, { status: 404, headers: { 'Content-Type': 'text/plain' } });
   let data = {};
   try { data = JSON.parse(await new Response(lp.data).text()); } catch { /* the defaults, then */ }
   const str = v => JSON.stringify(String(v));
@@ -59,10 +59,13 @@ self.addEventListener('fetch', e => {
   if (!want) return;
   e.respondWith((async () => {
     try {
+      // a level pack being edited is read at /__idb/drafts/<id>/: with no
+      // draft (nothing changed since it was saved), that is what was saved
+      if (want.kind === 'drafts' && !await packStore.manifest('drafts', want.name)) want.kind = 'packs';
       const rec = await packStore.get(want.kind, want.name, want.path);
       // a level pack's own folder (/__idb/packs/<id>/) keeps no game page: it
       // is played on the site's engine as it is now, pointed at the folder
-      if (!rec && want.kind === 'packs' && want.path === 'index.html') return await enginePage(want.name);
+      if (!rec && (want.kind === 'packs' || want.kind === 'drafts') && want.path === 'index.html') return await enginePage(want.kind, want.name);
       if (!rec) return new Response(`not in the browser's packs: ${url.pathname}`, { status: 404, headers: { 'Content-Type': 'text/plain' } });
       const headers = { 'Content-Type': rec.type, 'Cache-Control': 'no-store' };
       // a pack's page built before the game joined this browser's room

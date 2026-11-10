@@ -3,10 +3,15 @@
 // under its id, which never changes however it is renamed:
 //
 //   packs/<uid>/    the level pack as last saved — what Play, Share and
-//                   friends see
-//   drafts/<uid>/   the same folder, being edited: both editors write here,
-//                   Test plays it, Save copies it over packs/<uid>, Revert
-//                   copies packs/<uid> back over it
+//                   friends get (share/core.js sends it as it is, under its
+//                   share name, with the game page added)
+//   drafts/<uid>/   only while it has changes not saved: made by the first
+//                   write after a save (a copy of packs/<uid>), let go of by
+//                   Save (copied over packs/<uid> first) and by Revert, and
+//                   by a write that leaves it the same as what was saved.
+//                   Both editors read and write the pack by this address;
+//                   with no draft the service worker answers it from
+//                   packs/<uid> (sw.js).
 //
 // Copies cost next to nothing: the store keeps a file's bytes once, so a copy
 // is only its files' records. A folder holds the art as an asset pack lays it
@@ -16,8 +21,8 @@
 //   { v: 1, uid, name, order: ['levels/a.json', …], shareName, fresh? }
 //
 // `order` is the levels' order — the files alone only say which level a flag
-// leads to. `shareName` is the name its shared copy goes by (levels/<it>/),
-// kept through renames so links to it go on working. `fresh`: made, imported
+// leads to. `shareName` is the name friends fetch it by (the get= of its
+// link), kept through renames so links to it go on working. `fresh`: made, imported
 // or moved here, not yet opened — the editor's first save of it tidies it as
 // it reads it, and that becomes its saved state too.
 const Folders = (() => {
@@ -31,8 +36,13 @@ const Folders = (() => {
   // A path inside a folder, from one relative to another file in it.
   const join = (from, rel) => decodeURIComponent(new URL(rel, 'file:///' + from).pathname.slice(1));
 
-  async function meta(uid, kind = DRAFTS) {
-    try { return JSON.parse(await textOf(await packStore.get(kind, uid, META))); } catch { return null; }
+  const hasDraft = async uid => !!(await packStore.manifest(DRAFTS, uid));
+  // Where the pack is read from as it is being edited: its draft, or with
+  // none, what was saved.
+  const editKind = async uid => await hasDraft(uid) ? DRAFTS : PACKS;
+
+  async function meta(uid, kind) {
+    try { return JSON.parse(await textOf(await packStore.get(kind || await editKind(uid), uid, META))); } catch { return null; }
   }
 
   // Every level pack here: [{ uid, name, count, shareName, saved }], made first, first.
@@ -50,11 +60,12 @@ const Folders = (() => {
 
   // The draft's levels, in order: [{ path, data }] (data the parsed level file).
   async function levels(uid) {
-    const m = await meta(uid);
+    const kind = await editKind(uid);
+    const m = await meta(uid, kind);
     if (!m) throw new Error('that level pack has no .wtw/pack.json');
     const out = [];
     for (const path of m.order || []) {
-      const text = await textOf(await packStore.get(DRAFTS, uid, path));
+      const text = await textOf(await packStore.get(kind, uid, path));
       if (text == null) continue;
       try { out.push({ path, data: JSON.parse(text) }); } catch { /* not a level: left out */ }
     }
@@ -63,11 +74,23 @@ const Folders = (() => {
 
   // Writes the draft's levels and manifest — [{ name, data }]: levelpack.json,
   // levels/…, .wtw/pack.json — and takes away level files no longer in it.
+  // A draft is made first if there is none; one left the same as what was
+  // saved goes.
   async function writeDraft(uid, files, title) {
+    await draftOf(uid);
     const m = await packStore.manifest(DRAFTS, uid);
     const keep = new Set(files.map(f => f.name));
     const stale = m ? m.files.map(f => f.path).filter(p => p.startsWith(LEVELS) && !keep.has(p)) : [];
     await packStore.write(DRAFTS, uid, { put: files, remove: stale }, title);
+    await dropIfSame(uid);
+  }
+  // The draft, made from what was saved if there is none yet.
+  async function draftOf(uid) {
+    if (!await hasDraft(uid) && await packStore.manifest(PACKS, uid)) await packStore.copy(PACKS, uid, uid, { toKind: DRAFTS });
+  }
+  async function dropIfSame(uid) {
+    const [d, s] = await Promise.all([packStore.manifest(DRAFTS, uid), packStore.manifest(PACKS, uid)]);
+    if (d && s && d.v === s.v) await packStore.remove(DRAFTS, uid);
   }
 
   // Whether the draft differs from what was last saved.
@@ -77,8 +100,12 @@ const Folders = (() => {
     return !s || d.v !== s.v;
   }
 
-  const save = uid => packStore.copy(DRAFTS, uid, uid, { toKind: PACKS });
-  const revert = uid => packStore.copy(PACKS, uid, uid, { toKind: DRAFTS });
+  async function save(uid) {
+    if (!await hasDraft(uid)) return;
+    await packStore.copy(DRAFTS, uid, uid, { toKind: PACKS });
+    await packStore.remove(DRAFTS, uid);
+  }
+  const revert = uid => packStore.remove(DRAFTS, uid);
   async function remove(uid) {
     await packStore.remove(DRAFTS, uid);
     await packStore.remove(PACKS, uid);
@@ -184,18 +211,11 @@ const Folders = (() => {
 
   // A copy of the level pack `uid` as it is being edited, under `to`, called `name`.
   async function duplicate(uid, to, name, shareName) {
-    if (!await packStore.copy(DRAFTS, uid, to, { title: name })) throw new Error('that level pack is not here');
-    const m = await meta(uid) || {};
-    await packStore.write(DRAFTS, to, { put: [{ name: META, data: JSON.stringify({ ...m, uid: to, name, shareName, made: Date.now(), fresh: true }, null, 2) }] }, name);
-    await save(to);
+    const kind = await editKind(uid);
+    if (!await packStore.copy(kind, uid, to, { toKind: PACKS, title: name })) throw new Error('that level pack is not here');
+    const m = await meta(uid, kind) || {};
+    await packStore.write(PACKS, to, { put: [{ name: META, data: JSON.stringify({ ...m, uid: to, name, shareName, made: Date.now(), fresh: true }, null, 2) }] }, name);
   }
 
-  // Its shared copy, levels/<shareName>/: the saved folder, as a friend gets
-  // it — with the game page `page` and without what only the editor reads.
-  async function publish(uid, shareName, page) {
-    await packStore.copy(PACKS, uid, shareName, { toKind: 'levels' });
-    await packStore.write('levels', shareName, { put: page ? [{ name: 'index.html', data: page }] : [], remove: [META] });
-  }
-
-  return { PACKS, DRAFTS, META, dir, meta, list, levels, writeDraft, dirty, save, revert, remove, create, duplicate, publish, artFilesFrom, storeAt, join, libOf };
+  return { PACKS, DRAFTS, META, dir, meta, list, levels, writeDraft, hasDraft, dirty, save, revert, remove, create, duplicate, artFilesFrom, storeAt, join, libOf };
 })();

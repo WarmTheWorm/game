@@ -93,7 +93,11 @@ Each phase lands on its own, and the site keeps working after each one.
 - A journal in localStorage keeps the latest draft until the folder write lands, and it is replayed on the next opening.
 - In a draft, a flag not set yet is kept as `null`, so the flags after it keep their places.
 - Packs from before a `levelpack.json` listed its backgrounds get the backgrounds their levels name.
-- The share copy (`levels/<share name>`) is still a separate pack, now copied from the saved folder on Save, with the game page added. Sharing straight from `packs/` is left for later.
+- **Follow-up, done:** one entry per level pack.
+  - A draft exists only while there are unsaved changes. It's made by the first write after a save, and let go of by Save, by Revert, or by a write that matches what was saved.
+  - Both editors use the draft's address, and the service worker answers it from `packs/` when there's no draft.
+  - Friends fetch straight from `packs/<uid>` by its share name (`share/core.js` `folderSource`). That leaves out `.wtw/` and adds the engine page, and the send is pinned.
+  - `share list` and `share del` work on the editor's level packs themselves. Old `levels/<share name>` copies are removed the next time the pack is opened.
 - The Asset Editor writes its art into the draft (`putOwnedArt`). Its own working-copy database is still there; that is Phase 2.
 - **One store for all level packs.** The editor's list is read from `packs/` (`.wtw/pack.json` of each folder) instead of localStorage.
   - "Also in this browser" disappears: a pack fetched from a friend is a folder like any other, editable straight away. Opening it no longer imports a copy.

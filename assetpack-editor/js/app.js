@@ -580,7 +580,12 @@ async function openFromLink(dir, owner, title) {
 // the levels left as they are; or, a level pack from before folders, as
 // lp-<uid>. Its address.
 async function putOwnedArt(owner, files, title) {
-  const m = await packStore.manifest('drafts', owner);
+  let m = await packStore.manifest('drafts', owner);
+  // no draft — nothing changed since it was saved: one is made from what was
+  if (!m && await packStore.manifest('packs', owner)) {
+    await packStore.copy('packs', owner, owner, { toKind: 'drafts' });
+    m = await packStore.manifest('drafts', owner);
+  }
   if (!m) return packStore.put('assets', 'lp-' + owner, files, title);
   const art = /^(assetpack\.json$|tiles\/|objects\/|backgrounds\/|sounds\/)/;
   const names = new Set(files.map(f => f.name));
