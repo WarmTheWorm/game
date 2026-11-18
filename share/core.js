@@ -40,7 +40,7 @@
 // against the version it asked for before any of it is kept.
 const ShareCore = (() => {
   const fmt = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`;
-  const pageUrl = new URL('/share/', location.origin).href;
+  const pageUrl = new URL(wtwUrl('share/'), location.origin).href;
   const clean = name => packStore.clean(name);
   const error = (code, message) => Object.assign(new Error(message), { code });
 
@@ -63,7 +63,7 @@ const ShareCore = (() => {
   // engine's page on it if it came without one.
   const playUrl = (name, files) => {
     const dir = packStore.url('levels', name);
-    return files.some(f => (f.path || f.name) === 'index.html') ? dir + 'index.html' : `/src/index.html?pack=${encodeURIComponent(dir + 'levelpack.json')}`;
+    return files.some(f => (f.path || f.name) === 'index.html') ? dir + 'index.html' : `${wtwUrl('src/index.html')}?pack=${encodeURIComponent(dir + 'levelpack.json')}`;
   };
   const readStored = async name => Promise.all((await packStore.files('levels', name)).map(async f => ({ path: f.name, data: await f.data.arrayBuffer() })));
 
@@ -142,7 +142,7 @@ const ShareCore = (() => {
     const files = (await src.manifest()).files;
     let page = src.play(files);
     if (/\/index\.html$/.test(page) && !new TextDecoder().decode(await src.read('index.html')).includes('wtw:play')) {
-      page = `/src/index.html?pack=${encodeURIComponent(page.replace(/index\.html$/, 'levelpack.json'))}`;
+      page = `${wtwUrl('src/index.html')}?pack=${encodeURIComponent(page.replace(/index\.html$/, 'levelpack.json'))}`;
     }
     return page + (page.includes('?') ? '&' : '?') + 'play=1';
   }
@@ -216,10 +216,11 @@ const ShareCore = (() => {
   async function sources() {
     const out = [];
     try {
-      const res = await fetch('/levelpacks/index.json', { cache: 'no-store' });
-      if (res.ok) for (const p of await res.json()) if (Array.isArray(p.files)) {
+      const res = await fetch(wtwUrl('levelpacks/index.json'), { cache: 'no-store' });
+      if (res.ok) for (const q of await res.json()) if (Array.isArray(q.files)) {
+        const p = { ...q, dir: wtwUrl(q.dir) };
         out.push({ key: p.name, name: p.name, title: p.title || p.name, label: `${p.title || p.name} — levelpacks/${p.name}`, dir: p.dir,
-          play: files => files.some(f => f.path === 'index.html') ? p.dir + 'index.html' : `/src/index.html?pack=${encodeURIComponent(p.dir + 'levelpack.json')}`,
+          play: files => files.some(f => f.path === 'index.html') ? p.dir + 'index.html' : `${wtwUrl('src/index.html')}?pack=${encodeURIComponent(p.dir + 'levelpack.json')}`,
           version: async function () { return (await this.manifest()).v; },
           manifest: async function () { return packStore.manifestOf(await this.load()); },
           read: async path => {

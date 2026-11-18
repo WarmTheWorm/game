@@ -236,8 +236,8 @@ async function openInLevelEditor() {
     // editor opens on that level pack (?for=)
     const base = pack.owner ? await putOwnedArt(pack.owner, files, pack.name) : await packStore.put('assets', slug(pack.name), files, pack.name);
     const url = pack.owner && base.startsWith(packStore.PREFIX + 'drafts/')
-      ? `/editor/index.html?open=${encodeURIComponent(pack.owner)}`
-      : `/editor/index.html?assets=${encodeURIComponent(base)}${pack.owner ? '&for=' + encodeURIComponent(pack.owner) : '&new'}`;
+      ? `${wtwUrl('editor/index.html')}?open=${encodeURIComponent(pack.owner)}`
+      : `${wtwUrl('editor/index.html')}?assets=${encodeURIComponent(base)}${pack.owner ? '&for=' + encodeURIComponent(pack.owner) : '&new'}`;
     if (tab) { tab.location.href = url; tab.focus(); } else window.open(url, 'wtw-level-editor');
     toast(pack.owner ? `Back in the level editor, with ${pack.name}'s new art` : `Saved in this browser as ${base} and opened in the level editor`);
   } catch (err) {

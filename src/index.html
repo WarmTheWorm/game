@@ -477,11 +477,12 @@
      whatever that pack leaves out. tools/bundle.mjs folds the scripts below
      into one file and leaves a marker right after this, which the editor fills
      in with a built pack's own roots — so a shipped pack always wins. -->
+<script src="js/root.js"></script>
 <script>
   (() => {
     const asked = new URLSearchParams(location.search);
-    const assets = asked.get('assets') || '/assetpacks/old/garden/';
-    window.PACK_URL = asked.get('pack') || '/levelpacks/garden/levelpack.json';
+    const assets = asked.get('assets') || wtwUrl('assetpacks/old/garden/');
+    window.PACK_URL = asked.get('pack') || wtwUrl('levelpacks/garden/levelpack.json');
     window.OBJECTS_URL = assets + 'objects/objects.json';
     window.SOUNDS_URL = assets + 'sounds/default.json';
     window.TILES_URL = assets + 'tiles/tiles.png';

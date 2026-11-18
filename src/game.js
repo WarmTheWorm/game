@@ -1196,7 +1196,7 @@ function drawDarkness() {
 // what lets a bonus level be entered from three different places — or from
 // another bonus level — without it knowing where home is.
 // fetch() is blocked on file:// URLs, so the page must be served over http.
-const ROOT_PACK_URL = window.PACK_URL || '/levelpacks/garden/levelpack.json';
+const ROOT_PACK_URL = window.PACK_URL || wtwUrl('levelpacks/garden/levelpack.json');
 const PACK_FILE = 'levelpack.json';
 const MAX_LEVELS = 64;
 let BUILTIN_LEVELS = [];
@@ -2737,16 +2737,16 @@ Promise.all([atlas.loadRoot(), sound.loadRoot()]).then(loadBuiltinLevels).then((
   const pack = new URL(ROOT_PACK_URL, location.href);
   if (pack.origin !== location.origin) return;
   let key = null, m;
-  if ((m = /^\/__idb\/levels\/([^/]+)\//.exec(pack.pathname))) key = 'idb:' + decodeURIComponent(m[1]);
-  else if ((m = /^\/levelpacks\/([^/]+)\//.exec(pack.pathname))) key = decodeURIComponent(m[1]);
+  if (pack.pathname.startsWith(packStore.PREFIX) && (m = /^levels\/([^/]+)\//.exec(pack.pathname.slice(packStore.PREFIX.length)))) key = 'idb:' + decodeURIComponent(m[1]);
+  else if (pack.pathname.startsWith(wtwUrl('levelpacks/')) && (m = /^([^/]+)\//.exec(pack.pathname.slice(wtwUrl('levelpacks/').length)))) key = decodeURIComponent(m[1]);
   if (!key) return;
   try {
-    const res = await fetch('/share/index.html', { method: 'HEAD', cache: 'no-store' });
+    const res = await fetch(wtwUrl('share/index.html'), { method: 'HEAD', cache: 'no-store' });
     if (!res.ok) return;
   } catch (err) { return; }
   const btn = document.getElementById('shareBtn');
   btn.classList.remove('hidden');
-  btn.addEventListener('click', () => window.open(`/share/?pack=${encodeURIComponent(key)}`, 'wtw-share'));
+  btn.addEventListener('click', () => window.open(`${wtwUrl('share/')}?pack=${encodeURIComponent(key)}`, 'wtw-share'));
 })();
 
 document.getElementById('customLevelBtn').addEventListener('click', () => {

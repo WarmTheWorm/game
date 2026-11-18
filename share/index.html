@@ -55,8 +55,9 @@
   the same, the sharer says so and sends nothing more.
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script src="/src/js/packstore.js"></script>
-<script src="/src/js/sharehost.js"></script>
+<script src="../src/js/root.js"></script>
+<script src="../src/js/packstore.js"></script>
+<script src="../src/js/sharehost.js"></script>
 <style>
   :root {
     --bg:#17122a; --panel:#211a3a; --panel2:#2b2249; --line:#3d3263; --line2:#52457f;
@@ -194,11 +195,11 @@
   <p class="foot"><a href="?help">All commands</a> · <a href="cli.html">Web shell</a></p>
 </main>
 
-<script src="/src/js/zip.js"></script>
-<script src="/src/js/arttidy.js"></script>
-<script src="/share/core.js"></script>
-<script src="/share/cards.js"></script>
-<script src="/share/commands.js"></script>
+<script src="../src/js/zip.js"></script>
+<script src="../src/js/arttidy.js"></script>
+<script src="core.js"></script>
+<script src="cards.js"></script>
+<script src="commands.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const P = ShareCommands.params(location.search);

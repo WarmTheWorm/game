@@ -3,7 +3,7 @@
 // pack reads exactly like a folder on disk. Everything else goes to the
 // server as if this weren't here. It sits at the site's root so its scope
 // takes in the game, the level editor and the asset pack creator alike.
-importScripts('src/js/packstore.js');
+importScripts('src/js/root.js', 'src/js/packstore.js');
 
 // For a pack's page from before ?play hid its start menu: with ?play the menu
 // is hidden from the first paint, and shown again only once the game has
@@ -29,7 +29,7 @@ if (new URLSearchParams(location.search).has('play')) {
 // packGame) — so playing it never meets an engine page older than the site.
 const ROOTS_MARKER = '<!-- pack roots -->';
 async function enginePage(kind, name) {
-  const res = await fetch('/dist/game.html', { cache: 'no-cache' });
+  const res = await fetch(wtwUrl('dist/game.html'), { cache: 'no-cache' });
   if (!res.ok) return new Response(`the game page is not here: /dist/game.html ${res.status}`, { status: 502, headers: { 'Content-Type': 'text/plain' } });
   let page = await res.text();
   const lp = await packStore.get(kind, name, 'levelpack.json');
@@ -44,7 +44,7 @@ async function enginePage(kind, name) {
     + `  window.TILES_URL = ${str((data.tileset && data.tileset.texture) || 'tiles/tiles.png')};\n`
     + '</script>';
   page = page.includes(ROOTS_MARKER) ? page.replace(ROOTS_MARKER, roots) : page.replace('<head>', '<head>\n' + roots);
-  if (!page.includes('wtwShareHost')) page += '\n<script src="/src/js/sharehost.js"></script>\n';
+  if (!page.includes('wtwShareHost')) page += `\n<script src="${wtwUrl('src/js/sharehost.js')}"></script>\n`;
   if (page.includes('wtw:play') && !page.includes('play-run') && page.includes('<head>')) page = page.replace('<head>', '<head>\n' + PLAY_RUN);
   return new Response(page, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 }
@@ -72,7 +72,7 @@ self.addEventListener('fetch', e => {
       // (src/js/sharehost.js) joins it all the same
       if (want.kind === 'levels' && String(rec.type).startsWith('text/html')) {
         let page = await new Response(rec.data).text();
-        if (!page.includes('wtwShareHost')) page += '\n<script src="/src/js/sharehost.js"></script>\n';
+        if (!page.includes('wtwShareHost')) page += `\n<script src="${wtwUrl('src/js/sharehost.js')}"></script>\n`;
         // ... and one built before ?play hid the start menu while it loads
         // (come through a flag from another pack) hides it too, until the
         // game hides it itself

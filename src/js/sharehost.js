@@ -25,7 +25,8 @@
   if (window.wtwShareHost) return;
   window.wtwShareHost = true;
 
-  const CODE = ['/src/js/packstore.js', '/share/core.js', '/share/cards.js'];
+  // (a page from before src/js/root.js has the site at the host's root)
+  const CODE = ['src/js/packstore.js', 'share/core.js', 'share/cards.js'].map(p => typeof wtwUrl === 'function' ? wtwUrl(p) : '/' + p);
   const PEERJS = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js';
   const PLAY_PAUSE = 4;      // ms between a file's pieces while a game is on show
   const loadPeerJs = () => new Promise((resolve, reject) => {

@@ -1,4 +1,19 @@
+<p align="center"><img src="docs/logo.png" alt="Warm the Worm" width="560"></p>
+
 # Warm the Worm
+
+**Play it in your browser: [warmtheworm.github.io/game](https://warmtheworm.github.io/game/)**
+
+| | |
+|---|---|
+| ▶ **[Play the game](https://warmtheworm.github.io/game/levelpacks/garden/)** | the Garden level pack |
+| 🧩 **[Level editor](https://warmtheworm.github.io/game/editor/)** | make level packs: levels, the flags between them, and their own art |
+| 🎨 **[Asset Editor](https://warmtheworm.github.io/game/assetpack-editor/)** | tiles, sprites, objects, backgrounds and sounds |
+| 🔗 **[Share](https://warmtheworm.github.io/game/share/)** | your level packs, and the ones friends sent you, peer to peer |
+
+In this repository: the game is [`src/`](src/) (and the built packs in
+[`levelpacks/`](levelpacks/)), the level editor [`editor/`](editor/), the Asset
+Editor [`assetpack-editor/`](assetpack-editor/), and sharing [`share/`](share/).
 
 A tile-based platformer, its level editor, and the packs they feed on. Plain
 scripts and plain files — the only tooling is Node for the bundler and the dev

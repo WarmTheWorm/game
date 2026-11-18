@@ -29,7 +29,8 @@ const packStore = (() => {
   const BLOBS = 'blobs';     // hash -> { data: Blob, size }
   const PACKS = 'packs';     // `${kind}/${name}` -> { kind, name, title, updated, count, manifest }
   const MOVED = '~moved';    // in PACKS: there since every file of version 1 is in BLOBS
-  const PREFIX = '/__idb/';
+  // the site's own root, which is '/' on a host of its own (src/js/root.js)
+  const PREFIX = (typeof wtwUrl === 'function' ? wtwUrl('__idb/') : '/__idb/');
 
   const TYPES = {
     json: 'application/json', png: 'image/png', jpg: 'image/jpeg', html: 'text/html; charset=utf-8',
@@ -458,7 +459,7 @@ const packStore = (() => {
     // reloads once it is, since its first requests went past the worker.
     async boot() {
       if (typeof navigator === 'undefined' || !navigator.serviceWorker) return false;
-      const root = new URL('/', location.href);
+      const root = new URL(typeof WTW_ROOT === 'string' ? WTW_ROOT : '/', location.href);
       try {
         await navigator.serviceWorker.register(new URL('sw.js', root).href, { scope: root.pathname });
       } catch (err) {

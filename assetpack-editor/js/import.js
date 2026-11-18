@@ -11,7 +11,7 @@ function packDir(typed) {
   let d = String(typed).trim().replace(/\\/g, '/');
   const at = d.toLowerCase().lastIndexOf('assetpacks/');
   if (at >= 0) d = '/' + d.slice(at);
-  else if (!d.includes('/')) d = '/assetpacks/' + d;
+  else if (!d.includes('/')) d = wtwUrl('assetpacks/' + d);
   else if (!/^(\/|https?:)/.test(d)) d = '/' + d;
   return d.endsWith('/') ? d : d + '/';
 }

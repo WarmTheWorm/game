@@ -8,7 +8,7 @@
 // A level or pack may name its own manifest; it is laid over the root set
 // rather than replacing it, so a level that wants one sound changed says only
 // that, and nothing it leaves out goes quiet by accident.
-const ROOT_SOUNDS_URL = window.SOUNDS_URL || '/assetpacks/old/garden/sounds/default.json';
+const ROOT_SOUNDS_URL = window.SOUNDS_URL || wtwUrl('assetpacks/old/garden/sounds/default.json');
 const DEFAULT_TRACK = 'theme';
 
 const SOUND_TAIL = 0.02;   // an oscillator runs this long past its envelope

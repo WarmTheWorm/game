@@ -484,6 +484,7 @@
      the real ones: tileset.js and atlas.js are loaded as-is, and Test hands
      the map text to a live copy of the game running in the frame below. -->
 <!-- the pack store the three tools share, and the worker that serves it -->
+<script src="../src/js/root.js"></script>
 <script src="../src/js/packstore.js"></script>
 <script>packStore.boot();</script>
 <script src="../src/js/arttidy.js"></script>
@@ -540,7 +541,7 @@ function withCtx(target, fn) {
 // sound sets are all in there, and nothing outside it is read.
 // Each level pack remembers its asset pack (`assets`); the page is opened on
 // the open one's, or on ?assets= — which then becomes that level pack's.
-const DEFAULT_ASSETS = '/assetpacks/old/garden/';
+const DEFAULT_ASSETS = wtwUrl('assetpacks/old/garden/');
 const ASKED_ASSETS = new URLSearchParams(location.search).get('assets');
 // ?for=<a level pack's uid>: the asset pack creator, back with that pack's art;
 // ?new: its Open in level editor, on an asset pack no level pack owns
@@ -582,8 +583,8 @@ const EDITOR_DIR = (() => {
 const EDITOR_LIBRARY = EDITOR_DIR + 'assetpack.json';
 const EDITOR_TILES = EDITOR_DIR + 'tiles/tiles.png';
 const EDITOR_OBJECTS = EDITOR_DIR + 'objects/objects.json';
-const GAME_PAGE = '/src/index.html';   // the engine as it stands, for Test
-let gameFile = '/dist/game.html';      // the built page a pack ships as its index
+const GAME_PAGE = wtwUrl('src/index.html');   // the engine as it stands, for Test
+let gameFile = wtwUrl('dist/game.html');      // the built page a pack ships as its index
 
 // ---------- the sheet ----------
 // The rows, size and collision rules are the asset pack's, from its
@@ -1850,9 +1851,9 @@ async function artChoices() {
   if (!noPack) add(EDITOR_DIR, `${packName || 'this level pack'} — the one open`);
   packs.forEach((p, i) => { if (i !== packIndex || noPack) add(FOLDERS ? Folders.dir(p.uid) : p.assets || DEFAULT_ASSETS, `${p.name || `Level pack ${i + 1}`} — a level pack here`); });
   try {
-    const res = await fetch('/assetpacks/index.json', { cache: 'no-store' });
+    const res = await fetch(wtwUrl('assetpacks/index.json'), { cache: 'no-store' });
     // a zipped one can't be read here
-    if (res.ok) for (const p of await res.json()) if (String(p.dir).endsWith('/')) add(p.dir, `${p.title || p.name} — an asset pack in ${p.dir.replace(/^\//, '').replace(/\/$/, '')}`);
+    if (res.ok) for (const p of await res.json()) if (String(p.dir).endsWith('/')) add(wtwUrl(p.dir), `${p.title || p.name} — an asset pack in ${p.dir.replace(/^\//, '').replace(/\/$/, '')}`);
   } catch (err) { /* no list */ }
   try {
     if (await storeReady(1500)) for (const p of await packStore.list('assets')) {
@@ -1901,7 +1902,7 @@ function enterAssets() {
   if (FOLDERS) flushFolder();
   if (assetFrame.dataset.owner !== p.uid) {
     const q = new URLSearchParams({ open: EDITOR_DIR, owner: p.uid, title: packName || p.name || 'Level pack', embed: '1' });
-    assetFrame.src = '/assetpack-editor/?' + q;
+    assetFrame.src = wtwUrl('assetpack-editor/') + '?' + q;
     assetFrame.dataset.owner = p.uid;
   }
   showAssetsMode(true);
@@ -3319,7 +3320,7 @@ async function mirrorNow() {
 async function storeTrouble() {
   if (!window.isSecureContext) return `${location.origin} is plain http — open it on https or localhost`;
   if (!navigator.serviceWorker) return 'this browser has no service workers here (a private window can turn them off)';
-  try { await navigator.serviceWorker.register('/sw.js', { scope: '/' }); }
+  try { await navigator.serviceWorker.register(wtwUrl('sw.js'), { scope: WTW_ROOT }); }
   catch (err) { return 'the service worker would not start: ' + err.message + (location.protocol === 'https:' ? ' — is the https certificate trusted on this device?' : ''); }
   if (!navigator.serviceWorker.controller) return 'the service worker is not looking after this page yet — reload it once';
   return '';
@@ -3461,7 +3462,7 @@ async function openStorePack(name) {
 // an empty one. ?pack=<url to a levelpack.json>
 // imports one on load.
 const packSlug = () => (packName || 'level-pack').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'level-pack';
-const gameUrlFor = packUrl => `/src/index.html?pack=${encodeURIComponent(packUrl)}&assets=${encodeURIComponent(EDITOR_DIR)}`;
+const gameUrlFor = packUrl => `${wtwUrl('src/index.html')}?pack=${encodeURIComponent(packUrl)}&assets=${encodeURIComponent(EDITOR_DIR)}`;
 const storeReady = ms => Promise.race([packStore.ready(), new Promise(ok => setTimeout(() => ok(false), ms))]);
 const escHtml = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -3472,8 +3473,8 @@ async function importChoices() {
     { value: 'link', label: 'A share link from another browser…', ask: 'The link (share/?from=…&get=…)', hint: 'https://…/share/?from=wtw-…&get=…' }
   ];
   try {
-    const res = await fetch('/levelpacks/index.json', { cache: 'no-store' });
-    if (res.ok) for (const p of await res.json()) opts.push({ value: `url:${p.dir}levelpack.json`, label: `${p.title} — levelpacks/${p.name}` });
+    const res = await fetch(wtwUrl('levelpacks/index.json'), { cache: 'no-store' });
+    if (res.ok) for (const p of await res.json()) opts.push({ value: `url:${wtwUrl(p.dir)}levelpack.json`, label: `${p.title} — levelpacks/${p.name}` });
   } catch (err) { /* no folder list */ }
   try {
     // the browser's copies of the level packs here are those level packs
@@ -3516,7 +3517,7 @@ async function importShared(text) {
   const frame = shareFrame = document.createElement('iframe');
   frame.hidden = true;
   const v = link.searchParams.get('v');     // the copy here at that version: nothing to ask
-  frame.src = `/share/?from=${encodeURIComponent(from)}&get=${encodeURIComponent(name)}${v ? '&v=' + encodeURIComponent(v) : ''}&json`;
+  frame.src = `${wtwUrl('share/')}?from=${encodeURIComponent(from)}&get=${encodeURIComponent(name)}${v ? '&v=' + encodeURIComponent(v) : ''}&json`;
   levelMsg.textContent = `Connecting to the browser sharing "${name}"…`;
   const done = () => { window.removeEventListener('message', heard); frame.remove(); if (shareFrame === frame) shareFrame = null; };
   const heard = e => {
@@ -3565,7 +3566,7 @@ async function importZip() {
 // assetpack.json made from it, becomes the art of the level pack `uid`:
 // its address, or null if it is not one kept in the browser.
 async function artOfStoredPack(packUrl, manifest, uid, title) {
-  const m = /^\/__idb\/levels\/([^/]+)\/levelpack\.json$/.exec(packUrl.pathname);
+  const m = packUrl.pathname.startsWith(packStore.PREFIX) && /^levels\/([^/]+)\/levelpack\.json$/.exec(packUrl.pathname.slice(packStore.PREFIX.length));
   if (!m || !await storeReady(3000)) return null;
   try {
     const all = await packStore.files('levels', decodeURIComponent(m[1]));

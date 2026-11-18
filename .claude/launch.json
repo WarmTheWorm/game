@@ -13,6 +13,16 @@
       "port": 5180
     },
     {
+      "name": "subfolder",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/serve-sub.mjs",
+        "--port=5190",
+        "--base=/game/"
+      ],
+      "port": 5190
+    },
+    {
       "name": "static",
       "runtimeExecutable": "python",
       "runtimeArgs": [

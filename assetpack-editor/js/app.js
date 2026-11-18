@@ -307,7 +307,7 @@ $('#deleteBtn').onclick = async () => {
 
 // What Import's empty pack starts from: a zipped pack on disk, as small as a
 // pack can be. Its __name__ keeps it out of assetpacks/index.json.
-const EMPTY_PACK = '/assetpacks/__EmptyPack__.zip';
+const EMPTY_PACK = wtwUrl('assetpacks/__EmptyPack__.zip');
 
 // The packs there are to read, as assetpacks/index.json lists them: a
 // folder, or a .zip ("dir": "/assetpacks/mine.zip") — not the copies Open in
@@ -318,7 +318,7 @@ async function packFolders() {
   const out = [];
   const where = dir => String(dir).replace(/^\//, '').replace(/\/$/, '');
   try {
-    const res = await fetch('/assetpacks/index.json', { cache: 'no-store' });
+    const res = await fetch(wtwUrl('assetpacks/index.json'), { cache: 'no-store' });
     if (res.ok) for (const p of await res.json()) out.push({ name: p.name, dir: p.dir, label: `${p.title || p.name} — ${where(p.dir)}` });
   } catch { /* no folder list; the path can still be typed */ }
   return out;
@@ -543,7 +543,7 @@ async function openFromLink(dir, owner, title) {
     toast(`The art of the level pack ${title || next.name} — its own copy, to change as you like`);
     return;
   }
-  const kept = /^\/__idb\/assets\/([^/]+)\/$/.exec(want);
+  const kept = want.startsWith(packStore.PREFIX) && /^assets\/([^/]+)\/$/.exec(want.slice(packStore.PREFIX.length));
   let hit = kept ? list.find(x => slug(x.name) === decodeURIComponent(kept[1])) : null;
   if (!hit) {
     for (const x of list) {

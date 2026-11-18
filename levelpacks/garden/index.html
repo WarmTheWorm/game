@@ -478,10 +478,42 @@
      into one file and leaves a marker right after this, which the editor fills
      in with a built pack's own roots — so a shipped pack always wins. -->
 <script>
+  window.PACK_URL = 'levelpack.json';
+  window.OBJECTS_URL = 'objects/objects.json';
+  window.SOUNDS_URL = 'sounds/default.json';
+  window.TILES_URL = 'tiles/tiles.png';
+</script>
+<!-- js/root.js -->
+<script>
+// Where the site is served from: '/' on a host of its own (localhost:5180,
+// shor-ofer.github.io), or the folder it sits in — '/game/' on GitHub Pages
+// as warmtheworm.github.io/game/. Every page, and the service worker, reach
+// the site's own files through it (wtwUrl), never from the host's root.
+//
+// A page knows it from its own address: the part before the first of the
+// site's folders (editor/, share/, src/, levelpacks/, __idb/, …); a page at
+// the top (index.html) is in the root itself. The service worker knows it as
+// its scope. Read once, by whichever script loads first.
+var WTW_ROOT = typeof WTW_ROOT === 'string' ? WTW_ROOT : (() => {
+  if (typeof registration !== 'undefined' && registration && registration.scope) return new URL(registration.scope).pathname;
+  const path = location.pathname;
+  const m = /^(.*?\/)(?:editor|share|src|dist|levelpacks|assetpacks|assetpack-editor|__idb|tools|docs)\//.exec(path);
+  return m ? m[1] : path.replace(/[^/]*$/, '');
+})();
+// A path of the site's — 'share/', or '/levelpacks/garden/' as an index lists
+// it — as an address on this host.
+function wtwUrl(path) {
+  const p = String(path);
+  if (/^[a-z]+:/i.test(p) || p.startsWith(WTW_ROOT)) return p;
+  return WTW_ROOT + p.replace(/^\/+/, '');
+}
+
+</script>
+<script>
   (() => {
     const asked = new URLSearchParams(location.search);
-    const assets = asked.get('assets') || '/assetpacks/old/garden/';
-    window.PACK_URL = asked.get('pack') || '/levelpacks/garden/levelpack.json';
+    const assets = asked.get('assets') || wtwUrl('assetpacks/old/garden/');
+    window.PACK_URL = asked.get('pack') || wtwUrl('levelpacks/garden/levelpack.json');
     window.OBJECTS_URL = assets + 'objects/objects.json';
     window.SOUNDS_URL = assets + 'sounds/default.json';
     window.TILES_URL = assets + 'tiles/tiles.png';
@@ -495,12 +527,6 @@
      every class. -->
 <!-- the pack store the tools share: only a page asked to open a pack kept in
      the browser (a URL naming /__idb/) needs its service worker -->
-<script>
-  window.PACK_URL = 'levelpack.json';
-  window.OBJECTS_URL = 'objects/objects.json';
-  window.SOUNDS_URL = 'sounds/default.json';
-  window.TILES_URL = 'tiles/tiles.png';
-</script>
 <!-- js/packstore.js -->
 <script>
 // ---------- The pack store ----------
@@ -534,7 +560,8 @@ const packStore = (() => {
   const BLOBS = 'blobs';     // hash -> { data: Blob, size }
   const PACKS = 'packs';     // `${kind}/${name}` -> { kind, name, title, updated, count, manifest }
   const MOVED = '~moved';    // in PACKS: there since every file of version 1 is in BLOBS
-  const PREFIX = '/__idb/';
+  // the site's own root, which is '/' on a host of its own (src/js/root.js)
+  const PREFIX = (typeof wtwUrl === 'function' ? wtwUrl('__idb/') : '/__idb/');
 
   const TYPES = {
     json: 'application/json', png: 'image/png', jpg: 'image/jpeg', html: 'text/html; charset=utf-8',
@@ -963,7 +990,7 @@ const packStore = (() => {
     // reloads once it is, since its first requests went past the worker.
     async boot() {
       if (typeof navigator === 'undefined' || !navigator.serviceWorker) return false;
-      const root = new URL('/', location.href);
+      const root = new URL(typeof WTW_ROOT === 'string' ? WTW_ROOT : '/', location.href);
       try {
         await navigator.serviceWorker.register(new URL('sw.js', root).href, { scope: root.pathname });
       } catch (err) {
@@ -1024,7 +1051,8 @@ const packStore = (() => {
   if (window.wtwShareHost) return;
   window.wtwShareHost = true;
 
-  const CODE = ['/src/js/packstore.js', '/share/core.js', '/share/cards.js'];
+  // (a page from before src/js/root.js has the site at the host's root)
+  const CODE = ['src/js/packstore.js', 'share/core.js', 'share/cards.js'].map(p => typeof wtwUrl === 'function' ? wtwUrl(p) : '/' + p);
   const PEERJS = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js';
   const PLAY_PAUSE = 4;      // ms between a file's pieces while a game is on show
   const loadPeerJs = () => new Promise((resolve, reject) => {
@@ -1150,7 +1178,7 @@ const packStore = (() => {
 // A level or pack may name its own manifest; it is laid over the root set
 // rather than replacing it, so a level that wants one sound changed says only
 // that, and nothing it leaves out goes quiet by accident.
-const ROOT_SOUNDS_URL = window.SOUNDS_URL || '/assetpacks/old/garden/sounds/default.json';
+const ROOT_SOUNDS_URL = window.SOUNDS_URL || wtwUrl('assetpacks/old/garden/sounds/default.json');
 const DEFAULT_TRACK = 'theme';
 
 const SOUND_TAIL = 0.02;   // an oscillator runs this long past its envelope
@@ -1412,7 +1440,7 @@ const isRampHit = c => c >= '0' && c <= '3';   // a wedge, the digit is its dire
 const isBlank = ch => ch === undefined || ch === '.' || ch === ' ';
 
 const CELL_PAD = 4;            // empty margin each cell carries, in tile units
-const DEFAULT_TEXTURE = new URL(window.TILES_URL || '/assetpacks/old/garden/tiles/tiles.png', location.href).href;
+const DEFAULT_TEXTURE = new URL(window.TILES_URL || wtwUrl('assetpacks/old/garden/tiles/tiles.png'), location.href).href;
 const DEFAULT_TILE_SIZE = 64;
 
 // Every path a level names is relative to that level's own JSON file, so a
@@ -1528,7 +1556,7 @@ class Tileset {
 // Nothing about a thing's look, size or settings lives in code.
 // A page may say where its root manifest is before loading this, which is how
 // a downloaded pack points the game at its own copy.
-const ROOT_OBJECTS_URL = window.OBJECTS_URL || '/assetpacks/old/garden/objects/objects.json';
+const ROOT_OBJECTS_URL = window.OBJECTS_URL || wtwUrl('assetpacks/old/garden/objects/objects.json');
 
 // What a pairing id looks like. A key, a door and the portal pair all wear
 // their id as a colour, filled into the object's glow mask below; index 0 is
@@ -3312,7 +3340,7 @@ function drawDarkness() {
 // what lets a bonus level be entered from three different places — or from
 // another bonus level — without it knowing where home is.
 // fetch() is blocked on file:// URLs, so the page must be served over http.
-const ROOT_PACK_URL = window.PACK_URL || '/levelpacks/garden/levelpack.json';
+const ROOT_PACK_URL = window.PACK_URL || wtwUrl('levelpacks/garden/levelpack.json');
 const PACK_FILE = 'levelpack.json';
 const MAX_LEVELS = 64;
 let BUILTIN_LEVELS = [];
@@ -4853,16 +4881,16 @@ Promise.all([atlas.loadRoot(), sound.loadRoot()]).then(loadBuiltinLevels).then((
   const pack = new URL(ROOT_PACK_URL, location.href);
   if (pack.origin !== location.origin) return;
   let key = null, m;
-  if ((m = /^\/__idb\/levels\/([^/]+)\//.exec(pack.pathname))) key = 'idb:' + decodeURIComponent(m[1]);
-  else if ((m = /^\/levelpacks\/([^/]+)\//.exec(pack.pathname))) key = decodeURIComponent(m[1]);
+  if (pack.pathname.startsWith(packStore.PREFIX) && (m = /^levels\/([^/]+)\//.exec(pack.pathname.slice(packStore.PREFIX.length)))) key = 'idb:' + decodeURIComponent(m[1]);
+  else if (pack.pathname.startsWith(wtwUrl('levelpacks/')) && (m = /^([^/]+)\//.exec(pack.pathname.slice(wtwUrl('levelpacks/').length)))) key = decodeURIComponent(m[1]);
   if (!key) return;
   try {
-    const res = await fetch('/share/index.html', { method: 'HEAD', cache: 'no-store' });
+    const res = await fetch(wtwUrl('share/index.html'), { method: 'HEAD', cache: 'no-store' });
     if (!res.ok) return;
   } catch (err) { return; }
   const btn = document.getElementById('shareBtn');
   btn.classList.remove('hidden');
-  btn.addEventListener('click', () => window.open(`/share/?pack=${encodeURIComponent(key)}`, 'wtw-share'));
+  btn.addEventListener('click', () => window.open(`${wtwUrl('share/')}?pack=${encodeURIComponent(key)}`, 'wtw-share'));
 })();
 
 document.getElementById('customLevelBtn').addEventListener('click', () => {

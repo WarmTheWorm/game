@@ -178,7 +178,9 @@ const Folders = (() => {
 
   // The store pack a URL is the folder of, or null: /__idb/<kind>/<name>/…
   function storeAt(url) {
-    const m = /^\/__idb\/([^/]+)\/([^/]+)\//.exec(new URL(url, location.href).pathname);
+    const path = new URL(url, location.href).pathname;
+    if (!path.startsWith(packStore.PREFIX)) return null;
+    const m = /^([^/]+)\/([^/]+)\//.exec(path.slice(packStore.PREFIX.length));
     return m ? { kind: decodeURIComponent(m[1]), name: decodeURIComponent(m[2]) } : null;
   }
 
